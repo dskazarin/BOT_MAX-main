@@ -1,28 +1,66 @@
-# Logs
-*.log
-heal.log
-
 # Binaries
+bin/
 *.exe
+*.exe~
 *.dll
 *.so
+*.dylib
+*.test
+*.out
 
-# Database
-*.db
-*.db-journal
+# Go workspace file
+go.work
+go.work.sum
 
-# Environment
-.env
+# Dependency directories
+vendor/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+server.log
+
+# Database
+*.db
+*.db-shm
+*.db-wal
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Temporary
-*.pid
-*.bak
+# Temporary files
 tmp/
+temp/
+*.tmp
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# SSL certificates
+*.pem
+*.crt
+*.key
+
+# Backups
+*.bak
+*.backup
+test_results_*.txt
+
+# PID files
+*.pid
+
+# Binary
+botmax
+simple_server
+final_server
+botmax_server
