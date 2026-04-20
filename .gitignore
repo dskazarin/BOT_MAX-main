@@ -1,0 +1,28 @@
+# Logs
+*.log
+heal.log
+
+# Binaries
+*.exe
+*.dll
+*.so
+
+# Database
+*.db
+*.db-journal
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.pid
+*.bak
+tmp/
