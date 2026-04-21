@@ -1,18 +1,22 @@
 {
-    "name": "BOT_MAX",
-    "image": "mcr.microsoft.com/devcontainers/go:1.21",
-    "postCreateCommand": "go mod download && go get github.com/mattn/go-sqlite3",
+    "name": "BOT_MAX Medical Platform",
+    "image": "mcr.microsoft.com/devcontainers/go:1.22",
+    "postCreateCommand": "go mod init botmax 2>/dev/null || true && go get github.com/gorilla/mux && go get github.com/gorilla/websocket && go mod tidy && chmod +x start.sh stop.sh status.sh",
+    "postStartCommand": "nohup go run botmax_server.go > server.log 2>&1 &",
     "forwardPorts": [8082],
     "portsAttributes": {
         "8082": {
-            "label": "BOT_MAX Server",
-            "onAutoForward": "openPreview"
+            "label": "BOT_MAX Medical Platform",
+            "onAutoForward": "notify",
+            "visibility": "public"
         }
     },
-    "postStartCommand": "./start.sh",
     "customizations": {
         "vscode": {
-            "extensions": ["golang.go"]
+            "extensions": ["golang.go"],
+            "settings": {
+                "go.useLanguageServer": true
+            }
         }
     }
 }
