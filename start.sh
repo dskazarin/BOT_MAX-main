@@ -1,32 +1,46 @@
 #!/bin/bash
-cd /workspaces/BOT_MAX
 
-# Установка зависимостей
-echo "📦 Установка зависимостей..."
-go mod tidy 2>/dev/null
-go get github.com/mattn/go-sqlite3 2>/dev/null
+echo "═══════════════════════════════════════════════════════════════"
+echo "🚀 ЗАПУСК BOT_MAX - Медицинская платформа"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
 
 # Остановка старых процессов
-echo "🛑 Остановка старых процессов..."
-pkill -9 -f "main_fixed" 2>/dev/null
-pkill -9 -f "main_fixed.bin" 2>/dev/null
-sudo fuser -k 8082/tcp 2>/dev/null
-sleep 2
+pkill -f "botmax_server" 2>/dev/null
+pkill -f "main_fixed" 2>/dev/null
+lsof -ti:8082 | xargs kill -9 2>/dev/null
 
-# Компиляция бинарника
-echo "🔧 Компиляция сервера..."
-go build -o main_fixed.bin main_fixed.go
+# Проверка наличия зависимостей
+if [ ! -f "go.mod" ]; then
+    echo "📦 Инициализация Go модуля..."
+    go mod init botmax
+    go get github.com/gorilla/mux
+    go get github.com/gorilla/websocket
+fi
 
-# Запуск бинарника (только 1 процесс!)
-echo "🚀 Запуск защищенного сервера..."
-./main_fixed.bin &
+# Скачивание зависимостей
+go mod tidy
+
+# Запуск правильного файла
+echo "🚀 Запуск сервера с русским интерфейсом..."
+nohup go run botmax_server.go > server.log 2>&1 &
+
 sleep 3
 
 # Проверка
-if curl -s http://localhost:8082/health > /dev/null 2>&1; then
-    echo "✅ BOT_MAX Secure Server started"
-    echo "✅ Server is healthy"
-    echo "✅ Процессов: $(pgrep -f "main_fixed.bin" | wc -l)"
+if curl -s http://localhost:8082/health > /dev/null; then
+    echo ""
+    echo "✅ СЕРВЕР УСПЕШНО ЗАПУЩЕН!"
+    echo ""
+    echo "🌐 Откройте в браузере: http://localhost:8082"
+    echo ""
+    echo "🔐 Доступ к админ-панели:"
+    echo "   Логин: admin"
+    echo "   Пароль: admin123"
+    echo ""
 else
-    echo "❌ Server failed to start"
+    echo "❌ Ошибка запуска. Проверьте логи: tail -f server.log"
 fi
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
