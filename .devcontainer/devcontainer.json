@@ -2,6 +2,6 @@
     "name": "BOT_MAX",
     "image": "mcr.microsoft.com/devcontainers/go:1.22",
     "postCreateCommand": "go mod init botmax 2>/dev/null || true && go get github.com/gorilla/mux && go mod tidy",
-    "postStartCommand": "nohup go run beautiful_login.go > server.log 2>&1 &",
+    "postStartCommand": "nohup go run final_patient_cabinet.go > server.log 2>&1 &",
     "forwardPorts": [8082]
 }
