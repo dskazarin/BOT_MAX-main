@@ -1,0 +1,18 @@
+{
+    "name": "BOT_MAX",
+    "image": "mcr.microsoft.com/devcontainers/go:1.21",
+    "postCreateCommand": "go mod download && go get github.com/mattn/go-sqlite3",
+    "forwardPorts": [8082],
+    "portsAttributes": {
+        "8082": {
+            "label": "BOT_MAX Server",
+            "onAutoForward": "openPreview"
+        }
+    },
+    "postStartCommand": "./start.sh",
+    "customizations": {
+        "vscode": {
+            "extensions": ["golang.go"]
+        }
+    }
+}
