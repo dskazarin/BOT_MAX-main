@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Личный кабинет пациента - BOT_MAX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            color: white;
+        }
+        .logout-btn {
+            background: #f56565;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .logout-btn:hover { background: #e53e3e; transform: translateY(-2px); }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .card-header h2 { color: #667eea; font-size: 1.3em; display: flex; align-items: center; gap: 10px; }
+        .toggle-icon { font-size: 1.2em; transition: transform 0.3s; display: inline-block; }
+        .toggle-icon.collapsed { transform: rotate(-90deg); }
+        .card-content { transition: all 0.3s; overflow: hidden; }
+        .card-content.collapsed { display: none; }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .info-item {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 12px;
+        }
+        .info-label { font-weight: 600; color: #4a5568; font-size: 0.8em; text-transform: uppercase; }
+        .info-value { font-size: 1.1em; color: #2d3748; margin-top: 5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .edit-icon {
+            cursor: pointer;
+            background: #e2e8f0;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.7em;
+        }
+        .edit-icon:hover { background: #cbd5e0; }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1em;
+        }
+        input:focus, textarea:focus { outline: none; border-color: #667eea; }
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
+        .btn-small { padding: 5px 12px; font-size: 0.8em; margin: 2px; }
+        .btn-danger { background: #f56565; }
+        .btn-warning { background: #ed8936; }
+        .btn-info { background: #4299e1; }
+        .btn-success { background: #48bb78; }
+        .symptoms-list, .allergies-list, .vaccinations-list, .medications-list, .diagnoses-list, .files-list { margin-top: 15px; }
+        .symptom-item, .allergy-item, .vaccination-item, .medication-item, .diagnosis-item, .file-item {
+            background: #f7fafc;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .symptom-text, .allergy-text, .vaccination-text, .medication-text, .diagnosis-text { flex: 1; }
+        .symptom-date { font-size: 0.7em; color: #718096; }
+        .button-group { display: flex; gap: 5px; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .history-item { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        .print-options { display: flex; gap: 15px; flex-wrap: wrap; align-items: center; margin-top: 15px; }
+        .print-options label { display: flex; align-items: center; gap: 5px; font-size: 0.9em; }
+        .file-preview { max-width: 100%; max-height: 400px; margin-top: 10px; }
+        .file-preview img { max-width: 100%; max-height: 300px; border-radius: 10px; }
+        .file-preview iframe { width: 100%; height: 500px; border: none; }
+        .recording { animation: pulse 1s infinite; background: #e53e3e; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        @media (max-width: 768px) {
+            .info-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="user-info">
+            <div class="avatar">👤</div>
+            <div><strong>Иванов Иван Иванович</strong><br><small>ID: PAT-2026-001</small></div>
+        </div>
+        <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
+    </div>
+
+    <div class="card">
+        <h2>👤 Информация о пациенте</h2>
+        <div class="info-grid">
+            <div class="info-item"><div class="info-label">ФИО</div><div class="info-value">Иванов Иван Иванович</div></div>
+            <div class="info-item"><div class="info-label">Дата рождения</div><div class="info-value">15.05.1990 (35 лет)</div></div>
+            <div class="info-item">
+                <div class="info-label">Рост/Вес</div>
+                <div class="info-value">
+                    <span id="heightValue">175</span> см / <span id="weightValue">80</span> кг
+                    <span class="edit-icon" onclick="editHeightWeight()">✏️</span>
+                    <span class="edit-icon" onclick="showWeightHistory()">📊</span>
+                </div>
+            </div>
+            <div class="info-item"><div class="info-label">ИМТ</div><div class="info-value" id="bmiValue">26.1 (Избыточный вес)</div></div>
+            <div class="info-item">
+                <div class="info-label">Артериальное давление</div>
+                <div class="info-value">
+                    <span id="bpSystolic">140</span> / <span id="bpDiastolic">90</span> мм рт.ст.
+                    <span class="edit-icon" onclick="editBP()">✏️</span>
+                    <span class="edit-icon" onclick="showBPHistory()">📊</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Сатурация (SpO2)</div>
+                <div class="info-value">
+                    <span id="spo2Value">98</span> %
+                    <span class="edit-icon" onclick="editSpO2()">✏️</span>
+                    <span class="edit-icon" onclick="showSpO2History()">📊</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📝 Добавить симптом</h2>
+        <textarea id="symptomInput" rows="3" placeholder="Опишите симптом..."></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+            <button onclick="addSymptom()">💾 Сохранить симптом</button>
+            <button onclick="addTemperature()">🌡️ Добавить температуру</button>
+            <button onclick="startVoiceInput()" id="voiceBtn">🎤 Голосовой ввод</button>
+            <button onclick="document.getElementById('photoInput').click()">📸 Загрузить фото</button>
+            <input type="file" id="photoInput" accept="image/*,application/pdf" style="display:none" onchange="uploadFile(this)">
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('symptomsSection')">
+            <h2>📋 Симптомы <span class="toggle-icon" id="symptomsIcon">▼</span></h2>
+        </div>
+        <div id="symptomsSection" class="card-content"><div id="symptomsList" class="symptoms-list"></div></div>
+    </div>
+
+    <div class="card">
+        <h2>🖨️ Печать</h2>
+        <div class="print-options">
+            <label><input type="checkbox" id="printSymptoms" checked> Симптомы</label>
+            <label><input type="checkbox" id="printAllergies" checked> Аллергии</label>
+            <label><input type="checkbox" id="printVaccinations" checked> Вакцинации</label>
+            <label><input type="checkbox" id="printMedications" checked> Препараты</label>
+            <label><input type="checkbox" id="printDiagnoses" checked> Диагнозы</label>
+            <label><input type="checkbox" id="printVitals" checked> Показатели</label>
+            <select id="printPeriod"><option value="all">За всё время</option><option value="week">За неделю</option><option value="month">За месяц</option></select>
+            <button onclick="printSelected()">🖨️ Распечатать</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('allergiesSection')">
+            <h2>⚠️ Аллергии <span class="toggle-icon" id="allergiesIcon">▼</span></h2>
+            <button class="btn-small" onclick="event.stopPropagation(); addAllergy()">+ Добавить</button>
+        </div>
+        <div id="allergiesSection" class="card-content"><div id="allergiesList" class="allergies-list"></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('vaccinationsSection')">
+            <h2>💉 Вакцинации <span class="toggle-icon" id="vaccinationsIcon">▼</span></h2>
+            <button class="btn-small" onclick="event.stopPropagation(); addVaccination()">+ Добавить</button>
+        </div>
+        <div id="vaccinationsSection" class="card-content"><div id="vaccinationsList" class="vaccinations-list"></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('medicationsSection')">
+            <h2>💊 Мои препараты <span class="toggle-icon" id="medicationsIcon">▼</span></h2>
+            <button class="btn-small" onclick="event.stopPropagation(); addMedication()">+ Добавить</button>
+        </div>
+        <div id="medicationsSection" class="card-content"><div id="medicationsList" class="medications-list"></div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('diagnosesSection')">
+            <h2>📋 Диагнозы <span class="toggle-icon" id="diagnosesIcon">▼</span></h2>
+            <button class="btn-small" onclick="event.stopPropagation(); addDiagnosis()">+ Добавить диагноз</button>
+        </div>
+        <div id="diagnosesSection" class="card-content"><div id="diagnosesList" class="diagnoses-list"></div></div>
+    </div>
+
+    <div class="card">
+        <h2>📎 Загруженные файлы</h2>
+        <div id="filesList" class="files-list"></div>
+    </div>
+</div>
+
+<div id="historyModal" class="modal"><div class="modal-content"><h3 id="historyTitle">История изменений</h3><div id="historyList"></div><button onclick="closeHistoryModal()">Закрыть</button></div></div>
+<div id="fileViewModal" class="modal"><div class="modal-content"><h3 id="fileViewTitle">Просмотр файла</h3><div id="fileViewContent"></div><button onclick="closeFileViewModal()">Закрыть</button></div></div>
+
+<script>
+    let patientData = {
+        height: 175, weight: 80,
+        heightWeightHistory: [{height:175,weight:80,date:new Date().toLocaleString()}],
+        bpHistory: [{systolic:140,diastolic:90,date:new Date().toLocaleString()}],
+        spo2History: [{value:98,date:new Date().toLocaleString()}],
+        symptoms: [
+            {id:1,text:"Температура: 37.5°C, боль в горле, заложенность носа",date:"30.04.2026 15:45"},
+            {id:2,text:"насморк утром в 7:00 и температура 38, снижали нурофен 5 мл однократно, в 10:00 боль в ухе слева, зеленые сопли",date:"28.05.2026, 10:09:20"},
+            {id:3,text:"[28.05.2026 10:10] Температура: 38.0°C",date:"28.05.2026, 10:10:26"},
+            {id:4,text:"[28.05.2026 10:10] Температура: 38.0°C снижали парацетамол",date:"28.05.2026, 10:10:54"}
+        ],
+        allergies: [
+            {id:1,name:"Пенициллин",reaction:"Крапивница, отек",date:"2024-03-15"},
+            {id:2,name:"Персик",reaction:"зуд и чихание",date:"2026-05-28"}
+        ],
+        vaccinations: [
+            {id:1,name:"COVID-19",date:"15.01.2024"},
+            {id:2,name:"Грипп",date:"30.04.2026"}
+        ],
+        medications: [
+            {id:1,name:"Омез",startDate:"28.05.2026",diagnosis:"ОРВИ"},
+            {id:2,name:"Омега 3",startDate:"28.05.2026",diagnosis:"профилактика"}
+        ],
+        diagnoses: [
+            {id:1,name:"ОРВИ",date:"10.01.2024",medications:["Омез"]},
+            {id:2,name:"Гипертония",date:"01.06.2023",medications:["Эналаприл"]}
+        ],
+        files: []
+    };
+
+    function loadData(){const s=localStorage.getItem('patientData');if(s)patientData=JSON.parse(s);updateAll();}
+    function saveData(){localStorage.setItem('patientData',JSON.stringify(patientData));updateAll();}
+    function updateAll(){updateBMI();updateSymptomsList();updateAllergiesList();updateVaccinationsList();updateMedicationsList();updateDiagnosesList();updateFilesList();document.getElementById('bpSystolic').innerText=patientData.bpHistory[patientData.bpHistory.length-1].systolic;document.getElementById('bpDiastolic').innerText=patientData.bpHistory[patientData.bpHistory.length-1].diastolic;document.getElementById('spo2Value').innerText=patientData.spo2History[patientData.spo2History.length-1].value;document.getElementById('heightValue').innerText=patientData.height;document.getElementById('weightValue').innerText=patientData.weight;}
+    function updateBMI(){const h=patientData.height/100,w=patientData.weight,bmi=(w/(h*h)).toFixed(1);let s="";if(bmi<18.5)s="Недостаточный вес";else if(bmi<25)s="Норма";else if(bmi<30)s="Избыточный вес";else s="Ожирение";document.getElementById('bmiValue').innerHTML=`${bmi} (${s})`;}
+    function editHeightWeight(){const h=prompt("Рост (см):",patientData.height),w=prompt("Вес (кг):",patientData.weight);if(h&&w){patientData.height=parseFloat(h);patientData.weight=parseFloat(w);patientData.heightWeightHistory.push({height:patientData.height,weight:patientData.weight,date:new Date().toLocaleString()});saveData();}}
+    function showWeightHistory(){showHistory("История роста/веса",patientData.heightWeightHistory.map(h=>`${h.date}: ${h.height} см / ${h.weight} кг`));}
+    function editBP(){const s=prompt("Систолическое давление:",patientData.bpHistory[patientData.bpHistory.length-1].systolic),d=prompt("Диастолическое давление:",patientData.bpHistory[patientData.bpHistory.length-1].diastolic);if(s&&d){patientData.bpHistory.push({systolic:parseInt(s),diastolic:parseInt(d),date:new Date().toLocaleString()});saveData();}}
+    function showBPHistory(){showHistory("История АД",patientData.bpHistory.map(h=>`${h.date}: ${h.systolic}/${h.diastolic} мм рт.ст.`));}
+    function editSpO2(){const v=prompt("Сатурация (%):",patientData.spo2History[patientData.spo2History.length-1].value);if(v&&v>=70&&v<=100){patientData.spo2History.push({value:parseInt(v),date:new Date().toLocaleString()});saveData();}}
+    function showSpO2History(){showHistory("История сатурации",patientData.spo2History.map(h=>`${h.date}: ${h.value}%`));}
+    function showHistory(title,items){document.getElementById('historyTitle').innerText=title;document.getElementById('historyList').innerHTML=items.map(i=>`<div class="history-item">${i}</div>`).join('');document.getElementById('historyModal').style.display='flex';}
+    function closeHistoryModal(){document.getElementById('historyModal').style.display='none';}
+    function addSymptom(){const t=document.getElementById('symptomInput').value.trim();if(t){patientData.symptoms.unshift({id:Date.now(),text:t,date:new Date().toLocaleString()});saveData();document.getElementById('symptomInput').value='';}}
+    function addTemperature(){const t=prompt("Температура (°C):");if(t){patientData.symptoms.unshift({id:Date.now(),text:`Температура: ${t}°C`,date:new Date().toLocaleString()});saveData();}}
+    function editSymptom(id){const s=patientData.symptoms.find(x=>x.id===id);if(s){const t=prompt("Редактировать:",s.text);if(t){s.text=t;s.date=`${new Date().toLocaleString()} (ред.)`;saveData();}}}
+    function deleteSymptom(id){if(confirm("Удалить симптом?")){patientData.symptoms=patientData.symptoms.filter(x=>x.id!==id);saveData();}}
+    function updateSymptomsList(){const c=document.getElementById('symptomsList');c.innerHTML=patientData.symptoms.map(s=>`<div class="symptom-item"><div class="symptom-text">📝 ${escapeHtml(s.text)}<br><span class="symptom-date">${s.date}</span></div><div class="button-group"><button class="btn-small btn-warning" onclick="editSymptom(${s.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteSymptom(${s.id})">🗑️</button></div></div>`).join('');}
+    function addAllergy(){const n=prompt("Аллерген:"),r=prompt("Реакция:");if(n&&r){patientData.allergies.push({id:Date.now(),name:n,reaction:r,date:new Date().toLocaleDateString()});saveData();}}
+    function editAllergy(id){const a=patientData.allergies.find(x=>x.id===id);if(a){const n=prompt("Аллерген:",a.name),r=prompt("Реакция:",a.reaction);if(n&&r){a.name=n;a.reaction=r;saveData();}}}
+    function deleteAllergy(id){if(confirm("Удалить аллергию?")){patientData.allergies=patientData.allergies.filter(x=>x.id!==id);saveData();}}
+    function updateAllergiesList(){const c=document.getElementById('allergiesList');c.innerHTML=patientData.allergies.map(a=>`<div class="allergy-item"><div class="allergy-text">⚠️ ${escapeHtml(a.name)} - ${escapeHtml(a.reaction)}<br><span class="symptom-date">Добавлено: ${a.date}</span></div><div class="button-group"><button class="btn-small btn-warning" onclick="editAllergy(${a.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteAllergy(${a.id})">🗑️</button></div></div>`).join('');}
+    function addVaccination(){const n=prompt("Вакцина:"),d=prompt("Дата (ДД.ММ.ГГГГ):");if(n&&d){patientData.vaccinations.push({id:Date.now(),name:n,date:d});saveData();}}
+    function editVaccination(id){const v=patientData.vaccinations.find(x=>x.id===id);if(v){const n=prompt("Вакцина:",v.name),d=prompt("Дата:",v.date);if(n&&d){v.name=n;v.date=d;saveData();}}}
+    function deleteVaccination(id){if(confirm("Удалить вакцинацию?")){patientData.vaccinations=patientData.vaccinations.filter(x=>x.id!==id);saveData();}}
+    function updateVaccinationsList(){const c=document.getElementById('vaccinationsList');c.innerHTML=patientData.vaccinations.map(v=>`<div class="vaccination-item"><div class="vaccination-text">💉 ${escapeHtml(v.name)} - ${v.date}</div><div class="button-group"><button class="btn-small btn-warning" onclick="editVaccination(${v.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteVaccination(${v.id})">🗑️</button></div></div>`).join('');}
+    function addMedication(){const n=prompt("Название препарата:"),d=prompt("К какому диагнозу относится (оставьте пустым):");if(n){patientData.medications.push({id:Date.now(),name:n,startDate:new Date().toLocaleDateString(),diagnosis:d||"Общий"});if(d){const diag=patientData.diagnoses.find(x=>x.name===d);if(diag)diag.medications.push(n);}saveData();}}
+    function editMedication(id){const m=patientData.medications.find(x=>x.id===id);if(m){const n=prompt("Название препарата:",m.name);if(n){m.name=n;saveData();}}}
+    function deleteMedication(id){if(confirm("Удалить препарат?")){patientData.medications=patientData.medications.filter(x=>x.id!==id);saveData();}}
+    function updateMedicationsList(){const c=document.getElementById('medicationsList');c.innerHTML=patientData.medications.map(m=>`<div class="medication-item"><div class="medication-text">💊 ${escapeHtml(m.name)}<br><span class="symptom-date">Начало: ${m.startDate} | Диагноз: ${m.diagnosis}</span></div><div class="button-group"><button class="btn-small btn-warning" onclick="editMedication(${m.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteMedication(${m.id})">🗑️</button></div></div>`).join('');}
+    function addDiagnosis(){const n=prompt("Название диагноза:"),d=prompt("Дата (ДД.ММ.ГГГГ):");if(n&&d){patientData.diagnoses.push({id:Date.now(),name:n,date:d,medications:[]});saveData();}}
+    function addMedicationToDiagnosis(diagnosisName){const medName=prompt("Название препарата:");if(medName){const diagnosis=patientData.diagnoses.find(d=>d.name===diagnosisName);if(diagnosis){diagnosis.medications.push(medName);if(!patientData.medications.find(m=>m.name===medName)){patientData.medications.push({id:Date.now(),name:medName,startDate:new Date().toLocaleDateString(),diagnosis:diagnosisName});}saveData();}}}
+    function editDiagnosis(id){const d=patientData.diagnoses.find(x=>x.id===id);if(d){const n=prompt("Название диагноза:",d.name);if(n){d.name=n;saveData();}}}
+    function deleteDiagnosis(id){if(confirm("Удалить диагноз?")){patientData.diagnoses=patientData.diagnoses.filter(x=>x.id!==id);saveData();}}
+    function updateDiagnosesList(){const c=document.getElementById('diagnosesList');c.innerHTML=patientData.diagnoses.map(d=>`<div class="diagnosis-item"><div class="diagnosis-text">📋 ${escapeHtml(d.name)} - ${d.date}<br>💊 Препараты: ${d.medications.join(', ')||'не назначены'}</div><div class="button-group"><button class="btn-small btn-info" onclick="addMedicationToDiagnosis('${d.name}')">+ Добавить препарат</button><button class="btn-small btn-warning" onclick="editDiagnosis(${d.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteDiagnosis(${d.id})">🗑️</button></div></div>`).join('');}
+    function uploadFile(input){const file=input.files[0];if(file){const reader=new FileReader();reader.onload=e=>{let type="image";if(file.type==="application/pdf")type="pdf";patientData.files.push({id:Date.now(),name:file.name,type:type,data:e.target.result,date:new Date().toLocaleString()});saveData();};reader.readAsDataURL(file);}}
+    function deleteFile(id){if(confirm("Удалить файл?")){patientData.files=patientData.files.filter(f=>f.id!==id);saveData();}}
+    function viewFile(file){document.getElementById('fileViewTitle').innerHTML=`Просмотр: ${file.name}`;const c=document.getElementById('fileViewContent');if(file.type==="image"){c.innerHTML=`<img src="${file.data}" class="file-preview">`;}else if(file.type==="pdf"){c.innerHTML=`<iframe src="${file.data}" class="file-preview"></iframe>`;}else{c.innerHTML=`<p>Не удается предварительно просмотреть этот тип файла</p><a href="${file.data}" download="${file.name}">Скачать файл</a>`;}document.getElementById('fileViewModal').style.display='flex';}
+    function closeFileViewModal(){document.getElementById('fileViewModal').style.display='none';}
+    function updateFilesList(){const c=document.getElementById('filesList');c.innerHTML=patientData.files.map(f=>`<div class="file-item"><span>📎 ${escapeHtml(f.name)} (${f.date})</span><div class="button-group"><button class="btn-small btn-info" onclick='viewFile(${JSON.stringify(f)})'>👁️</button><button class="btn-small btn-danger" onclick="deleteFile(${f.id})">🗑️</button></div></div>`).join('');}
+    function startVoiceInput(){const btn=document.getElementById('voiceBtn'),rec=new(window.SpeechRecognition||window.webkitSpeechRecognition)();rec.lang='ru-RU';btn.textContent='🎤 Слушаю...';btn.classList.add('recording');rec.onresult=e=>{document.getElementById('symptomInput').value=e.results[0][0].transcript;btn.textContent='🎤 Голосовой ввод';btn.classList.remove('recording');};rec.onerror=()=>{btn.textContent='🎤 Голосовой ввод';btn.classList.remove('recording');alert('Ошибка распознавания');};rec.start();}
+    function printSelected(){const ps=document.getElementById('printSymptoms').checked,pa=document.getElementById('printAllergies').checked,pv=document.getElementById('printVaccinations').checked,pm=document.getElementById('printMedications').checked,pd=document.getElementById('printDiagnoses').checked,pvt=document.getElementById('printVitals').checked;let html='<html><head><title>Медицинская карта</title><style>body{font-family:Arial;padding:20px}</style></head><body><h1>Медицинская карта пациента</h1><p>Пациент: Иванов Иван Иванович</p><p>Дата рождения: 15.05.1990</p><hr>';if(pvt){html+=`<h2>Показатели здоровья</h2><p>Рост/Вес: ${patientData.height} см / ${patientData.weight} кг</p><p>ИМТ: ${((patientData.weight/((patientData.height/100)**2)).toFixed(1))}</p><p>АД: ${patientData.bpHistory[patientData.bpHistory.length-1].systolic}/${patientData.bpHistory[patientData.bpHistory.length-1].diastolic} мм рт.ст.</p><p>Сатурация: ${patientData.spo2History[patientData.spo2History.length-1].value}%</p>`;}if(ps&&patientData.symptoms.length){html+='<h2>Симптомы</h2><ul>'+patientData.symptoms.map(s=>`<li>${s.date}: ${s.text}</li>`).join('')+'</ul>';}if(pa&&patientData.allergies.length){html+='<h2>Аллергии</h2><ul>'+patientData.allergies.map(a=>`<li>${a.name} - ${a.reaction}</li>`).join('')+'</ul>';}if(pv&&patientData.vaccinations.length){html+='<h2>Вакцинации</h2><ul>'+patientData.vaccinations.map(v=>`<li>${v.name} - ${v.date}</li>`).join('')+'</ul>';}if(pm&&patientData.medications.length){html+='<h2>Препараты</h2><ul>'+patientData.medications.map(m=>`<li>${m.name} (с ${m.startDate}) - ${m.diagnosis}</li>`).join('')+'</ul>';}if(pd&&patientData.diagnoses.length){html+='<h2>Диагнозы</h2><ul>'+patientData.diagnoses.map(d=>`<li>${d.name} (${d.date})</li>`).join('')+'</ul>';}html+='</body></html>';const w=window.open('','_blank');w.document.write(html);w.document.close();w.print();}
+    function toggleSection(sectionId){const c=document.getElementById(sectionId),i=document.getElementById(sectionId+'Icon');if(c.classList.contains('collapsed')){c.classList.remove('collapsed');i.classList.remove('collapsed');}else{c.classList.add('collapsed');i.classList.add('collapsed');}}
+    function escapeHtml(text){const d=document.createElement('div');d.textContent=text;return d.innerHTML;}
+    function logout(){if(confirm('Выйти из личного кабинета?'))window.location.href='/';}
+    loadData();
+</script>
+</body>
+</html>
