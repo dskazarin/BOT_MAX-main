@@ -1,0 +1,31 @@
+{
+    "name": "BOT_MAX - Patient Cabinet",
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+    "features": {
+        "ghcr.io/devcontainers/features/python:1": {
+            "version": "3.9"
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/post-create.sh",
+    "postStartCommand": "bash .devcontainer/post-start.sh",
+    "forwardPorts": [8082],
+    "portsAttributes": {
+        "8082": {
+            "label": "Patient Cabinet",
+            "onAutoForward": "openPreview",
+            "elevateIfNeeded": true
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "liveServer.settings.port": 8082
+            },
+            "extensions": [
+                "ms-python.python",
+                "github.copilot"
+            ]
+        }
+    }
+}
