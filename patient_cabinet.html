@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Личный кабинет пациента - BOT_MAX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            color: white;
+        }
+        .logout-btn {
+            background: #f56565;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .card-header h2 { color: #667eea; font-size: 1.3em; }
+        .toggle-icon { font-size: 1.2em; transition: transform 0.3s; display: inline-block; }
+        .toggle-icon.collapsed { transform: rotate(-90deg); }
+        .card-content { transition: all 0.3s; overflow: hidden; }
+        .card-content.collapsed { display: none; }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .info-item {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 12px;
+        }
+        .info-label { font-weight: 600; color: #4a5568; font-size: 0.8em; text-transform: uppercase; }
+        .info-value { font-size: 1.1em; color: #2d3748; margin-top: 5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .edit-icon {
+            cursor: pointer;
+            background: #e2e8f0;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.7em;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1em;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn-small { padding: 5px 12px; font-size: 0.8em; margin: 2px; }
+        .btn-danger { background: #f56565; }
+        .btn-warning { background: #ed8936; }
+        .symptom-item {
+            background: #f7fafc;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .symptom-text { flex: 1; }
+        .symptom-date { font-size: 0.7em; color: #718096; }
+        .button-group { display: flex; gap: 5px; }
+        @media (max-width: 768px) {
+            .info-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="user-info">
+            <div class="avatar">👤</div>
+            <div><strong>Иванов Иван Иванович</strong><br><small>ID: PAT-2026-001</small></div>
+        </div>
+        <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
+    </div>
+
+    <div class="card">
+        <h2>👤 Информация о пациенте</h2>
+        <div class="info-grid">
+            <div class="info-item"><div class="info-label">ФИО</div><div class="info-value">Иванов Иван Иванович</div></div>
+            <div class="info-item"><div class="info-label">Дата рождения</div><div class="info-value">15.05.1990 (35 лет)</div></div>
+            <div class="info-item">
+                <div class="info-label">Рост/Вес</div>
+                <div class="info-value">
+                    <span id="heightValue">175</span> см / <span id="weightValue">80</span> кг
+                    <span class="edit-icon" onclick="editHeightWeight()">✏️</span>
+                </div>
+            </div>
+            <div class="info-item"><div class="info-label">ИМТ</div><div class="info-value" id="bmiValue">26.1 (Избыточный вес)</div></div>
+            <div class="info-item">
+                <div class="info-label">Артериальное давление</div>
+                <div class="info-value">
+                    <span id="bpSystolic">140</span> / <span id="bpDiastolic">90</span> мм рт.ст.
+                    <span class="edit-icon" onclick="editBP()">✏️</span>
+                </div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Сатурация (SpO2)</div>
+                <div class="info-value">
+                    <span id="spo2Value">98</span> %
+                    <span class="edit-icon" onclick="editSpO2()">✏️</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📝 Добавить симптом</h2>
+        <textarea id="symptomInput" rows="3" placeholder="Опишите симптом..."></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+            <button onclick="addSymptom()">💾 Сохранить симптом</button>
+            <button onclick="addTemperature()">🌡️ Добавить температуру</button>
+            <button onclick="startVoiceInput()" id="voiceBtn">🎤 Голосовой ввод</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('symptomsSection')">
+            <h2>📋 Симптомы <span class="toggle-icon" id="symptomsIcon">▼</span></h2>
+        </div>
+        <div id="symptomsSection" class="card-content"><div id="symptomsList" class="symptoms-list"></div></div>
+    </div>
+</div>
+
+<script>
+    let patientData = {
+        height: 175, weight: 80,
+        bpHistory: [{systolic:140,diastolic:90,date:new Date().toLocaleString()}],
+        spo2History: [{value:98,date:new Date().toLocaleString()}],
+        symptoms: []
+    };
+
+    function loadData(){const s=localStorage.getItem('patientData');if(s)patientData=JSON.parse(s);updateAll();}
+    function saveData(){localStorage.setItem('patientData',JSON.stringify(patientData));updateAll();}
+    function updateAll(){updateBMI();updateSymptomsList();document.getElementById('bpSystolic').innerText=patientData.bpHistory[patientData.bpHistory.length-1].systolic;document.getElementById('bpDiastolic').innerText=patientData.bpHistory[patientData.bpHistory.length-1].diastolic;document.getElementById('spo2Value').innerText=patientData.spo2History[patientData.spo2History.length-1].value;document.getElementById('heightValue').innerText=patientData.height;document.getElementById('weightValue').innerText=patientData.weight;}
+    function updateBMI(){const h=patientData.height/100,w=patientData.weight,bmi=(w/(h*h)).toFixed(1);let s="";if(bmi<18.5)s="Недостаточный вес";else if(bmi<25)s="Норма";else if(bmi<30)s="Избыточный вес";else s="Ожирение";document.getElementById('bmiValue').innerHTML=`${bmi} (${s})`;}
+    function editHeightWeight(){const h=prompt("Рост (см):",patientData.height),w=prompt("Вес (кг):",patientData.weight);if(h&&w){patientData.height=parseFloat(h);patientData.weight=parseFloat(w);saveData();}}
+    function editBP(){const s=prompt("Систолическое давление:",patientData.bpHistory[patientData.bpHistory.length-1].systolic),d=prompt("Диастолическое давление:",patientData.bpHistory[patientData.bpHistory.length-1].diastolic);if(s&&d){patientData.bpHistory.push({systolic:parseInt(s),diastolic:parseInt(d),date:new Date().toLocaleString()});saveData();}}
+    function editSpO2(){const v=prompt("Сатурация (%):",patientData.spo2History[patientData.spo2History.length-1].value);if(v&&v>=70&&v<=100){patientData.spo2History.push({value:parseInt(v),date:new Date().toLocaleString()});saveData();}}
+    function addSymptom(){const t=document.getElementById('symptomInput').value.trim();if(t){patientData.symptoms.unshift({id:Date.now(),text:t,date:new Date().toLocaleString()});saveData();document.getElementById('symptomInput').value='';}}
+    function addTemperature(){const t=prompt("Температура (°C):");if(t){patientData.symptoms.unshift({id:Date.now(),text:`Температура: ${t}°C`,date:new Date().toLocaleString()});saveData();}}
+    function editSymptom(id){const s=patientData.symptoms.find(x=>x.id===id);if(s){const t=prompt("Редактировать:",s.text);if(t){s.text=t;s.date=`${new Date().toLocaleString()} (ред.)`;saveData();}}}
+    function deleteSymptom(id){if(confirm("Удалить симптом?")){patientData.symptoms=patientData.symptoms.filter(x=>x.id!==id);saveData();}}
+    function updateSymptomsList(){const c=document.getElementById('symptomsList');c.innerHTML=patientData.symptoms.map(s=>`<div class="symptom-item"><div class="symptom-text">📝 ${s.text}<br><span class="symptom-date">${s.date}</span></div><div class="button-group"><button class="btn-small btn-warning" onclick="editSymptom(${s.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteSymptom(${s.id})">🗑️</button></div></div>`).join('');}
+    function startVoiceInput(){const btn=document.getElementById('voiceBtn'),rec=new(window.SpeechRecognition||window.webkitSpeechRecognition)();rec.lang='ru-RU';btn.textContent='🎤 Слушаю...';rec.onresult=e=>{document.getElementById('symptomInput').value=e.results[0][0].transcript;btn.textContent='🎤 Голосовой ввод';};rec.onerror=()=>{btn.textContent='🎤 Голосовой ввод';alert('Ошибка');};rec.start();}
+    function toggleSection(sectionId){const c=document.getElementById(sectionId),i=document.getElementById(sectionId+'Icon');if(c.classList.contains('collapsed')){c.classList.remove('collapsed');i.classList.remove('collapsed');}else{c.classList.add('collapsed');i.classList.add('collapsed');}}
+    function logout(){if(confirm('Выйти?'))window.location.href='/';}
+    loadData();
+</script>
+</body>
+</html>
