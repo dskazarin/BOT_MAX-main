@@ -29,3 +29,5 @@ final_working_cabinet.go
 # Uploads (keep folder)
 uploads/
 !uploads/.gitkeep
+
+# Но разрешаем HTML файлы личного кабинета
