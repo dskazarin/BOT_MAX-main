@@ -1,33 +1,11 @@
-# Compiled files
 *.bin
 *.exe
-
-# Backup
-backup_*/
-
-# Logs
 *.log
-
-# IDE
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Temporary
 *.tmp
 *.temp
-
-# Old files (not needed)
-beautiful_login.go
-botmax_server.go
-final_patient_cabinet.go
-final_working_cabinet.go
-
-# Uploads (keep folder)
-uploads/
-!uploads/.gitkeep
-
-# Но разрешаем HTML файлы личного кабинета
+server.log
+nohup.out
