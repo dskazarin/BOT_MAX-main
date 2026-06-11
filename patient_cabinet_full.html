@@ -48,6 +48,15 @@
             cursor: pointer;
             font-weight: 600;
         }
+        .sync-badge {
+            background: #48bb78;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.7em;
+            margin-left: 10px;
+            cursor: pointer;
+        }
         .current-date {
             background: white;
             border-radius: 20px;
@@ -60,21 +69,21 @@
             gap: 15px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.1);
         }
-        .date-display {
-            font-size: 1.1em;
-            color: #2d3748;
+        .date-display { font-size: 1.1em; color: #2d3748; }
+        .date-label { font-weight: 600; color: #667eea; }
+        .sync-status { font-size: 0.8em; padding: 5px 10px; border-radius: 20px; background: #c6f6d5; color: #22543d; }
+        .computer-link {
+            background: #4299e1;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-size: 0.9em;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
-        .date-label {
-            font-weight: 600;
-            color: #667eea;
-        }
-        .sync-status {
-            font-size: 0.8em;
-            padding: 5px 10px;
-            border-radius: 20px;
-            background: #c6f6d5;
-            color: #22543d;
-        }
+        .computer-link:hover { background: #3182ce; }
         .combined-section {
             background: white;
             border-radius: 20px;
@@ -87,6 +96,7 @@
             gap: 20px;
             flex-wrap: wrap;
             margin-bottom: 20px;
+            align-items: flex-start;
         }
         .qr-box {
             background: #f7fafc;
@@ -94,28 +104,14 @@
             padding: 15px;
             text-align: center;
         }
-        .voice-box {
-            flex: 1;
+        .computer-box {
             background: #f7fafc;
             border-radius: 15px;
             padding: 15px;
-        }
-        .voice-box textarea {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            resize: vertical;
-            font-family: inherit;
-        }
-        .voice-buttons {
+            text-align: center;
             display: flex;
+            flex-direction: column;
             gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-        .symptom-section {
-            margin-top: 20px;
         }
         .symptom-section textarea {
             width: 100%;
@@ -124,6 +120,13 @@
             border-radius: 10px;
             resize: vertical;
             font-family: inherit;
+            font-size: 1em;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
         }
         .card {
             background: white;
@@ -146,7 +149,7 @@
         .card-content.collapsed { display: none; }
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 15px;
         }
         .info-item {
@@ -172,12 +175,35 @@
             font-size: 0.9em;
             background: white;
         }
-        .temp-control {
+        .weight-control, .height-control {
             display: flex;
+            gap: 5px;
             align-items: center;
-            gap: 10px;
             flex-wrap: wrap;
         }
+        .custom-btn {
+            background: #ed8936;
+            font-size: 0.7em;
+            padding: 5px 10px;
+        }
+        .age-category { font-size: 0.7em; color: #718096; margin-left: 5px; }
+        .growth-table {
+            margin-top: 15px;
+            overflow-x: auto;
+        }
+        .growth-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8em;
+        }
+        .growth-table th, .growth-table td {
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+            text-align: center;
+        }
+        .growth-table th { background: #667eea; color: white; }
+        .normal-value { background: #c6f6d5; }
+        .alert-value { background: #fed7d7; }
         button {
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
@@ -207,10 +233,7 @@
             flex-wrap: wrap;
             margin-bottom: 10px;
         }
-        .medication-name {
-            font-size: 1.1em;
-            font-weight: bold;
-        }
+        .medication-name { font-size: 1.1em; font-weight: bold; }
         .dose-item {
             background: white;
             padding: 10px;
@@ -223,31 +246,15 @@
         }
         .dose-taken { background: #c6f6d5; }
         .dose-missed { background: #fed7d7; }
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 0.7em;
-            font-weight: 600;
-        }
+        .status-badge { padding: 4px 8px; border-radius: 20px; font-size: 0.7em; font-weight: 600; }
         .status-taken { background: #48bb78; color: white; }
         .status-missed { background: #f56565; color: white; }
-        .calendar-input {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin: 10px 0;
-            align-items: center;
+        .constant-med-item {
+            background: #e6fffa;
+            border-left: 4px solid #38b2ac;
         }
-        .calendar-input label {
-            min-width: 140px;
-            font-weight: 600;
-        }
-        .calendar-input input, .calendar-input select {
-            padding: 8px 12px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            flex: 1;
-        }
+        .recording { animation: pulse 1s infinite; background: #e53e3e; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
         .print-options {
             display: flex;
             gap: 15px;
@@ -279,13 +286,8 @@
             max-height: 85vh;
             overflow-y: auto;
         }
-        .times-list {
-            margin: 10px 0;
-            padding: 10px;
-            background: #f7fafc;
-            border-radius: 10px;
-            min-height: 50px;
-        }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+        .times-list { margin: 10px 0; padding: 10px; background: #f7fafc; border-radius: 10px; min-height: 50px; }
         .time-chip {
             display: inline-block;
             background: #e2e8f0;
@@ -294,17 +296,22 @@
             margin: 5px;
             font-size: 0.9em;
         }
-        .remove-time {
-            cursor: pointer;
-            margin-left: 5px;
-            color: #f56565;
-            font-weight: bold;
+        .remove-time { cursor: pointer; margin-left: 5px; color: #f56565; font-weight: bold; }
+        .sync-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #48bb78;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
         }
-        .recording { animation: pulse 1s infinite; background: #e53e3e; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-        .stat-modal-content { max-width: 600px; }
-        .stat-item { padding: 10px; border-bottom: 1px solid #e2e8f0; }
-        .temp-chart { max-width: 100%; height: 400px; margin: 20px 0; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
         @media print {
             body { background: white; }
             .card { break-inside: avoid; }
@@ -313,6 +320,7 @@
         @media (max-width: 768px) {
             .info-grid { grid-template-columns: 1fr; }
             .qr-voice-row { flex-direction: column; }
+            .growth-table { font-size: 0.7em; }
         }
     </style>
 </head>
@@ -320,10 +328,11 @@
 <div class="container">
     <div class="header">
         <div class="user-info">
-            <div class="avatar">👤</div>
+            <div class="avatar" id="avatarEmoji">👨</div>
             <div>
                 <strong id="patientName">Иванов Петр Александрович</strong><br>
                 <small>ID: <span id="patientId">PAT-2026-001</span></small>
+                <span class="sync-badge" id="syncBadge" onclick="manualSync()">🔄 Синхронизация</span>
             </div>
         </div>
         <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
@@ -335,141 +344,79 @@
             <span id="currentDateTimeDisplay">--</span>
             <span class="edit-icon" onclick="editCurrentDateTime()" style="margin-left: 10px;">✏️</span>
         </div>
-        <div class="sync-status" id="syncStatus">
-            🌐 Синхронизация...
-        </div>
+        <div class="sync-status" id="syncStatus">🌐 Синхронизация...</div>
     </div>
 
-    <!-- Объединенный блок: QR-код, голосовые заметки -->
     <div class="combined-section">
         <div class="qr-voice-row">
             <div class="qr-box">
                 <div id="qrcode"></div>
                 <div style="margin-top: 10px; font-size: 0.8em; color: #718096;">Отсканируйте для доступа с телефона</div>
             </div>
-            <div class="voice-box">
-                <textarea id="voiceNoteInput" rows="2" placeholder="Голосовая заметка или диктовка..."></textarea>
-                <div class="voice-buttons">
-                    <button onclick="startVoiceInput()" id="voiceBtn">🎤 Диктовать с телефона</button>
-                    <button onclick="uploadVoiceFile()">📁 Загрузить голосовой файл</button>
-                    <button onclick="sortVoiceNotes()">📅 В хронологическом порядке</button>
-                    <input type="file" id="voiceFileInput" accept="audio/*" style="display:none" onchange="processVoiceFile(this)">
-                </div>
+            <div class="computer-box">
+                <a href="#" id="computerLink" class="computer-link" target="_blank">💻 Открыть на компьютере</a>
+                <button onclick="endAllSessions()" class="btn-small btn-danger">🔒 Завершить все сеансы</button>
+                <div style="margin-top: 5px; font-size: 0.7em; color: #718096;">Скопируйте ссылку для открытия на ПК</div>
             </div>
         </div>
         
-        <!-- Поле ввода симптома объединено -->
         <div class="symptom-section">
-            <textarea id="symptomInput" rows="2" placeholder="Опишите симптом..."></textarea>
-            <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+            <textarea id="symptomInput" rows="3" placeholder="Опишите симптом..."></textarea>
+            <div class="button-group">
+                <button onclick="startVoiceInput()" id="voiceBtn">🎤 Диктовать с телефона</button>
+                <button onclick="uploadVoiceFile()">📁 Загрузить голосовой файл</button>
+                <button onclick="sortAndReorderSymptoms()">📅 В хронологическом порядке</button>
                 <button onclick="addSymptom()">💾 Сохранить симптом</button>
-                <button onclick="addFromVoiceNote()">🎤 Из голосовой заметки</button>
                 <button onclick="document.getElementById('photoInput').click()">📸 Загрузить файл</button>
                 <input type="file" id="photoInput" accept="image/*,application/pdf" style="display:none" onchange="uploadFile(this)">
+                <input type="file" id="voiceFileInput" accept="audio/*" style="display:none" onchange="processVoiceFile(this)">
             </div>
         </div>
     </div>
 
+    <!-- Информация о пациенте (упрощена для краткости, но все поля есть) -->
     <div class="card">
         <h2>👤 Информация о пациенте</h2>
         <div class="info-grid">
-            <div class="info-item">
-                <div class="info-label">ФИО</div>
-                <div class="info-value">
-                    <span id="fullName">Иванов Петр Александрович</span>
-                    <span class="edit-icon" onclick="editPatientName()">✏️</span>
-                </div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Дата рождения</div>
-                <div class="info-value">
-                    <span id="birthDate">27.04.2026</span>
-                    <span class="edit-icon" onclick="showBirthDatePicker()">✏️</span>
-                </div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Рост/Вес</div>
-                <div class="info-value">
-                    <select id="heightSelect" class="select-control" onchange="updateHeightWeight()">
-                        <option value="50">50 см</option><option value="60">60 см</option><option value="70">70 см</option>
-                        <option value="80">80 см</option><option value="90">90 см</option><option value="100">100 см</option>
-                        <option value="110">110 см</option><option value="120">120 см</option><option value="130">130 см</option>
-                        <option value="140">140 см</option><option value="150">150 см</option><option value="160">160 см</option>
-                        <option value="165">165 см</option><option value="170">170 см</option><option value="175" selected>175 см</option>
-                        <option value="180">180 см</option><option value="185">185 см</option><option value="190">190 см</option>
-                    </select>
-                    <select id="weightSelect" class="select-control" onchange="updateHeightWeight()">
-                        <option value="3">3 кг</option><option value="5">5 кг</option><option value="8">8 кг</option>
-                        <option value="10">10 кг</option><option value="15">15 кг</option><option value="20">20 кг</option>
-                        <option value="25">25 кг</option><option value="30">30 кг</option><option value="35">35 кг</option>
-                        <option value="40">40 кг</option><option value="45">45 kg</option><option value="50">50 кг</option>
-                        <option value="55">55 кг</option><option value="60">60 кг</option><option value="65">65 кг</option>
-                        <option value="70">70 кг</option><option value="75">75 кг</option><option value="80" selected>80 кг</option>
-                        <option value="85">85 кг</option><option value="90">90 кг</option><option value="95">95 кг</option>
-                        <option value="100">100 кг</option><option value="110">110 кг</option><option value="120">120 кг</option>
-                    </select>
-                    <span class="edit-icon" onclick="showWeightHistory()">📊</span>
-                </div>
-            </div>
-            <div class="info-item"><div class="info-label">ИМТ</div><div class="info-value" id="bmiValue">26.1 (Избыточный вес)</div></div>
-            <div class="info-item">
-                <div class="info-label">Артериальное давление</div>
-                <div class="info-value">
-                    <select id="bpSystolicSelect" class="select-control" onchange="updateBP()">
-                        <option value="70">70</option><option value="80">80</option><option value="90">90</option>
-                        <option value="100">100</option><option value="110">110</option><option value="120">120</option>
-                        <option value="130">130</option><option value="140" selected>140</option><option value="150">150</option>
-                        <option value="160">160</option><option value="170">170</option><option value="180">180</option>
-                    </select>
-                    /
-                    <select id="bpDiastolicSelect" class="select-control" onchange="updateBP()">
-                        <option value="40">40</option><option value="50">50</option><option value="60">60</option>
-                        <option value="70">70</option><option value="80" selected>80</option><option value="90">90</option>
-                        <option value="100">100</option><option value="110">110</option><option value="120">120</option>
-                    </select>
-                    <span class="edit-icon" onclick="showBPHistory()">📊</span>
-                </div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Сатурация (SpO2)</div>
-                <div class="info-value">
-                    <select id="spo2Select" class="select-control" onchange="updateSpO2()">
-                        <option value="85">85%</option><option value="86">86%</option><option value="87">87%</option>
-                        <option value="88">88%</option><option value="89">89%</option><option value="90">90%</option>
-                        <option value="91">91%</option><option value="92">92%</option><option value="93">93%</option>
-                        <option value="94">94%</option><option value="95">95%</option><option value="96">96%</option>
-                        <option value="97">97%</option><option value="98" selected>98%</option><option value="99">99%</option>
-                        <option value="100">100%</option>
-                    </select>
-                    <span class="edit-icon" onclick="showSpO2History()">📊</span>
-                </div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Температура</div>
-                <div class="info-value">
-                    <div class="temp-control">
-                        <select id="tempSelect">
-                            <option value="35.0">35.0°C</option><option value="35.5">35.5°C</option>
-                            <option value="36.0">36.0°C</option><option value="36.1">36.1°C</option>
-                            <option value="36.2">36.2°C</option><option value="36.3">36.3°C</option>
-                            <option value="36.4">36.4°C</option><option value="36.5">36.5°C</option>
-                            <option value="36.6" selected>36.6°C</option><option value="36.7">36.7°C</option>
-                            <option value="36.8">36.8°C</option><option value="36.9">36.9°C</option>
-                            <option value="37.0">37.0°C</option><option value="37.1">37.1°C</option>
-                            <option value="37.2">37.2°C</option><option value="37.3">37.3°C</option>
-                            <option value="37.4">37.4°C</option><option value="37.5">37.5°C</option>
-                            <option value="38.0">38.0°C</option><option value="38.5">38.5°C</option>
-                            <option value="39.0">39.0°C</option><option value="39.5">39.5°C</option>
-                            <option value="40.0">40.0°C</option>
-                        </select>
-                        <button onclick="addTemperatureFromSelect()" class="btn-small btn-info">🌡️ Добавить</button>
-                        <span class="edit-icon" onclick="showTemperatureChart()">📊</span>
-                    </div>
-                </div>
-            </div>
+            <div class="info-item"><div class="info-label">ФИО</div><div class="info-value"><span id="fullName">Иванов Петр Александрович</span><span class="edit-icon" onclick="editPatientName()">✏️</span></div></div>
+            <div class="info-item"><div class="info-label">Дата рождения и пол</div><div class="info-value"><span id="birthDate">27.04.2026</span><span class="edit-icon" onclick="showBirthDatePicker()">✏️</span><select id="genderSelect" class="select-control" onchange="updateGender()"><option value="male">👨 Мужской</option><option value="female">👩 Женский</option></select><span class="age-category" id="ageCategory"></span></div></div>
+            <div class="info-item"><div class="info-label">Рост/Вес</div><div class="info-value"><div class="height-control"><select id="heightMeters" onchange="updateHeightWeight()"><option value="0">0</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option><option value="50" selected>50</option><option value="60">60</option><option value="70">70</option><option value="80">80</option><option value="90">90</option><option value="100">100</option><option value="110">110</option><option value="120">120</option><option value="130">130</option><option value="140">140</option><option value="150">150</option><option value="160">160</option><option value="170">170</option><option value="180">180</option><option value="190">190</option><option value="200">200</option></select><span>см</span><select id="heightCm" onchange="updateHeightWeight()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7" selected>7</option><option value="8">8</option><option value="9">9</option></select><span>см</span><button onclick="openCustomHeightModal()" class="btn-small custom-btn">✏️ Свой вариант</button></div><div class="weight-control"><select id="weightKg" onchange="updateHeightWeight()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50">50</option><option value="55">55</option><option value="60">60</option><option value="65">65</option><option value="70">70</option><option value="75">75</option><option value="80">80</option><option value="85">85</option><option value="90">90</option><option value="95">95</option><option value="100">100</option><option value="110">110</option><option value="120">120</option></select><span>кг</span><select id="weightGrams100" onchange="updateHeightWeight()"><option value="0">0</option><option value="100">100</option><option value="200">200</option><option value="300">300</option><option value="400">400</option><option value="500">500</option><option value="600">600</option><option value="700">700</option><option value="800" selected>800</option><option value="900">900</option></select><span>г</span><select id="weightGrams10" onchange="updateHeightWeight()"><option value="0">0</option><option value="10">10</option><option value="20">20</option><option value="30" selected>30</option><option value="40">40</option><option value="50">50</option><option value="60">60</option><option value="70">70</option><option value="80">80</option><option value="90">90</option></select><span>г</span><select id="weightGrams1" onchange="updateHeightWeight()"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6" selected>6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option></select><span>г</span><button onclick="openCustomWeightModal()" class="btn-small custom-btn">✏️ Свой вариант</button></div><span class="edit-icon" onclick="showWeightHistory()">📊</span></div></div>
+            <div class="info-item"><div class="info-label">ИМТ</div><div class="info-value" id="bmiValue">--</div></div>
+            <div class="info-item"><div class="info-label">Артериальное давление</div><div class="info-value"><select id="bpSystolicSelect" onchange="updateBP()"><option value="70">70</option><option value="80">80</option><option value="90">90</option><option value="100">100</option><option value="110">110</option><option value="120">120</option><option value="130">130</option><option value="140" selected>140</option><option value="150">150</option><option value="160">160</option><option value="170">170</option><option value="180">180</option></select>/<select id="bpDiastolicSelect" onchange="updateBP()"><option value="40">40</option><option value="50">50</option><option value="60">60</option><option value="70">70</option><option value="80" selected>80</option><option value="90">90</option><option value="100">100</option><option value="110">110</option><option value="120">120</option></select><span class="edit-icon" onclick="showBPHistory()">📊</span></div></div>
+            <div class="info-item"><div class="info-label">Сатурация (SpO2)</div><div class="info-value"><select id="spo2Select" onchange="updateSpO2()"><option value="85">85%</option><option value="86">86%</option><option value="87">87%</option><option value="88">88%</option><option value="89">89%</option><option value="90">90%</option><option value="91">91%</option><option value="92">92%</option><option value="93">93%</option><option value="94">94%</option><option value="95">95%</option><option value="96">96%</option><option value="97">97%</option><option value="98" selected>98%</option><option value="99">99%</option><option value="100">100%</option></select><span class="edit-icon" onclick="showSpO2History()">📊</span></div></div>
+            <div class="info-item"><div class="info-label">Температура</div><div class="info-value"><select id="tempSelect"><option value="35.0">35.0°C</option><option value="35.5">35.5°C</option><option value="36.0">36.0°C</option><option value="36.1">36.1°C</option><option value="36.2">36.2°C</option><option value="36.3">36.3°C</option><option value="36.4">36.4°C</option><option value="36.5">36.5°C</option><option value="36.6" selected>36.6°C</option><option value="36.7">36.7°C</option><option value="36.8">36.8°C</option><option value="36.9">36.9°C</option><option value="37.0">37.0°C</option><option value="37.1">37.1°C</option><option value="37.2">37.2°C</option><option value="37.3">37.3°C</option><option value="37.4">37.4°C</option><option value="37.5">37.5°C</option><option value="38.0">38.0°C</option><option value="38.5">38.5°C</option><option value="39.0">39.0°C</option><option value="39.5">39.5°C</option><option value="40.0">40.0°C</option></select><button onclick="addTemperatureFromSelect()" class="btn-small btn-info">🌡️ Добавить</button><span class="edit-icon" onclick="showTemperatureChart()">📊</span></div></div>
         </div>
     </div>
 
+    <!-- Динамика развития (до 1 года) -->
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('growthSection', 'growthIcon')">
+            <h2>📈 Динамика развития (до 1 года) <span class="toggle-icon" id="growthIcon">▼</span></h2>
+        </div>
+        <div id="growthSection" class="card-content">
+            <div class="growth-table"><table id="growthTable"><thead><tr><th>Возраст</th><th>Масса (г)</th><th>Норма массы</th><th>Рост (см)</th><th>Норма роста</th><th>Окружность головы (см)</th><th>Норма</th></tr></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- Постоянные препараты -->
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('constantMedsSection', 'constantMedsIcon')">
+            <h2>💊 Постоянные препараты <span class="toggle-icon" id="constantMedsIcon">▼</span></h2>
+            <button class="btn-small" onclick="event.stopPropagation(); showAddConstantMedicationModal()">+ Добавить постоянный</button>
+        </div>
+        <div id="constantMedsSection" class="card-content"><div id="constantMedsList"></div></div>
+    </div>
+
+    <!-- Курсовые препараты -->
+    <div class="card">
+        <div class="card-header" onclick="toggleSection('medicationsSection', 'medicationsIcon')">
+            <h2>💊 Курсовые препараты <span class="toggle-icon" id="medicationsIcon">▼</span></h2>
+            <button class="btn-small" onclick="event.stopPropagation(); showAddMedicationModal()">+ Добавить курсовой</button>
+        </div>
+        <div id="medicationsSection" class="card-content"><div id="medicationsList"></div></div>
+    </div>
+
+    <!-- Симптомы -->
     <div class="card">
         <div class="card-header" onclick="toggleSection('symptomsSection', 'symptomsIcon')">
             <h2>📋 Симптомы <span class="toggle-icon" id="symptomsIcon">▼</span></h2>
@@ -477,6 +424,7 @@
         <div id="symptomsSection" class="card-content"><div id="symptomsList"></div></div>
     </div>
 
+    <!-- Аллергии -->
     <div class="card">
         <div class="card-header" onclick="toggleSection('allergiesSection', 'allergiesIcon')">
             <h2>⚠️ Аллергии <span class="toggle-icon" id="allergiesIcon">▼</span></h2>
@@ -485,6 +433,7 @@
         <div id="allergiesSection" class="card-content"><div id="allergiesList"></div></div>
     </div>
 
+    <!-- Вакцинации -->
     <div class="card">
         <div class="card-header" onclick="toggleSection('vaccinationsSection', 'vaccinationsIcon')">
             <h2>💉 Вакцинации <span class="toggle-icon" id="vaccinationsIcon">▼</span></h2>
@@ -493,14 +442,7 @@
         <div id="vaccinationsSection" class="card-content"><div id="vaccinationsList"></div></div>
     </div>
 
-    <div class="card">
-        <div class="card-header" onclick="toggleSection('medicationsSection', 'medicationsIcon')">
-            <h2>💊 Мои препараты <span class="toggle-icon" id="medicationsIcon">▼</span></h2>
-            <button class="btn-small" onclick="event.stopPropagation(); showAddMedicationModal()">+ Добавить</button>
-        </div>
-        <div id="medicationsSection" class="card-content"><div id="medicationsList"></div></div>
-    </div>
-
+    <!-- Диагнозы -->
     <div class="card">
         <div class="card-header" onclick="toggleSection('diagnosesSection', 'diagnosesIcon')">
             <h2>📋 Диагнозы <span class="toggle-icon" id="diagnosesIcon">▼</span></h2>
@@ -509,6 +451,7 @@
         <div id="diagnosesSection" class="card-content"><div id="diagnosesList"></div></div>
     </div>
 
+    <!-- Загруженные файлы -->
     <div class="card">
         <div class="card-header" onclick="toggleSection('filesSection', 'filesIcon')">
             <h2>📎 Загруженные файлы <span class="toggle-icon" id="filesIcon">▼</span></h2>
@@ -516,149 +459,227 @@
         <div id="filesSection" class="card-content"><div id="filesList"></div></div>
     </div>
 
+    <!-- Печать -->
     <div class="card">
         <h2>🖨️ Печать медицинской карты</h2>
         <div class="print-options">
             <label><input type="checkbox" id="printSymptoms" checked> Симптомы</label>
             <label><input type="checkbox" id="printAllergies" checked> Аллергии</label>
             <label><input type="checkbox" id="printVaccinations" checked> Вакцинации</label>
-            <label><input type="checkbox" id="printMedications" checked> Препараты</label>
+            <label><input type="checkbox" id="printConstantMeds" checked> Постоянные препараты</label>
+            <label><input type="checkbox" id="printMedications" checked> Курсовые препараты</label>
             <label><input type="checkbox" id="printDiagnoses" checked> Диагнозы</label>
             <label><input type="checkbox" id="printVitals" checked> Показатели</label>
             <label><input type="checkbox" id="printFiles" checked> Файлы</label>
-            <select id="printPeriod">
-                <option value="all">За всё время</option>
-                <option value="week">За неделю</option>
-                <option value="month">За месяц</option>
-            </select>
+            <select id="printPeriod"><option value="all">За всё время</option><option value="week">За неделю</option><option value="month">За месяц</option></select>
             <button onclick="printSelected()">🖨️ Распечатать</button>
             <button onclick="exportToPDF()" class="btn-info">📄 Экспорт в PDF</button>
         </div>
     </div>
 </div>
 
-<div id="birthDateModal" class="modal">
-    <div class="modal-content">
-        <h3 style="margin-bottom: 20px;">📅 Выберите дату рождения</h3>
-        <div class="calendar-input">
-            <label>Дата рождения:</label>
-            <input type="date" id="birthDatePicker">
-        </div>
-        <div class="modal-buttons">
-            <button onclick="saveBirthDate()" style="background: #48bb78;">✅ Сохранить</button>
-            <button onclick="closeBirthDateModal()" style="background: #cbd5e0;">❌ Отмена</button>
-        </div>
-    </div>
-</div>
-
-<div id="dateEditModal" class="modal">
-    <div class="modal-content">
-        <h3 style="margin-bottom: 20px;">📅 Выберите текущую дату и время</h3>
-        <div class="calendar-input">
-            <label>Дата:</label>
-            <input type="date" id="currentDatePicker">
-        </div>
-        <div class="calendar-input">
-            <label>Время:</label>
-            <input type="time" id="currentTimePicker">
-        </div>
-        <div class="modal-buttons">
-            <button onclick="saveCurrentDateTime()" style="background: #48bb78;">✅ Сохранить</button>
-            <button onclick="syncWithInternet()" style="background: #4299e1;">🌐 Синхронизировать с интернетом</button>
-            <button onclick="closeDateTimeEditModal()" style="background: #cbd5e0;">❌ Отмена</button>
-        </div>
-    </div>
-</div>
-
-<div id="medicationModal" class="modal">
-    <div class="modal-content">
-        <h3 style="margin-bottom: 20px;">➕ Добавить препарат</h3>
-        <div class="calendar-input">
-            <label>Название препарата:</label>
-            <input type="text" id="medName" placeholder="Например: Нурофен">
-        </div>
-        <div class="calendar-input">
-            <label>Дозировка:</label>
-            <input type="text" id="medDosage" placeholder="Например: 200 мг">
-        </div>
-        <div class="calendar-input">
-            <label>Дата начала:</label>
-            <input type="date" id="startDate">
-        </div>
-        <div class="calendar-input">
-            <label>Длительность (дней):</label>
-            <input type="number" id="durationDays" value="2">
-        </div>
-        <div class="calendar-input">
-            <label>Время приема:</label>
-            <div style="flex: 1;">
-                <div class="time-input">
-                    <input type="time" id="newTime" value="09:00">
-                    <button type="button" onclick="addTime()" class="btn-small btn-info">➕ Добавить время</button>
-                </div>
-                <div id="timesList" class="times-list">
-                    <span class="time-chip">09:00 <span class="remove-time" onclick="removeTime('09:00')">✖</span></span>
-                </div>
-            </div>
-        </div>
-        <div class="calendar-input">
-            <label>Диагноз:</label>
-            <input type="text" id="medDiagnosis" placeholder="Например: отит слева">
-        </div>
-        <div class="modal-buttons">
-            <button onclick="addMedicationFromModal()" style="background: #48bb78;">✅ Добавить</button>
-            <button onclick="closeMedicationModal()" style="background: #cbd5e0;">❌ Отмена</button>
-        </div>
-    </div>
-</div>
-
-<div id="historyModal" class="modal">
-    <div class="modal-content">
-        <h3 id="historyTitle">История изменений</h3>
-        <div id="historyList"></div>
-        <div class="modal-buttons">
-            <button onclick="closeHistoryModal()">Закрыть</button>
-        </div>
-    </div>
-</div>
-
-<div id="statsModal" class="modal">
-    <div class="modal-content stat-modal-content">
-        <h3 id="statsTitle">Статистика приема препарата</h3>
-        <div id="statsList"></div>
-        <div class="modal-buttons">
-            <button onclick="closeStatsModal()">Закрыть</button>
-        </div>
-    </div>
-</div>
-
-<div id="tempChartModal" class="modal">
-    <div class="modal-content">
-        <h3>📊 Динамика температуры</h3>
-        <canvas id="temperatureChart" class="temp-chart"></canvas>
-        <div class="modal-buttons">
-            <button onclick="closeTempChartModal()">Закрыть</button>
-        </div>
-    </div>
-</div>
+<!-- Модальные окна -->
+<div id="birthDateModal" class="modal"><div class="modal-content"><h3>📅 Выберите дату рождения</h3><input type="date" id="birthDatePicker" style="width:100%; padding:10px; margin:10px 0;"><div class="modal-buttons"><button onclick="saveBirthDate()" style="background:#48bb78;">✅ Сохранить</button><button onclick="closeBirthDateModal()" style="background:#cbd5e0;">❌ Отмена</button></div></div></div>
+<div id="dateEditModal" class="modal"><div class="modal-content"><h3>📅 Выберите текущую дату и время</h3><input type="date" id="currentDatePicker" style="width:100%; padding:10px; margin:10px 0;"><input type="time" id="currentTimePicker" style="width:100%; padding:10px; margin:10px 0;"><div class="modal-buttons"><button onclick="saveCurrentDateTime()" style="background:#48bb78;">✅ Сохранить</button><button onclick="syncTimeWithInternet()" style="background:#4299e1;">🌐 Синхронизировать</button><button onclick="closeDateTimeEditModal()" style="background:#cbd5e0;">❌ Отмена</button></div></div></div>
+<div id="medicationModal" class="modal"><div class="modal-content"><h3>➕ Добавить курсовой препарат</h3><input type="text" id="medName" placeholder="Название" style="width:100%; padding:10px; margin:10px 0;"><input type="text" id="medDosage" placeholder="Дозировка" style="width:100%; padding:10px; margin:10px 0;"><input type="date" id="startDate" style="width:100%; padding:10px; margin:10px 0;"><input type="number" id="durationDays" value="2" style="width:100%; padding:10px; margin:10px 0;"><div><input type="time" id="newTime" value="09:00"><button onclick="addTime()" class="btn-small btn-info">➕ Добавить время</button></div><div id="timesList"></div><input type="text" id="medDiagnosis" placeholder="Диагноз" style="width:100%; padding:10px; margin:10px 0;"><div class="modal-buttons"><button onclick="addMedicationFromModal()" style="background:#48bb78;">✅ Добавить</button><button onclick="closeMedicationModal()" style="background:#cbd5e0;">❌ Отмена</button></div></div></div>
+<div id="constantMedModal" class="modal"><div class="modal-content"><h3>➕ Добавить постоянный препарат</h3><input type="text" id="constMedName" placeholder="Название" style="width:100%; padding:10px; margin:10px 0;"><input type="text" id="constMedDosage" placeholder="Дозировка" style="width:100%; padding:10px; margin:10px 0;"><input type="text" id="constMedFrequency" placeholder="Частота" style="width:100%; padding:10px; margin:10px 0;"><div class="modal-buttons"><button onclick="addConstantMedication()" style="background:#48bb78;">✅ Добавить</button><button onclick="closeConstantMedModal()" style="background:#cbd5e0;">❌ Отмена</button></div></div></div>
+<div id="customHeightModal" class="modal"><div class="modal-content"><h3>✏️ Укажите рост</h3><input type="number" id="customHeight" placeholder="Рост в см" style="width:100%; padding:10px; margin:10px 0;"><div class="modal-buttons"><button onclick="saveCustomHeight()" style="background:#48bb78;">✅ Сохранить</button><button onclick="closeCustomHeightModal()" style="background:#cbd5e0;">❌ Отмена</button></div></div></div>
+<div id="customWeightModal" class="modal"><div class="modal-content"><h3>✏️ Укажите вес</h3><input type="number" id="customWeight" placeholder="Вес в граммах" style="width:100%; padding:10px; margin:10px 0;"><div class="modal-buttons"><button onclick="saveCustomWeight()" style="background:#48bb78;">✅ Сохранить</button><button onclick="closeCustomWeightModal()" style="background:#cbd5e0;">❌ Отмена</button></div></div></div>
+<div id="historyModal" class="modal"><div class="modal-content"><h3 id="historyTitle">История</h3><div id="historyList"></div><button onclick="closeHistoryModal()">Закрыть</button></div></div>
+<div id="statsModal" class="modal"><div class="modal-content"><h3 id="statsTitle">Статистика</h3><div id="statsList"></div><button onclick="closeStatsModal()">Закрыть</button></div></div>
+<div id="tempChartModal" class="modal"><div class="modal-content"><h3>📊 Динамика температуры</h3><canvas id="temperatureChart"></canvas><button onclick="closeTempChartModal()">Закрыть</button></div></div>
 
 <script>
-    let medicationTimes = ['09:00'];
-    let temperatureChart = null;
-    let currentSystemDate = new Date(2026, 5, 10, 11, 7);
-    let qrcode = null;
+    // ========== НАСТРОЙКИ СИНХРОНИЗАЦИИ ==========
+    let currentSystemDate = new Date();
+    let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString();
     let recognition = null;
-    let voiceNotes = [];
+    let accumulatedText = '';
+    let temperatureChart = null;
+    let medicationTimes = ['09:00'];
+    let lastUpdateTime = 0;
+    let isOwnUpdate = false;
     
+    // ИИ-АГЕНТ ДЛЯ ИЗВЛЕЧЕНИЯ ДАТ ИЗ ТЕКСТА
+    class IntelligentDateParser {
+        constructor() {
+            this.months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+            this.monthsShort = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+        }
+        
+        parseDate(text) {
+            let pattern = /(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)/i;
+            let match = text.match(pattern);
+            if (match) {
+                let day = parseInt(match[1]);
+                let monthName = match[2].toLowerCase();
+                let monthIndex = this.months.indexOf(monthName);
+                if (monthIndex === -1) monthIndex = this.monthsShort.indexOf(monthName.substring(0, 3));
+                if (monthIndex !== -1 && day >= 1 && day <= 31) {
+                    let year = currentSystemDate.getFullYear();
+                    let testDate = new Date(year, monthIndex, day);
+                    if (testDate > currentSystemDate) testDate.setFullYear(year - 1);
+                    return testDate;
+                }
+            }
+            let pattern2 = /(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?/;
+            match = text.match(pattern2);
+            if (match) {
+                let day = parseInt(match[1]);
+                let month = parseInt(match[2]) - 1;
+                let year = match[3] ? parseInt(match[3]) : currentSystemDate.getFullYear();
+                if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+                    let date = new Date(year, month, day);
+                    if (date > currentSystemDate && !match[3]) date.setFullYear(year - 1);
+                    return date;
+                }
+            }
+            return null;
+        }
+        
+        extractEntries(text) {
+            let entries = [];
+            let parts = text.split(/[,.]\s*/);
+            for (let part of parts) {
+                let date = this.parseDate(part);
+                if (date) {
+                    entries.push({ text: part.trim(), date: date });
+                }
+            }
+            return entries;
+        }
+    }
+    
+    const dateParser = new IntelligentDateParser();
+    
+    function sortAndReorderSymptoms() {
+        let inputText = document.getElementById('symptomInput').value;
+        if (!inputText.trim()) {
+            alert("Поле ввода симптомов пусто. Сначала введите симптомы.");
+            return;
+        }
+        
+        let entries = dateParser.extractEntries(inputText);
+        if (entries.length < 2) {
+            alert("Не удалось определить даты в тексте. Используйте формат: '08 июня температура, 10 июня боль в горле'");
+            return;
+        }
+        
+        entries.sort((a, b) => a.date - b.date);
+        let sortedText = entries.map(e => e.text).join(', ');
+        document.getElementById('symptomInput').value = sortedText;
+        
+        showNotification('📅 Симптомы перестроены в хронологическом порядке!', 'success');
+    }
+    
+    function sortSymptomsInHistory() {
+        patientData.symptoms.sort((a, b) => {
+            let dateA = dateParser.parseDate(a.text) || new Date(a.date);
+            let dateB = dateParser.parseDate(b.text) || new Date(b.date);
+            return dateA - dateB;
+        });
+        saveToLocalStorage();
+        updateSymptomsList();
+    }
+    
+    // Валидация даты рождения
+    function validateBirthDate(date) {
+        let birthDate = new Date(date);
+        let today = new Date(currentSystemDate);
+        today.setHours(0, 0, 0, 0);
+        if (birthDate > today) {
+            alert("❌ Дата рождения не может быть в будущем!");
+            return false;
+        }
+        let age = today.getFullYear() - birthDate.getFullYear();
+        if (age > 120) {
+            alert("❌ Пожалуйста, проверьте корректность даты рождения!");
+            return false;
+        }
+        return true;
+    }
+    
+    function getTotalHeight() { return (parseInt(document.getElementById('heightMeters').value) || 0) + (parseInt(document.getElementById('heightCm').value) || 0); }
+    function getTotalWeight() { return (parseInt(document.getElementById('weightKg').value) || 0) * 1000 + (parseInt(document.getElementById('weightGrams100').value) || 0) + (parseInt(document.getElementById('weightGrams10').value) || 0) + (parseInt(document.getElementById('weightGrams1').value) || 0); }
+    
+    function openCustomHeightModal() { document.getElementById('customHeight').value = getTotalHeight(); document.getElementById('customHeightModal').style.display = 'flex'; }
+    function closeCustomHeightModal() { document.getElementById('customHeightModal').style.display = 'none'; }
+    function saveCustomHeight() {
+        let height = parseInt(document.getElementById('customHeight').value);
+        if (!isNaN(height) && height > 0 && height < 300) {
+            document.getElementById('heightMeters').value = Math.floor(height / 10) * 10;
+            document.getElementById('heightCm').value = height % 10;
+            updateHeightWeight();
+            closeCustomHeightModal();
+        } else alert("Введите корректный рост от 1 до 300 см");
+    }
+    
+    function openCustomWeightModal() { document.getElementById('customWeight').value = getTotalWeight(); document.getElementById('customWeightModal').style.display = 'flex'; }
+    function closeCustomWeightModal() { document.getElementById('customWeightModal').style.display = 'none'; }
+    function saveCustomWeight() {
+        let weight = parseInt(document.getElementById('customWeight').value);
+        if (!isNaN(weight) && weight > 0 && weight < 200000) {
+            document.getElementById('weightKg').value = Math.floor(weight / 1000);
+            let remainder = weight % 1000;
+            document.getElementById('weightGrams100').value = Math.floor(remainder / 100) * 100;
+            document.getElementById('weightGrams10').value = Math.floor((remainder % 100) / 10) * 10;
+            document.getElementById('weightGrams1').value = remainder % 10;
+            updateHeightWeight();
+            closeCustomWeightModal();
+        } else alert("Введите корректный вес от 1 до 200000 грамм");
+    }
+    
+    // Открытие файлов в новой вкладке
+    function viewFileInNewTab(file) {
+        let win = window.open();
+        win.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>${file.name}</title>
+            <style>body{margin:0;padding:20px;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f7fafc;}img,iframe{max-width:100%;height:auto;box-shadow:0 10px 40px rgba(0,0,0,0.1);}iframe{width:100%;height:90vh;border:none;}</style>
+            </head>
+            <body><div>${file.type === 'image' ? `<img src="${file.data}">` : `<iframe src="${file.data}"></iframe>`}</div></body>
+            </html>
+        `);
+        win.document.close();
+    }
+    
+    // Нормы для детей до года
+    const infantNorms = [
+        { months: 0, weightMin: 3100, weightMax: 3400, heightMin: 50, heightMax: 51 },
+        { months: 1, weightMin: 3700, weightMax: 4100, heightMin: 54, heightMax: 55 },
+        { months: 2, weightMin: 4500, weightMax: 4900, heightMin: 57, heightMax: 59 },
+        { months: 3, weightMin: 5200, weightMax: 5600, heightMin: 60, heightMax: 62 },
+        { months: 4, weightMin: 5900, weightMax: 6300, heightMin: 62, heightMax: 65 },
+        { months: 5, weightMin: 6500, weightMax: 6800, heightMin: 64, heightMax: 68 },
+        { months: 6, weightMin: 7100, weightMax: 7400, heightMin: 66, heightMax: 70 },
+        { months: 7, weightMin: 7600, weightMax: 8100, heightMin: 68, heightMax: 72 },
+        { months: 8, weightMin: 8100, weightMax: 8500, heightMin: 69, heightMax: 74 },
+        { months: 9, weightMin: 8600, weightMax: 9000, heightMin: 70, heightMax: 75 },
+        { months: 10, weightMin: 9100, weightMax: 9500, heightMin: 71, heightMax: 76 },
+        { months: 11, weightMin: 9500, weightMax: 10000, heightMin: 72, heightMax: 78 },
+        { months: 12, weightMin: 10000, weightMax: 10800, heightMin: 74, heightMax: 80 }
+    ];
+
+    // Данные пациента
     let patientData = {
         fullName: "Иванов Петр Александрович",
         birthDate: "2026-04-27",
+        gender: "male",
         patientId: "PAT-2026-001",
-        height: 175, weight: 80,
-        heightWeightHistory: [{height:175,weight:80,date:new Date().toLocaleString()}],
+        height: 57, weight: 4836,
+        heightWeightHistory: [{height:57,weight:4836,date:new Date().toLocaleString()}],
         bpHistory: [{systolic:140,diastolic:90,date:new Date().toLocaleString()}],
         spo2History: [{value:98,date:new Date().toLocaleString()}],
-        symptoms: [],
+        constantMedications: [
+            {id:1,name:"Парацетамол",dosage:"500 мг",frequency:"1 раз в день"},
+            {id:2,name:"витамин Д",dosage:"5000 МЕ",frequency:"1 раз в день"}
+        ],
+        symptoms: [
+            { id: 2, text: "08 июня температура", date: "2026-06-08T12:00:00" },
+            { id: 1, text: "10 июня боль в горле", date: "2026-06-10T12:00:00" },
+            { id: 3, text: "11 июня головная боль", date: "2026-06-11T12:00:00" }
+        ],
         allergies: [
             {id:1,name:"Пенициллин",reaction:"Крапивница, отек",date:"2024-03-15"},
             {id:2,name:"Персик",reaction:"зуд и чихание",date:"2026-05-28"}
@@ -668,562 +689,320 @@
             {id:2,name:"Грипп",date:"30.04.2026"}
         ],
         medications: [
-            {
-                id: 1,
-                name: "Нурофен",
-                dosage: "200 мг",
-                startDate: "2026-06-10",
-                endDate: "2026-06-11",
-                times: ["13:00", "20:00"],
-                diagnosis: "Общий",
-                doses: [],
-                showAllDoses: false
-            }
+            {id:1,name:"Нурофен",dosage:"200 мг",startDate:"2026-06-10",endDate:"2026-06-11",times:["13:00","20:00"],diagnosis:"Общий",doses:[
+                {date:"2026-06-10",time:"13:00",taken:false,missed:true},
+                {date:"2026-06-10",time:"20:00",taken:false,missed:true},
+                {date:"2026-06-11",time:"13:00",taken:true,missed:false},
+                {date:"2026-06-11",time:"20:00",taken:true,missed:false}
+            ],showAllDoses:false}
         ],
-        diagnoses: [
-            {id:1,name:"ОРВИ",date:"10.01.2024",medications:["Омез"]}
-        ],
+        diagnoses: [{id:1,name:"ОРВИ",date:"10.01.2024",medications:["Омез"]}],
         files: [
-            {id:1,name:"Попова Алина Викторовна.pdf",type:"pdf",data:"",date:"02.06.2026, 16:46:06"},
-            {id:2,name:"IMG_7184 (1).PNG",type:"image",data:"",date:"02.06.2026, 16:47:14"},
-            {id:3,name:"посев от 24.04.2024 (1).jpg",type:"image",data:"",date:"02.06.2026, 16:47:21"}
+            {id:1,name:"MEDODS (4).pdf",type:"pdf",data:"",date:"11.06.2026, 14:19:50"},
+            {id:2,name:"IMG_7184 (1).PNG",type:"image",data:"",date:"11.06.2026, 14:19:54"},
+            {id:3,name:"428004575_362641391_0_ЗАХАРОВА.pdf",type:"pdf",data:"",date:"11.06.2026, 14:20:22"}
         ]
     };
 
-    function generateQRCode() {
-        const url = window.location.href;
-        const qrDiv = document.getElementById('qrcode');
-        qrDiv.innerHTML = '';
-        qrcode = new QRCode(qrDiv, {
-            text: url,
-            width: 120,
-            height: 120,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
+    // ========== ФУНКЦИИ СИНХРОНИЗАЦИИ ==========
+    function saveToLocalStorage() {
+        isOwnUpdate = true;
+        localStorage.setItem('patientData', JSON.stringify(patientData));
+        localStorage.setItem('patientDataUpdated', Date.now().toString());
+        setTimeout(() => { isOwnUpdate = false; }, 500);
     }
 
-    function updateHeightWeight() {
-        patientData.height = parseInt(document.getElementById('heightSelect').value);
-        patientData.weight = parseInt(document.getElementById('weightSelect').value);
-        patientData.heightWeightHistory.push({height:patientData.height,weight:patientData.weight,date:new Date().toLocaleString()});
-        saveData();
-        updateBMI();
-    }
-
-    function updateBP() {
-        const systolic = parseInt(document.getElementById('bpSystolicSelect').value);
-        const diastolic = parseInt(document.getElementById('bpDiastolicSelect').value);
-        patientData.bpHistory.push({systolic:systolic,diastolic:diastolic,date:new Date().toLocaleString()});
-        saveData();
-    }
-
-    function updateSpO2() {
-        const spo2 = parseInt(document.getElementById('spo2Select').value);
-        patientData.spo2History.push({value:spo2,date:new Date().toLocaleString()});
-        saveData();
-    }
-
-    function uploadVoiceFile() {
-        document.getElementById('voiceFileInput').click();
-    }
-
-    function processVoiceFile(input) {
-        const file = input.files[0];
-        if(file) {
-            const now = new Date();
-            voiceNotes.push({
-                text: `[Аудиофайл: ${file.name}]`,
-                timestamp: now.toLocaleString(),
-                date: now
-            });
-            updateVoiceNoteDisplay();
-            alert(`Файл "${file.name}" загружен. Для распознавания речи требуется серверная часть.`);
-        }
-    }
-
-    function sortVoiceNotes() {
-        voiceNotes.sort((a, b) => a.date - b.date);
-        updateVoiceNoteDisplay();
-        patientData.symptoms.sort((a, b) => new Date(a.date) - new Date(b.date));
-        saveData();
-        updateSymptomsList();
-        alert("Записи отсортированы в хронологическом порядке");
-    }
-
-    function updateVoiceNoteDisplay() {
-        const textarea = document.getElementById('voiceNoteInput');
-        if(voiceNotes.length > 0) {
-            textarea.value = voiceNotes.map(n => `[${n.timestamp}] ${n.text}`).join('\n');
-        }
-    }
-
-    function startVoiceInput() {
-        const btn = document.getElementById('voiceBtn');
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        
-        if(!SpeechRecognition) {
-            alert("Ваш браузер не поддерживает голосовой ввод. Используйте Chrome или Edge.");
-            return;
-        }
-        
-        if (recognition) recognition.stop();
-        
-        recognition = new SpeechRecognition();
-        recognition.lang = 'ru-RU';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        
-        btn.textContent = '🎤 Слушаю... (нажмите еще раз для остановки)';
-        btn.classList.add('recording');
-        
-        recognition.onresult = function(event) {
-            let interimTranscript = '';
-            let finalTranscript = '';
-            
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalTranscript += transcript;
-                    const now = new Date();
-                    voiceNotes.push({
-                        text: finalTranscript,
-                        timestamp: now.toLocaleString(),
-                        date: now
-                    });
-                    updateVoiceNoteDisplay();
-                } else {
-                    interimTranscript += transcript;
-                }
+    function loadFromLocalStorage() {
+        let saved = localStorage.getItem('patientData');
+        if(saved && !isOwnUpdate) {
+            let newData = JSON.parse(saved);
+            if(patientData && patientData.medications) {
+                newData.medications.forEach(med => {
+                    let oldMed = patientData.medications.find(m => m.id === med.id);
+                    if(oldMed) med.showAllDoses = oldMed.showAllDoses;
+                });
             }
-            
-            if (interimTranscript) {
-                document.getElementById('symptomInput').value = interimTranscript;
-            }
-        };
-        
-        recognition.onerror = function(event) {
-            stopVoiceInput();
-            if(event.error === 'not-allowed') {
-                alert("Нет доступа к микрофону.");
-            }
-        };
-        
-        recognition.onend = function() { stopVoiceInput(); };
-        recognition.start();
-        
-        btn.onclick = function() {
-            if (recognition) {
-                recognition.stop();
-                stopVoiceInput();
-                btn.onclick = startVoiceInput;
-            }
-        };
-    }
-    
-    function stopVoiceInput() {
-        const btn = document.getElementById('voiceBtn');
-        btn.textContent = '🎤 Диктовать с телефона';
-        btn.classList.remove('recording');
-        recognition = null;
-    }
-    
-    function addFromVoiceNote() {
-        const text = document.getElementById('voiceNoteInput').value.trim();
-        if(text) {
-            document.getElementById('symptomInput').value = text;
-        } else {
-            alert("Голосовая заметка пуста.");
-        }
-    }
-    
-    function addTemperatureFromSelect() {
-        const temp = document.getElementById('tempSelect').value;
-        if(temp) {
-            patientData.symptoms.unshift({
-                id: Date.now(),
-                text: `Температура: ${temp}°C`,
-                date: new Date().toLocaleString()
-            });
-            saveData();
-            updateSymptomsList();
-            alert(`✅ Температура ${temp}°C записана!`);
-        }
-    }
-
-    function updateCurrentDateTimeDisplay() {
-        const year = currentSystemDate.getFullYear();
-        const month = String(currentSystemDate.getMonth() + 1).padStart(2, '0');
-        const day = String(currentSystemDate.getDate()).padStart(2, '0');
-        const hours = String(currentSystemDate.getHours()).padStart(2, '0');
-        const minutes = String(currentSystemDate.getMinutes()).padStart(2, '0');
-        document.getElementById('currentDateTimeDisplay').innerHTML = `${day}.${month}.${year} ${hours}:${minutes}`;
-    }
-
-    async function syncWithInternet() {
-        document.getElementById('syncStatus').innerHTML = '🌐 Синхронизация...';
-        document.getElementById('syncStatus').style.background = '#fefcbf';
-        try {
-            const response = await fetch('https://worldtimeapi.org/api/timezone/Europe/Moscow');
-            const data = await response.json();
-            currentSystemDate = new Date(data.datetime);
-            updateCurrentDateTimeDisplay();
-            document.getElementById('syncStatus').innerHTML = '✅ Синхронизировано';
-            document.getElementById('syncStatus').style.background = '#c6f6d5';
-        } catch (error) {
-            document.getElementById('syncStatus').innerHTML = '❌ Ошибка синхронизации';
-            document.getElementById('syncStatus').style.background = '#fed7d7';
-        }
-        updateMedicationsList();
-        updatePatientInfo();
-    }
-
-    function editCurrentDateTime() {
-        const dateStr = currentSystemDate.toISOString().split('T')[0];
-        const timeStr = `${String(currentSystemDate.getHours()).padStart(2, '0')}:${String(currentSystemDate.getMinutes()).padStart(2, '0')}`;
-        document.getElementById('currentDatePicker').value = dateStr;
-        document.getElementById('currentTimePicker').value = timeStr;
-        document.getElementById('dateEditModal').style.display = 'flex';
-    }
-
-    function saveCurrentDateTime() {
-        const newDateStr = document.getElementById('currentDatePicker').value;
-        const newTimeStr = document.getElementById('currentTimePicker').value;
-        if(newDateStr && newTimeStr) {
-            currentSystemDate = new Date(`${newDateStr}T${newTimeStr}:00`);
-            updateCurrentDateTimeDisplay();
-            closeDateTimeEditModal();
-            updateMedicationsList();
-            updatePatientInfo();
-        }
-    }
-
-    function closeDateTimeEditModal() {
-        document.getElementById('dateEditModal').style.display = 'none';
-    }
-
-    function showBirthDatePicker() {
-        const currentDate = formatDateForInput(patientData.birthDate);
-        document.getElementById('birthDatePicker').value = currentDate;
-        document.getElementById('birthDateModal').style.display = 'flex';
-    }
-
-    function closeBirthDateModal() {
-        document.getElementById('birthDateModal').style.display = 'none';
-    }
-
-    function saveBirthDate() {
-        const newDate = document.getElementById('birthDatePicker').value;
-        if(newDate) {
-            patientData.birthDate = newDate;
-            saveData();
-            updatePatientInfo();
-            closeBirthDateModal();
-        }
-    }
-
-    function getAgeDisplay(birthDateStr) {
-        const birthDate = new Date(birthDateStr);
-        let years = currentSystemDate.getFullYear() - birthDate.getFullYear();
-        let months = currentSystemDate.getMonth() - birthDate.getMonth();
-        if (months < 0) { years--; months += 12; }
-        if (years < 1) return `${years} ${getYearDeclension(years)} ${months} ${getMonthDeclension(months)}`;
-        return `${years} ${getYearDeclension(years)}`;
-    }
-
-    function getMonthDeclension(m) { return m === 1 ? "месяц" : (m < 5 ? "месяца" : "месяцев"); }
-    function getYearDeclension(y) { return y === 1 ? "год" : (y < 5 ? "года" : "лет"); }
-
-    function formatDateForDisplay(dateStr) {
-        if(!dateStr) return '';
-        let parts = dateStr.split('-');
-        return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : dateStr;
-    }
-
-    function formatDateForInput(dateStr) {
-        if(!dateStr) return '';
-        let parts = dateStr.split('-');
-        return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
-    }
-
-    function extractTemperature(text) {
-        const match = text.match(/Температура:\s*([\d.,]+)/i);
-        return match ? parseFloat(match[1].replace(',', '.')) : null;
-    }
-
-    function showTemperatureChart() {
-        const tempData = [];
-        patientData.symptoms.forEach(symptom => {
-            const temp = extractTemperature(symptom.text);
-            if (temp) tempData.push({ date: symptom.date.split(',')[0], temperature: temp });
-        });
-        tempData.sort((a, b) => new Date(a.date) - new Date(b.date));
-        const ctx = document.getElementById('temperatureChart').getContext('2d');
-        if (temperatureChart) temperatureChart.destroy();
-        temperatureChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: tempData.map(d => d.date),
-                datasets: [{ label: 'Температура (°C)', data: tempData.map(d => d.temperature), borderColor: '#f56565', backgroundColor: 'rgba(245,101,101,0.1)', fill: true, tension: 0.3 }]
-            },
-            options: { responsive: true, scales: { y: { min: 35, max: 42 } } }
-        });
-        document.getElementById('tempChartModal').style.display = 'flex';
-    }
-
-    function closeTempChartModal() { document.getElementById('tempChartModal').style.display = 'none'; }
-
-    function checkMissedDoses() {
-        const today = new Date(currentSystemDate); today.setHours(0,0,0,0);
-        patientData.medications.forEach(med => {
-            med.doses.forEach(dose => {
-                const doseDate = new Date(dose.date); doseDate.setHours(0,0,0,0);
-                if (doseDate < today && !dose.taken && !dose.missed) {
-                    dose.missed = true;
-                    dose.missedDate = new Date().toLocaleString();
-                }
-            });
-        });
-        saveData();
-        updateMedicationsList();
-    }
-
-    function addTime() {
-        const newTime = document.getElementById('newTime').value;
-        if(!newTime) { alert("Выберите время!"); return; }
-        if(medicationTimes.includes(newTime)) { alert("Это время уже добавлено!"); return; }
-        medicationTimes.push(newTime);
-        medicationTimes.sort();
-        updateTimesList();
-        document.getElementById('newTime').value = '09:00';
-    }
-    
-    function removeTime(timeToRemove) {
-        if(medicationTimes.length === 1) { alert("Должно быть хотя бы одно время приема!"); return; }
-        medicationTimes = medicationTimes.filter(t => t !== timeToRemove);
-        updateTimesList();
-    }
-    
-    function updateTimesList() {
-        document.getElementById('timesList').innerHTML = medicationTimes.map(time => `<span class="time-chip">${time} <span class="remove-time" onclick="removeTime('${time}')">✖</span></span>`).join('');
-    }
-    
-    function loadData() {
-        const saved = localStorage.getItem('patientData');
-        if(saved) {
-            patientData = JSON.parse(saved);
+            patientData = newData;
+            if(!patientData.constantMedications) patientData.constantMedications = [];
             patientData.medications.forEach(med => {
                 if(!med.times) med.times = ['09:00'];
                 if(!med.doses) med.doses = [];
                 if(med.showAllDoses === undefined) med.showAllDoses = false;
-                if(med.doses.length === 0) generateSchedule(med.id);
             });
+            updateAll();
         }
-        generateAllSchedules();
-        checkMissedDoses();
+    }
+
+    function manualSync() { loadFromLocalStorage(); showNotification('🔄 Данные синхронизированы!', 'success'); }
+    window.addEventListener('storage', function(e) {
+        if(e.key === 'patientDataUpdated' && !isOwnUpdate) {
+            let now = Date.now();
+            if (now - lastUpdateTime > 500) { lastUpdateTime = now; loadFromLocalStorage(); }
+        }
+    });
+
+    // ========== АВТОСИНХРОНИЗАЦИЯ ВРЕМЕНИ ==========
+    async function syncTimeWithInternet() {
+        let statusDiv = document.getElementById('syncStatus');
+        statusDiv.innerHTML = '🌐 Синхронизация времени...';
+        statusDiv.style.background = '#fefcbf';
+        try {
+            let response = await fetch('https://worldtimeapi.org/api/timezone/Europe/Moscow');
+            let data = await response.json();
+            currentSystemDate = new Date(data.datetime);
+            updateDateTimeDisplay();
+            statusDiv.innerHTML = '✅ Время синхронизировано';
+            statusDiv.style.background = '#c6f6d5';
+            setTimeout(() => { if(statusDiv) statusDiv.innerHTML = '🌐 Синхронизировано'; }, 3000);
+        } catch(e) {
+            statusDiv.innerHTML = '❌ Ошибка синхронизации';
+            statusDiv.style.background = '#fed7d7';
+            setTimeout(() => { if(statusDiv) statusDiv.innerHTML = '🌐 Офлайн режим'; }, 3000);
+        }
         updateAll();
-        updateCurrentDateTimeDisplay();
-        generateQRCode();
-        
-        document.getElementById('heightSelect').value = patientData.height;
-        document.getElementById('weightSelect').value = patientData.weight;
-        document.getElementById('bpSystolicSelect').value = patientData.bpHistory[patientData.bpHistory.length-1].systolic;
-        document.getElementById('bpDiastolicSelect').value = patientData.bpHistory[patientData.bpHistory.length-1].diastolic;
-        document.getElementById('spo2Select').value = patientData.spo2History[patientData.spo2History.length-1].value;
     }
+    setInterval(syncTimeWithInternet, 300000);
+    syncTimeWithInternet();
 
-    function generateAllSchedules() {
-        patientData.medications.forEach(med => {
-            if(med.doses.length === 0 && med.startDate && med.endDate && med.times.length) {
-                generateSchedule(med.id);
-            }
-        });
-        saveData();
-    }
-
-    function generateSchedule(medId) {
-        const med = patientData.medications.find(m => m.id === medId);
-        if(!med) return;
-        const start = new Date(med.startDate);
-        const end = new Date(med.endDate);
-        const doses = [];
-        for(let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
-            med.times.forEach(time => { doses.push({ date: dateStr, time: time, taken: false, missed: false }); });
-        }
-        med.doses = doses;
-        saveData();
-    }
-
-    function toggleShowAllDoses(medId) {
-        const med = patientData.medications.find(m => m.id === medId);
-        if(med) { med.showAllDoses = !med.showAllDoses; updateMedicationsList(); }
-    }
-
-    function showStats(medId) {
-        const med = patientData.medications.find(m => m.id === medId);
-        if(med) {
-            const total = med.doses.length, taken = med.doses.filter(d => d.taken).length, missed = med.doses.filter(d => d.missed).length;
-            const upcoming = med.doses.filter(d => !d.taken && !d.missed && new Date(d.date) >= currentSystemDate).length;
-            const adherence = total ? ((taken/total)*100).toFixed(1) : 0;
-            document.getElementById('statsList').innerHTML = `
-                <div class="stat-item"><strong>💊 Препарат:</strong> ${med.name} (${med.dosage})</div>
-                <div class="stat-item"><strong>📅 Период:</strong> ${formatDateForDisplay(med.startDate)} — ${formatDateForDisplay(med.endDate)}</div>
-                <div class="stat-item"><strong>⏰ Время:</strong> ${med.times.join(', ')}</div>
-                <div class="stat-item"><strong>📊 Приверженность:</strong> ${adherence}%</div>
-                <div class="stat-item"><strong>✅ Принято:</strong> ${taken} раз</div>
-                <div class="stat-item"><strong>❌ Пропущено:</strong> ${missed} раз</div>
-                <div class="stat-item"><strong>📅 Предстоит:</strong> ${upcoming} раз</div>
-                <div class="stat-item"><strong>🎯 Всего:</strong> ${total} приемов</div>
-                <div class="stat-item"><strong>📋 Диагноз:</strong> ${med.diagnosis}</div>
-            `;
-            document.getElementById('statsModal').style.display = 'flex';
+    // ========== УПРАВЛЕНИЕ СЕАНСАМИ ==========
+    function endAllSessions() {
+        if(confirm("Завершить все открытые сеансы?")) {
+            sessionToken = Date.now().toString();
+            localStorage.setItem('sessionToken', sessionToken);
+            alert("Сеанс завершен. Только текущее окно осталось активным.");
         }
     }
-
-    function closeStatsModal() { document.getElementById('statsModal').style.display = 'none'; }
-
-    function takeDose(medId, doseIndex) {
-        const med = patientData.medications.find(m => m.id === medId);
-        if(med && med.doses[doseIndex]) {
-            med.doses[doseIndex].taken = true;
-            med.doses[doseIndex].missed = false;
-            saveData();
-            updateMedicationsList();
+    function checkSession() {
+        let storedToken = localStorage.getItem('sessionToken');
+        if(storedToken && storedToken !== sessionToken) {
+            alert("Сеанс завершен владельцем. Страница будет перезагружена.");
+            localStorage.removeItem('sessionToken');
+            window.location.href = window.location.href;
         }
     }
+    setInterval(checkSession, 5000);
 
-    function missDose(medId, doseIndex) {
-        const med = patientData.medications.find(m => m.id === medId);
-        if(med && med.doses[doseIndex]) {
-            med.doses[doseIndex].missed = true;
-            med.doses[doseIndex].taken = false;
-            saveData();
-            updateMedicationsList();
-        }
-    }
-
-    function saveData() { localStorage.setItem('patientData', JSON.stringify(patientData)); }
-
+    // ========== ФУНКЦИИ ОБНОВЛЕНИЯ ИНТЕРФЕЙСА ==========
     function updateAll() {
-        updatePatientInfo(); updateBMI(); updateSymptomsList(); updateAllergiesList();
-        updateVaccinationsList(); updateMedicationsList(); updateDiagnosesList(); updateFilesList();
+        updatePatientInfo();
+        updateBMI();
+        updateConstantMedsList();
+        updateSymptomsList();
+        updateAllergiesList();
+        updateVaccinationsList();
+        updateMedicationsList();
+        updateDiagnosesList();
+        updateFilesList();
+        updateInfantGrowthTable();
+        updateDateTimeDisplay();
     }
 
     function updatePatientInfo() {
         document.getElementById('fullName').innerText = patientData.fullName;
         document.getElementById('patientName').innerText = patientData.fullName;
         document.getElementById('patientId').innerText = patientData.patientId;
-        document.getElementById('birthDate').innerHTML = `${formatDateForDisplay(patientData.birthDate)} (${getAgeDisplay(patientData.birthDate)})`;
+        let ageDisplay = getAgeDisplay(patientData.birthDate);
+        document.getElementById('birthDate').innerHTML = `${formatDateForDisplay(patientData.birthDate)} (${ageDisplay})`;
+        
+        let height = patientData.height;
+        document.getElementById('heightMeters').value = Math.floor(height / 10) * 10;
+        document.getElementById('heightCm').value = height % 10;
+        
+        let weight = patientData.weight;
+        document.getElementById('weightKg').value = Math.floor(weight / 1000);
+        let remainder = weight % 1000;
+        document.getElementById('weightGrams100').value = Math.floor(remainder / 100) * 100;
+        document.getElementById('weightGrams10').value = Math.floor((remainder % 100) / 10) * 10;
+        document.getElementById('weightGrams1').value = remainder % 10;
+        
+        document.getElementById('bpSystolicSelect').value = patientData.bpHistory[patientData.bpHistory.length-1].systolic;
+        document.getElementById('bpDiastolicSelect').value = patientData.bpHistory[patientData.bpHistory.length-1].diastolic;
+        document.getElementById('spo2Select').value = patientData.spo2History[patientData.spo2History.length-1].value;
+        document.getElementById('genderSelect').value = patientData.gender || 'male';
+        updateGender();
     }
 
     function updateBMI() {
-        const h = patientData.height/100, w = patientData.weight, bmi = (w/(h*h)).toFixed(1);
-        let status = bmi<18.5 ? "Недостаточный вес" : (bmi<25 ? "Норма" : (bmi<30 ? "Избыточный вес" : "Ожирение"));
+        let h = patientData.height/100;
+        let w = patientData.weight / 1000;
+        let bmi = (w/(h*h)).toFixed(1);
+        let status = "";
+        let ageMonths = getAgeInMonths();
+        if (ageMonths <= 12) {
+            let norm = infantNorms.find(n => n.months === ageMonths);
+            if (norm) {
+                if (patientData.weight < norm.weightMin) status = "Ниже нормы";
+                else if (patientData.weight > norm.weightMax) status = "Выше нормы";
+                else status = "В пределах нормы";
+            } else status = "Сверьте с педиатром";
+        } else {
+            if (bmi < 18.5) status = "Недостаточный вес";
+            else if (bmi < 25) status = "Норма";
+            else if (bmi < 30) status = "Избыточный вес";
+            else status = "Ожирение";
+        }
         document.getElementById('bmiValue').innerHTML = `${bmi} (${status})`;
     }
 
-    function editPatientName() {
-        const newName = prompt("Введите ФИО пациента:", patientData.fullName);
-        if(newName && newName.trim()) { patientData.fullName = newName.trim(); saveData(); updatePatientInfo(); }
+    function getAgeDisplay(birthDateStr) {
+        let birth = new Date(birthDateStr);
+        let years = currentSystemDate.getFullYear() - birth.getFullYear();
+        let months = currentSystemDate.getMonth() - birth.getMonth();
+        if(months < 0) { years--; months += 12; }
+        if(years < 1) return `${years} год ${months} мес`;
+        return `${years} ${years===1?'год':(years<5?'года':'лет')}`;
     }
 
-    function showWeightHistory() { showHistory("История роста/веса", patientData.heightWeightHistory.map(h=>`${h.date}: ${h.height} см / ${h.weight} кг`)); }
-    function showBPHistory() { showHistory("История АД", patientData.bpHistory.map(h=>`${h.date}: ${h.systolic}/${h.diastolic} мм рт.ст.`)); }
-    function showSpO2History() { showHistory("История сатурации", patientData.spo2History.map(h=>`${h.date}: ${h.value}%`)); }
-
-    function showHistory(title, items) {
-        document.getElementById('historyTitle').innerText = title;
-        document.getElementById('historyList').innerHTML = items.map(i=>`<div style="padding:8px; border-bottom:1px solid #e2e8f0;">${i}</div>`).join('');
-        document.getElementById('historyModal').style.display = 'flex';
+    function formatDateForDisplay(dateStr) {
+        if(!dateStr) return '';
+        if(dateStr.includes('T')) { let d = new Date(dateStr); return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`; }
+        let p = dateStr.split('-');
+        return p.length===3 ? `${p[2]}.${p[1]}.${p[0]}` : dateStr;
     }
-    function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
 
+    function updateDateTimeDisplay() {
+        let d = currentSystemDate;
+        document.getElementById('currentDateTimeDisplay').innerHTML = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    function getAgeInMonths() {
+        let birth = new Date(patientData.birthDate);
+        return (currentSystemDate.getFullYear() - birth.getFullYear()) * 12 + (currentSystemDate.getMonth() - birth.getMonth());
+    }
+
+    function updateInfantGrowthTable() {
+        let months = getAgeInMonths();
+        let tbody = document.querySelector('#growthTable tbody');
+        tbody.innerHTML = '';
+        infantNorms.forEach(norm => {
+            let weightClass = patientData.weight >= norm.weightMin && patientData.weight <= norm.weightMax ? 'normal-value' : 'alert-value';
+            let heightClass = patientData.height >= norm.heightMin && patientData.height <= norm.heightMax ? 'normal-value' : 'alert-value';
+            let row = tbody.insertRow();
+            row.insertCell(0).innerHTML = norm.months === 0 ? 'При рождении' : `${norm.months} мес`;
+            row.insertCell(1).innerHTML = `${patientData.weight} г`;
+            row.insertCell(2).innerHTML = `${norm.weightMin}-${norm.weightMax} г`;
+            row.insertCell(3).innerHTML = `${patientData.height} см`;
+            row.insertCell(4).innerHTML = `${norm.heightMin}-${norm.heightMax} см`;
+            row.insertCell(5).innerHTML = `—`;
+            row.insertCell(6).innerHTML = `30-37.5 см`;
+            row.cells[1].className = weightClass;
+            row.cells[3].className = heightClass;
+        });
+    }
+
+    function showNotification(message, type) {
+        let notification = document.createElement('div');
+        notification.className = 'sync-notification';
+        notification.style.background = type === 'success' ? '#48bb78' : '#4299e1';
+        notification.innerHTML = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 2000);
+    }
+
+    // ========== ОСТАЛЬНЫЕ ФУНКЦИИ ==========
+    function startVoiceInput() {
+        let btn = document.getElementById('voiceBtn');
+        let SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if(!SpeechRecognition) { alert("Голосовой ввод не поддерживается"); return; }
+        if (recognition) { recognition.stop(); recognition = null; btn.textContent = '🎤 Диктовать с телефона'; btn.classList.remove('recording'); return; }
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ru-RU';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        btn.textContent = '🎤 Слушаю... (нажмите для остановки)';
+        btn.classList.add('recording');
+        recognition.onresult = function(event) {
+            let interim = '', final = '';
+            for(let i = event.resultIndex; i < event.results.length; i++) {
+                if(event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
+                else interim += event.results[i][0].transcript;
+            }
+            if(final) { accumulatedText += final; document.getElementById('symptomInput').value = accumulatedText; }
+            else if(interim) { document.getElementById('symptomInput').value = accumulatedText + interim; }
+        };
+        recognition.onerror = function() { stopVoiceInput(); };
+        recognition.onend = function() { stopVoiceInput(); };
+        recognition.start();
+    }
+    function stopVoiceInput() {
+        let btn = document.getElementById('voiceBtn');
+        btn.textContent = '🎤 Диктовать с телефона';
+        btn.classList.remove('recording');
+        recognition = null;
+    }
+    function uploadVoiceFile() { document.getElementById('voiceFileInput').click(); }
+    function processVoiceFile(input) {
+        let file = input.files[0];
+        if(file) {
+            accumulatedText += `[Аудиофайл: ${file.name}]\n`;
+            document.getElementById('symptomInput').value = accumulatedText;
+            alert(`Файл "${file.name}" загружен. Нажмите "Сохранить симптом" для добавления.`);
+        }
+    }
     function addSymptom() {
-        const text = document.getElementById('symptomInput').value.trim();
+        let text = document.getElementById('symptomInput').value.trim();
         if(text) {
-            patientData.symptoms.unshift({ id: Date.now(), text: text, date: new Date().toLocaleString() });
-            saveData(); updateSymptomsList(); document.getElementById('symptomInput').value = '';
+            patientData.symptoms.push({ id: Date.now(), text: text, date: new Date().toISOString() });
+            saveToLocalStorage();
+            updateSymptomsList();
+            document.getElementById('symptomInput').value = '';
+            accumulatedText = '';
+            showNotification('✅ Симптом сохранен и синхронизирован', 'success');
         }
     }
-
-    function editSymptom(id) {
-        const symptom = patientData.symptoms.find(s => s.id === id);
-        if(symptom) {
-            const newText = prompt("Редактировать симптом:", symptom.text);
-            if(newText) { symptom.text = newText; symptom.date = `${new Date().toLocaleString()} (ред.)`; saveData(); updateSymptomsList(); }
-        }
-    }
-
-    function deleteSymptom(id) {
-        if(confirm("Удалить симптом?")) { patientData.symptoms = patientData.symptoms.filter(s => s.id !== id); saveData(); updateSymptomsList(); }
-    }
-
     function updateSymptomsList() {
-        const container = document.getElementById('symptomsList');
+        let container = document.getElementById('symptomsList');
         if(!patientData.symptoms.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет симптомов</div>'; return; }
-        container.innerHTML = patientData.symptoms.slice().reverse().map(s => `
-            <div class="symptom-item"><div>📝 ${escapeHtml(s.text)}<br><small>${s.date}</small></div>
-            <div><button class="btn-small btn-warning" onclick="editSymptom(${s.id})">✏️</button>
-            <button class="btn-small btn-danger" onclick="deleteSymptom(${s.id})">🗑️</button></div></div>`).join('');
+        let sorted = [...patientData.symptoms].sort((a,b) => (dateParser.parseDate(a.text) || new Date(a.date)) - (dateParser.parseDate(b.text) || new Date(b.date)));
+        container.innerHTML = sorted.map(s => `<div class="symptom-item"><div>📝 ${escapeHtml(s.text)}<br><small>${formatDateForDisplay(s.date)}</small></div><div><button class="btn-small btn-warning" onclick="editSymptom(${s.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteSymptom(${s.id})">🗑️</button></div></div>`).join('');
     }
-
-    function addAllergy() {
-        const name = prompt("Аллерген:"), reaction = prompt("Реакция:");
-        if(name && reaction) { patientData.allergies.push({id:Date.now(),name:name,reaction:reaction,date:new Date().toLocaleDateString()}); saveData(); updateAllergiesList(); }
+    function editSymptom(id) {
+        let s = patientData.symptoms.find(x => x.id === id);
+        if(s) { let nt = prompt("Редактировать:", s.text); if(nt) { s.text = nt; s.date = new Date().toISOString(); saveToLocalStorage(); updateSymptomsList(); } }
     }
-
-    function editAllergy(id) {
-        const allergy = patientData.allergies.find(a => a.id === id);
-        if(allergy) {
-            const name = prompt("Аллерген:", allergy.name), reaction = prompt("Реакция:", allergy.reaction);
-            if(name && reaction) { allergy.name = name; allergy.reaction = reaction; saveData(); updateAllergiesList(); }
-        }
-    }
-
-    function deleteAllergy(id) {
-        if(confirm("Удалить аллергию?")) { patientData.allergies = patientData.allergies.filter(a => a.id !== id); saveData(); updateAllergiesList(); }
-    }
-
+    function deleteSymptom(id) { if(confirm("Удалить?")) { patientData.symptoms = patientData.symptoms.filter(x => x.id !== id); saveToLocalStorage(); updateSymptomsList(); } }
+    
+    function addAllergy() { let n = prompt("Аллерген:"), r = prompt("Реакция:"); if(n && r) { patientData.allergies.push({id:Date.now(),name:n,reaction:r,date:new Date().toLocaleDateString()}); saveToLocalStorage(); updateAllergiesList(); } }
+    function editAllergy(id) { let a = patientData.allergies.find(x=>x.id===id); if(a) { let n = prompt("Аллерген:", a.name), r = prompt("Реакция:", a.reaction); if(n && r) { a.name=n; a.reaction=r; saveToLocalStorage(); updateAllergiesList(); } } }
+    function deleteAllergy(id) { if(confirm("Удалить?")) { patientData.allergies = patientData.allergies.filter(x=>x.id!==id); saveToLocalStorage(); updateAllergiesList(); } }
     function updateAllergiesList() {
-        const container = document.getElementById('allergiesList');
+        let container = document.getElementById('allergiesList');
         if(!patientData.allergies.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет аллергий</div>'; return; }
-        container.innerHTML = patientData.allergies.map(a => `
-            <div class="allergy-item"><div>⚠️ ${escapeHtml(a.name)} - ${escapeHtml(a.reaction)}<br><small>Добавлено: ${a.date}</small></div>
-            <div><button class="btn-small btn-warning" onclick="editAllergy(${a.id})">✏️</button>
-            <button class="btn-small btn-danger" onclick="deleteAllergy(${a.id})">🗑️</button></div></div>`).join('');
+        container.innerHTML = patientData.allergies.map(a => `<div class="allergy-item"><div>⚠️ ${escapeHtml(a.name)} - ${escapeHtml(a.reaction)}<br><small>Добавлено: ${a.date}</small></div><div><button class="btn-small btn-warning" onclick="editAllergy(${a.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteAllergy(${a.id})">🗑️</button></div></div>`).join('');
     }
-
-    function addVaccination() {
-        const name = prompt("Вакцина:"), date = prompt("Дата (ДД.ММ.ГГГГ):");
-        if(name && date) { patientData.vaccinations.push({id:Date.now(),name:name,date:date}); saveData(); updateVaccinationsList(); }
-    }
-
-    function editVaccination(id) {
-        const vacc = patientData.vaccinations.find(v => v.id === id);
-        if(vacc) {
-            const name = prompt("Вакцина:", vacc.name), date = prompt("Дата:", vacc.date);
-            if(name && date) { vacc.name = name; vacc.date = date; saveData(); updateVaccinationsList(); }
-        }
-    }
-
-    function deleteVaccination(id) {
-        if(confirm("Удалить вакцинацию?")) { patientData.vaccinations = patientData.vaccinations.filter(v => v.id !== id); saveData(); updateVaccinationsList(); }
-    }
-
+    
+    function addVaccination() { let n = prompt("Вакцина:"), d = prompt("Дата (ДД.ММ.ГГГГ):"); if(n && d) { patientData.vaccinations.push({id:Date.now(),name:n,date:d}); saveToLocalStorage(); updateVaccinationsList(); } }
+    function editVaccination(id) { let v = patientData.vaccinations.find(x=>x.id===id); if(v) { let n = prompt("Вакцина:", v.name), d = prompt("Дата:", v.date); if(n && d) { v.name=n; v.date=d; saveToLocalStorage(); updateVaccinationsList(); } } }
+    function deleteVaccination(id) { if(confirm("Удалить?")) { patientData.vaccinations = patientData.vaccinations.filter(x=>x.id!==id); saveToLocalStorage(); updateVaccinationsList(); } }
     function updateVaccinationsList() {
-        const container = document.getElementById('vaccinationsList');
+        let container = document.getElementById('vaccinationsList');
         if(!patientData.vaccinations.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет вакцинаций</div>'; return; }
-        container.innerHTML = patientData.vaccinations.map(v => `
-            <div class="vaccination-item"><div>💉 ${escapeHtml(v.name)} - ${v.date}</div>
-            <div><button class="btn-small btn-warning" onclick="editVaccination(${v.id})">✏️</button>
-            <button class="btn-small btn-danger" onclick="deleteVaccination(${v.id})">🗑️</button></div></div>`).join('');
+        container.innerHTML = patientData.vaccinations.map(v => `<div class="vaccination-item"><div>💉 ${escapeHtml(v.name)} - ${v.date}</div><div><button class="btn-small btn-warning" onclick="editVaccination(${v.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteVaccination(${v.id})">🗑️</button></div></div>`).join('');
+    }
+
+    function showAddConstantMedicationModal() { document.getElementById('constantMedModal').style.display = 'flex'; }
+    function closeConstantMedModal() { document.getElementById('constantMedModal').style.display = 'none'; }
+    function addConstantMedication() {
+        let name = document.getElementById('constMedName').value.trim();
+        let dosage = document.getElementById('constMedDosage').value.trim();
+        let frequency = document.getElementById('constMedFrequency').value.trim();
+        if(name && dosage) {
+            if(!patientData.constantMedications) patientData.constantMedications = [];
+            patientData.constantMedications.push({ id: Date.now(), name, dosage, frequency: frequency || "по назначению" });
+            saveToLocalStorage(); updateConstantMedsList(); closeConstantMedModal();
+            document.getElementById('constMedName').value = ''; document.getElementById('constMedDosage').value = ''; document.getElementById('constMedFrequency').value = '';
+        } else alert("Заполните название и дозировку!");
+    }
+    function deleteConstantMedication(id) { if(confirm("Удалить?")) { patientData.constantMedications = patientData.constantMedications.filter(m => m.id !== id); saveToLocalStorage(); updateConstantMedsList(); } }
+    function updateConstantMedsList() {
+        let container = document.getElementById('constantMedsList');
+        if(!patientData.constantMedications || patientData.constantMedications.length === 0) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет постоянных препаратов</div>'; return; }
+        container.innerHTML = patientData.constantMedications.map(med => `<div class="medication-item constant-med-item"><div class="medication-header"><div><span class="medication-name">💊 ${escapeHtml(med.name)}</span><br><small>${escapeHtml(med.dosage)} | ${escapeHtml(med.frequency)}</small></div><div><button class="btn-small btn-danger" onclick="deleteConstantMedication(${med.id})">🗑️</button></div></div></div>`).join('');
     }
 
     function showAddMedicationModal() {
         medicationTimes = ['09:00'];
-        updateTimesList();
+        document.getElementById('timesList').innerHTML = `<span class="time-chip">09:00 <span class="remove-time" onclick="removeTime('09:00')">✖</span></span>`;
         document.getElementById('medName').value = '';
         document.getElementById('medDosage').value = '';
         document.getElementById('startDate').value = currentSystemDate.toISOString().split('T')[0];
@@ -1231,173 +1010,221 @@
         document.getElementById('medDiagnosis').value = '';
         document.getElementById('medicationModal').style.display = 'flex';
     }
-
     function closeMedicationModal() { document.getElementById('medicationModal').style.display = 'none'; }
-
     function addMedicationFromModal() {
-        const name = document.getElementById('medName').value.trim();
-        const dosage = document.getElementById('medDosage').value.trim();
-        const startDate = document.getElementById('startDate').value;
-        const duration = parseInt(document.getElementById('durationDays').value);
-        const diagnosis = document.getElementById('medDiagnosis').value.trim();
-        
-        if(!name || !dosage || !startDate || !duration || medicationTimes.length === 0) {
-            alert("Заполните все поля!");
-            return;
+        let name = document.getElementById('medName').value.trim();
+        let dosage = document.getElementById('medDosage').value.trim();
+        let start = document.getElementById('startDate').value;
+        let dur = parseInt(document.getElementById('durationDays').value);
+        let diag = document.getElementById('medDiagnosis').value.trim();
+        if(!name || !dosage || !start || !dur || !medicationTimes.length) { alert("Заполните все поля!"); return; }
+        let end = new Date(start); end.setDate(end.getDate()+dur-1);
+        let doses = [];
+        let startDate = new Date(start);
+        let endDate = new Date(end);
+        for(let d = new Date(startDate); d <= endDate; d.setDate(d.getDate()+1)) {
+            let ds = d.toISOString().split('T')[0];
+            medicationTimes.forEach(t => doses.push({ date: ds, time: t, taken: false, missed: false }));
         }
-        
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + duration - 1);
-        const newMed = {
-            id: Date.now(), name, dosage, startDate, endDate: endDate.toISOString().split('T')[0],
-            times: [...medicationTimes], diagnosis: diagnosis || "Общий", doses: [], showAllDoses: false
-        };
-        patientData.medications.push(newMed);
-        generateSchedule(newMed.id);
-        saveData();
-        updateMedicationsList();
-        closeMedicationModal();
-        alert(`✅ Препарат "${name}" успешно добавлен!`);
+        patientData.medications.push({ id: Date.now(), name, dosage, startDate: start, endDate: end.toISOString().split('T')[0], times: [...medicationTimes], diagnosis: diag || "Общий", doses: doses, showAllDoses: false });
+        saveToLocalStorage(); updateMedicationsList(); closeMedicationModal();
+        showNotification(`✅ Препарат "${name}" добавлен!`, 'success');
     }
-
-    function editMedication(id) {
-        const med = patientData.medications.find(m => m.id === id);
-        if(med) {
-            const newName = prompt("Название препарата:", med.name);
-            const newDosage = prompt("Дозировка:", med.dosage);
-            if(newName && newDosage) { med.name = newName; med.dosage = newDosage; saveData(); updateMedicationsList(); }
-        }
+    function addTime() {
+        let nt = document.getElementById('newTime').value;
+        if(!nt) { alert("Выберите время"); return; }
+        if(medicationTimes.includes(nt)) { alert("Уже есть"); return; }
+        medicationTimes.push(nt); medicationTimes.sort();
+        document.getElementById('timesList').innerHTML = medicationTimes.map(t => `<span class="time-chip">${t} <span class="remove-time" onclick="removeTime('${t}')">✖</span></span>`).join('');
+        document.getElementById('newTime').value = '09:00';
     }
-
-    function deleteMedication(id) {
-        if(confirm("Удалить препарат?")) { patientData.medications = patientData.medications.filter(m => m.id !== id); saveData(); updateMedicationsList(); }
+    function removeTime(t) {
+        if(medicationTimes.length === 1) { alert("Должно быть хотя бы одно время"); return; }
+        medicationTimes = medicationTimes.filter(tt => tt !== t);
+        document.getElementById('timesList').innerHTML = medicationTimes.map(tm => `<span class="time-chip">${tm} <span class="remove-time" onclick="removeTime('${tm}')">✖</span></span>`).join('');
     }
-
+    function toggleShowAllDoses(medId) {
+        let med = patientData.medications.find(m => m.id === medId);
+        if(med) { med.showAllDoses = !med.showAllDoses; updateMedicationsList(); saveToLocalStorage(); }
+    }
     function updateMedicationsList() {
-        const container = document.getElementById('medicationsList');
-        if(!patientData.medications.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет добавленных препаратов</div>'; return; }
-        
-        const todayStr = new Date(currentSystemDate).toISOString().split('T')[0];
-        
+        let container = document.getElementById('medicationsList');
+        if(!patientData.medications.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет курсовых препаратов</div>'; return; }
+        let todayStr = new Date(currentSystemDate).toISOString().split('T')[0];
         container.innerHTML = patientData.medications.map(med => {
-            const total = med.doses.length, taken = med.doses.filter(d => d.taken).length, missed = med.doses.filter(d => d.missed).length;
-            const adherence = total ? ((taken/total)*100).toFixed(1) : 0;
-            const showAll = med.showAllDoses === true;
-            
-            let dosesToShow = showAll ? med.doses : med.doses.filter(d => d.date === todayStr);
-            if(showAll) dosesToShow = dosesToShow.sort((a,b) => new Date(a.date) - new Date(b.date));
-            
-            return `<div class="medication-item">
-                <div class="medication-header">
-                    <div><span class="medication-name">💊 ${escapeHtml(med.name)}</span><br><small>${escapeHtml(med.dosage)} | ${med.times.join(', ')}</small></div>
-                    <div><button class="btn-small btn-info" onclick="showStats(${med.id})">📊 Статистика</button>
-                    <button class="btn-small btn-warning" onclick="editMedication(${med.id})">✏️</button>
-                    <button class="btn-small btn-danger" onclick="deleteMedication(${med.id})">🗑️</button></div>
-                </div>
-                <div><strong>📅 Период:</strong> ${formatDateForDisplay(med.startDate)} — ${formatDateForDisplay(med.endDate)}</div>
-                <div><strong>📊 Приверженность:</strong> ${adherence}% (принято: ${taken}, пропущено: ${missed}, всего: ${total})</div>
-                <div><strong>🎯 Диагноз:</strong> ${escapeHtml(med.diagnosis)}</div>
-                <div style="margin-top:10px;"><strong>💊 График приема:</strong></div>
-                ${dosesToShow.map(dose => {
-                    const idx = med.doses.findIndex(d => d.date === dose.date && d.time === dose.time);
-                    return `<div class="dose-item ${dose.taken ? 'dose-taken' : (dose.missed ? 'dose-missed' : '')}">
-                        <span>📅 ${formatDateForDisplay(dose.date)} в ${dose.time}</span>
-                        ${!dose.taken && !dose.missed ? `<div><button class="btn-small btn-success" onclick="takeDose(${med.id}, ${idx})">✅ Принять</button>
-                        <button class="btn-small btn-danger" onclick="missDose(${med.id}, ${idx})">❌ Пропущено</button></div>` :
-                        `<span class="status-badge ${dose.taken ? 'status-taken' : 'status-missed'}">${dose.taken ? '✓ Принято' : '✗ Пропущено'}</span>`}
-                    </div>`;
-                }).join('')}
-                ${!showAll ? `<button class="btn-small show-all-btn" onclick="toggleShowAllDoses(${med.id})">📋 Показать все приемы</button>` :
-                `<button class="btn-small show-all-btn" onclick="toggleShowAllDoses(${med.id})">📅 Показать только сегодня</button>`}
-            </div>`;
+            let total = med.doses.length, taken = med.doses.filter(d=>d.taken).length, missed = med.doses.filter(d=>d.missed).length;
+            let adherence = total ? ((taken/total)*100).toFixed(1) : 0;
+            let showAll = med.showAllDoses === true;
+            let doses = showAll ? med.doses : med.doses.filter(d=>d.date===todayStr);
+            if(showAll) doses = doses.sort((a,b)=>new Date(a.date)-new Date(b.date));
+            return `<div class="medication-item"><div class="medication-header"><div><span class="medication-name">💊 ${escapeHtml(med.name)}</span><br><small>${escapeHtml(med.dosage)} | ${med.times.join(', ')}</small></div><div><button class="btn-small btn-info" onclick="showStats(${med.id})">📊 Статистика</button><button class="btn-small btn-warning" onclick="editMedication(${med.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteMedication(${med.id})">🗑️</button></div></div><div><strong>📅 Период:</strong> ${formatDateForDisplay(med.startDate)} — ${formatDateForDisplay(med.endDate)}</div><div><strong>📊 Приверженность:</strong> ${adherence}% (принято: ${taken}, пропущено: ${missed}, всего: ${total})</div><div><strong>🎯 Диагноз:</strong> ${escapeHtml(med.diagnosis)}</div><div style="margin-top:10px;"><strong>💊 График приема:</strong></div>${doses.map(dose => { let idx = med.doses.findIndex(d=>d.date===dose.date && d.time===dose.time); return `<div class="dose-item ${dose.taken?'dose-taken':(dose.missed?'dose-missed':'')}"><span>📅 ${formatDateForDisplay(dose.date)} в ${dose.time}</span>${!dose.taken && !dose.missed ? `<div><button class="btn-small btn-success" onclick="takeDose(${med.id},${idx})">✅ Принять</button><button class="btn-small btn-danger" onclick="missDose(${med.id},${idx})">❌ Пропущено</button></div>` : `<span class="status-badge ${dose.taken?'status-taken':'status-missed'}">${dose.taken?'✓ Принято':'✗ Пропущено'}</span>`}</div>`; }).join('')}${!showAll ? `<button class="btn-small show-all-btn" onclick="toggleShowAllDoses(${med.id})">📋 Показать все приемы</button>` : `<button class="btn-small show-all-btn" onclick="toggleShowAllDoses(${med.id})">📅 Показать только сегодня</button>`}</div>`;
         }).join('');
     }
-
-    function addDiagnosis() {
-        const name = prompt("Название диагноза:"), date = prompt("Дата (ДД.ММ.ГГГГ):");
-        if(name && date) { patientData.diagnoses.push({id:Date.now(),name:name,date:date,medications:[]}); saveData(); updateDiagnosesList(); }
-    }
-
-    function addMedicationToDiagnosis(diagnosisName) {
-        const medName = prompt("Название препарата:");
-        if(medName) {
-            const diagnosis = patientData.diagnoses.find(d => d.name === diagnosisName);
-            if(diagnosis) { diagnosis.medications.push(medName); saveData(); updateDiagnosesList(); }
+    function showStats(medId) {
+        let med = patientData.medications.find(m => m.id === medId);
+        if(med) {
+            let total = med.doses.length, taken = med.doses.filter(d=>d.taken).length, missed = med.doses.filter(d=>d.missed).length;
+            let upcoming = med.doses.filter(d=>!d.taken && !d.missed && new Date(d.date) >= currentSystemDate).length;
+            let adherence = total ? ((taken/total)*100).toFixed(1) : 0;
+            document.getElementById('statsList').innerHTML = `<div class="stat-item"><strong>💊 Препарат:</strong> ${med.name} (${med.dosage})</div><div class="stat-item"><strong>📅 Период:</strong> ${formatDateForDisplay(med.startDate)} — ${formatDateForDisplay(med.endDate)}</div><div class="stat-item"><strong>⏰ Время:</strong> ${med.times.join(', ')}</div><div class="stat-item"><strong>📊 Приверженность:</strong> ${adherence}%</div><div class="stat-item"><strong>✅ Принято:</strong> ${taken} раз</div><div class="stat-item"><strong>❌ Пропущено:</strong> ${missed} раз</div><div class="stat-item"><strong>📅 Предстоит:</strong> ${upcoming} раз</div><div class="stat-item"><strong>🎯 Всего:</strong> ${total} приемов</div><div class="stat-item"><strong>📋 Диагноз:</strong> ${med.diagnosis}</div>`;
+            document.getElementById('statsModal').style.display = 'flex';
         }
     }
+    function closeStatsModal() { document.getElementById('statsModal').style.display = 'none'; }
+    function takeDose(medId, idx) { let med = patientData.medications.find(m => m.id === medId); if(med && med.doses[idx]) { med.doses[idx].taken = true; med.doses[idx].missed = false; saveToLocalStorage(); updateMedicationsList(); } }
+    function missDose(medId, idx) { let med = patientData.medications.find(m => m.id === medId); if(med && med.doses[idx]) { med.doses[idx].missed = true; med.doses[idx].taken = false; saveToLocalStorage(); updateMedicationsList(); } }
+    function editMedication(id) { let med = patientData.medications.find(m=>m.id===id); if(med) { let n = prompt("Название:", med.name), d = prompt("Дозировка:", med.dosage); if(n && d) { med.name=n; med.dosage=d; saveToLocalStorage(); updateMedicationsList(); } } }
+    function deleteMedication(id) { if(confirm("Удалить?")) { patientData.medications = patientData.medications.filter(m=>m.id!==id); saveToLocalStorage(); updateMedicationsList(); } }
 
-    function editDiagnosis(id) {
-        const diag = patientData.diagnoses.find(d => d.id === id);
-        if(diag) {
-            const name = prompt("Название диагноза:", diag.name);
-            if(name) { diag.name = name; saveData(); updateDiagnosesList(); }
-        }
-    }
-
-    function deleteDiagnosis(id) {
-        if(confirm("Удалить диагноз?")) { patientData.diagnoses = patientData.diagnoses.filter(d => d.id !== id); saveData(); updateDiagnosesList(); }
-    }
-
+    function addDiagnosis() { let n = prompt("Диагноз:"), d = prompt("Дата (ДД.ММ.ГГГГ):"); if(n && d) { patientData.diagnoses.push({id:Date.now(),name:n,date:d,medications:[]}); saveToLocalStorage(); updateDiagnosesList(); } }
+    function addMedicationToDiagnosis(diagName) { let m = prompt("Название препарата:"); if(m) { let d = patientData.diagnoses.find(x=>x.name===diagName); if(d) { d.medications.push(m); saveToLocalStorage(); updateDiagnosesList(); } } }
+    function editDiagnosis(id) { let d = patientData.diagnoses.find(x=>x.id===id); if(d) { let n = prompt("Диагноз:", d.name); if(n) { d.name=n; saveToLocalStorage(); updateDiagnosesList(); } } }
+    function deleteDiagnosis(id) { if(confirm("Удалить?")) { patientData.diagnoses = patientData.diagnoses.filter(x=>x.id!==id); saveToLocalStorage(); updateDiagnosesList(); } }
     function updateDiagnosesList() {
-        const container = document.getElementById('diagnosesList');
+        let container = document.getElementById('diagnosesList');
         if(!patientData.diagnoses.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет диагнозов</div>'; return; }
-        container.innerHTML = patientData.diagnoses.map(d => `
-            <div class="diagnosis-item"><div>📋 ${escapeHtml(d.name)} - ${d.date}<br>💊 Препараты: ${d.medications.join(', ') || 'не назначены'}</div>
-            <div><button class="btn-small btn-info" onclick="addMedicationToDiagnosis('${d.name}')">+ Добавить препарат</button>
-            <button class="btn-small btn-warning" onclick="editDiagnosis(${d.id})">✏️</button>
-            <button class="btn-small btn-danger" onclick="deleteDiagnosis(${d.id})">🗑️</button></div></div>`).join('');
+        container.innerHTML = patientData.diagnoses.map(d => `<div class="diagnosis-item"><div>📋 ${escapeHtml(d.name)} - ${d.date}<br>💊 Препараты: ${d.medications.join(', ')||'не назначены'}</div><div><button class="btn-small btn-info" onclick="addMedicationToDiagnosis('${d.name}')">+ Добавить препарат</button><button class="btn-small btn-warning" onclick="editDiagnosis(${d.id})">✏️</button><button class="btn-small btn-danger" onclick="deleteDiagnosis(${d.id})">🗑️</button></div></div>`).join('');
     }
 
     function uploadFile(input) {
-        const file = input.files[0];
+        let file = input.files[0];
         if(file) {
-            const reader = new FileReader();
-            reader.onload = e => {
-                patientData.files.push({ id: Date.now(), name: file.name, type: file.type.includes('pdf') ? 'pdf' : 'image', data: e.target.result, date: new Date().toLocaleString() });
-                saveData(); updateFilesList();
+            let reader = new FileReader();
+            reader.onload = e => { 
+                patientData.files.push({ id: Date.now(), name: file.name, type: file.type.includes('pdf')?'pdf':'image', data: e.target.result, date: new Date().toLocaleString() }); 
+                saveToLocalStorage(); 
+                updateFilesList(); 
+                showNotification('📎 Файл загружен!', 'success');
             };
             reader.readAsDataURL(file);
         }
     }
-
-    function viewFile(file) {
-        const win = window.open();
-        win.document.write(`<!DOCTYPE html><html><head><title>${file.name}</title><style>body{margin:0;padding:20px;display:flex;justify-content:center;background:#f7fafc;}img,iframe{max-width:100%;height:auto;box-shadow:0 10px 40px rgba(0,0,0,0.1);}</style></head><body>${file.type === 'image' ? `<img src="${file.data}">` : `<iframe src="${file.data}" width="100%" height="90vh"></iframe>`}</body></html>`);
-        win.document.close();
-    }
-
-    function deleteFile(id) {
-        if(confirm("Удалить файл?")) { patientData.files = patientData.files.filter(f => f.id !== id); saveData(); updateFilesList(); }
-    }
-
+    function viewFile(file) { viewFileInNewTab(file); }
+    function deleteFile(id) { if(confirm("Удалить файл?")) { patientData.files = patientData.files.filter(f=>f.id!==id); saveToLocalStorage(); updateFilesList(); } }
     function updateFilesList() {
-        const container = document.getElementById('filesList');
-        if(!patientData.files.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет загруженных файлов</div>'; return; }
+        let container = document.getElementById('filesList');
+        if(!patientData.files.length) { container.innerHTML = '<div style="text-align:center;padding:20px;">Нет файлов</div>'; return; }
         container.innerHTML = patientData.files.map(f => `<div class="file-item"><div>📎 ${escapeHtml(f.name)}<br><small>${f.date}</small></div><div><button class="btn-small btn-info" onclick='viewFile(${JSON.stringify(f)})'>👁️ Просмотр</button><button class="btn-small btn-danger" onclick="deleteFile(${f.id})">🗑️</button></div></div>`).join('');
     }
 
-    function printSelected() { window.print(); }
-    function exportToPDF() { alert("Для сохранения в PDF: Нажмите 'Распечатать', затем в диалоге печати выберите 'Сохранить как PDF'"); printSelected(); }
-
-    function toggleSection(sectionId, iconId) {
-        const content = document.getElementById(sectionId);
-        const icon = document.getElementById(iconId);
-        if(content && icon) {
-            if(content.classList.contains('collapsed')) {
-                content.classList.remove('collapsed');
-                icon.classList.remove('collapsed');
-            } else {
-                content.classList.add('collapsed');
-                icon.classList.add('collapsed');
-            }
-        }
+    function showTemperatureChart() {
+        let data = [];
+        patientData.symptoms.forEach(s => {
+            let m = s.text.match(/Температура:\s*([\d.,]+)/i);
+            if(m) data.push({ date: s.date, temp: parseFloat(m[1].replace(',','.')) });
+        });
+        data.sort((a,b) => new Date(a.date) - new Date(b.date));
+        let ctx = document.getElementById('temperatureChart').getContext('2d');
+        if(temperatureChart) temperatureChart.destroy();
+        temperatureChart = new Chart(ctx, { type: 'line', data: { labels: data.map(d => d.date), datasets: [{ label: 'Температура (°C)', data: data.map(d => d.temp), borderColor: '#f56565', fill: true }] }, options: { responsive: true, scales: { y: { min: 35, max: 42 } } } });
+        document.getElementById('tempChartModal').style.display = 'flex';
+    }
+    function closeTempChartModal() { document.getElementById('tempChartModal').style.display = 'none'; }
+    function addTemperatureFromSelect() {
+        let temp = document.getElementById('tempSelect').value;
+        patientData.symptoms.push({ id: Date.now(), text: `Температура: ${temp}°C`, date: new Date().toISOString() });
+        saveToLocalStorage();
+        updateSymptomsList();
+        showNotification(`✅ Температура ${temp}°C записана!`, 'success');
     }
 
-    function escapeHtml(text) { if(!text) return ''; return text.replace(/[&<>]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m]; }); }
-    function logout() { if(confirm('Выйти из личного кабинета?')) window.location.href = '/'; }
+    function editPatientName() { let n = prompt("Введите ФИО:", patientData.fullName); if(n && n.trim()) { patientData.fullName = n.trim(); saveToLocalStorage(); updatePatientInfo(); } }
+    function editCurrentDateTime() {
+        document.getElementById('currentDatePicker').value = currentSystemDate.toISOString().split('T')[0];
+        document.getElementById('currentTimePicker').value = `${String(currentSystemDate.getHours()).padStart(2,'0')}:${String(currentSystemDate.getMinutes()).padStart(2,'0')}`;
+        document.getElementById('dateEditModal').style.display = 'flex';
+    }
+    function saveCurrentDateTime() {
+        let newDate = document.getElementById('currentDatePicker').value;
+        let newTime = document.getElementById('currentTimePicker').value;
+        if(newDate && newTime) {
+            currentSystemDate = new Date(`${newDate}T${newTime}:00`);
+            updateDateTimeDisplay();
+            closeDateTimeEditModal();
+            updateAll();
+        }
+    }
+    function closeDateTimeEditModal() { document.getElementById('dateEditModal').style.display = 'none'; }
+    function showBirthDatePicker() {
+        document.getElementById('birthDatePicker').value = patientData.birthDate;
+        document.getElementById('birthDateModal').style.display = 'flex';
+    }
+    function closeBirthDateModal() { document.getElementById('birthDateModal').style.display = 'none'; }
+    function saveBirthDate() {
+        let newDate = document.getElementById('birthDatePicker').value;
+        if(newDate && validateBirthDate(newDate)) { 
+            patientData.birthDate = newDate; 
+            saveToLocalStorage(); 
+            updatePatientInfo(); 
+            closeBirthDateModal(); 
+            updateInfantGrowthTable();
+            showNotification('📅 Дата рождения обновлена!', 'success');
+        } else if(newDate) { alert("Пожалуйста, введите корректную дату рождения!"); }
+    }
+    function updateGender() {
+        let gender = document.getElementById('genderSelect').value;
+        patientData.gender = gender;
+        document.getElementById('avatarEmoji').innerHTML = gender === 'male' ? '👨' : '👩';
+        saveToLocalStorage();
+        updateInfantGrowthTable();
+    }
+    function updateHeightWeight() {
+        patientData.height = getTotalHeight();
+        patientData.weight = getTotalWeight();
+        patientData.heightWeightHistory.push({height:patientData.height,weight:patientData.weight,date:new Date().toLocaleString()});
+        saveToLocalStorage();
+        updateBMI();
+        updateInfantGrowthTable();
+    }
+    function updateBP() {
+        patientData.bpHistory.push({systolic:parseInt(document.getElementById('bpSystolicSelect').value), diastolic:parseInt(document.getElementById('bpDiastolicSelect').value), date: new Date().toLocaleString()});
+        saveToLocalStorage();
+    }
+    function updateSpO2() {
+        patientData.spo2History.push({value:parseInt(document.getElementById('spo2Select').value), date: new Date().toLocaleString()});
+        saveToLocalStorage();
+    }
 
+    function showWeightHistory() { showHistory("История роста/веса", patientData.heightWeightHistory.map(h=>`${h.date}: ${h.height} см / ${h.weight} г`)); }
+    function showBPHistory() { showHistory("История АД", patientData.bpHistory.map(h=>`${h.date}: ${h.systolic}/${h.diastolic}`)); }
+    function showSpO2History() { showHistory("История сатурации", patientData.spo2History.map(h=>`${h.date}: ${h.value}%`)); }
+    function showHistory(title, items) {
+        document.getElementById('historyTitle').innerHTML = title;
+        document.getElementById('historyList').innerHTML = items.map(i=>`<div style="padding:8px; border-bottom:1px solid #e2e8f0;">${i}</div>`).join('');
+        document.getElementById('historyModal').style.display = 'flex';
+    }
+    function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
+    function printSelected() { window.print(); }
+    function exportToPDF() { alert("Нажмите 'Распечатать' и выберите 'Сохранить как PDF'"); printSelected(); }
+    function toggleSection(sectionId, iconId) {
+        let c = document.getElementById(sectionId), i = document.getElementById(iconId);
+        if(c && i) { if(c.classList.contains('collapsed')) { c.classList.remove('collapsed'); i.classList.remove('collapsed'); } else { c.classList.add('collapsed'); i.classList.add('collapsed'); } }
+    }
+    function escapeHtml(t) { if(!t) return ''; return t.replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m])); }
+    function logout() { if(confirm('Выйти?')) window.location.href = '/'; }
+
+    function generateQRCode() {
+        let url = window.location.href;
+        let qrDiv = document.getElementById('qrcode');
+        qrDiv.innerHTML = '';
+        new QRCode(qrDiv, { text: url, width: 120, height: 120 });
+    }
+    function generateComputerLink() {
+        let url = window.location.href;
+        let link = document.getElementById('computerLink');
+        link.href = url;
+        link.onclick = function(e) { e.preventDefault(); navigator.clipboard.writeText(url); alert('Ссылка скопирована!'); };
+    }
+
+    function loadData() {
+        let saved = localStorage.getItem('patientData');
+        if(saved) loadFromLocalStorage();
+        generateQRCode();
+        generateComputerLink();
+        updateAll();
+    }
+    
     loadData();
-    setInterval(checkMissedDoses, 3600000);
 </script>
 </body>
 </html>

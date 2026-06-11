@@ -1,11 +1,46 @@
+# Скомпилированные файлы
 *.bin
 *.exe
+*.dll
+*.so
+*.dylib
+
+# Логи
 *.log
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-*.tmp
-*.temp
 server.log
 nohup.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Временные файлы
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+
+# Служебные файлы
+*.pid
+*.lock
+
+# Тестовые файлы
+test_*
+*_test.html
+*_backup.html
+update_*.js
+check_*.sh
+
+# Сборка
+dist/
+build/
+node_modules/
