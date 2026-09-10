@@ -1,0 +1,92 @@
+{
+  "id": "example_2025",
+  "version": "2025",
+  "specialty": "lor",
+  "title": "Название рекомендации",
+  "mkh10_codes": ["J01.0"],
+  "age_groups": ["adult", "child"],
+  "severity_levels": ["легкая", "средняя", "тяжелая"],
+
+  "diagnostic_criteria": {
+    "adult": {
+      "required_symptoms": ["zalozhennost"],
+      "optional_symptoms": ["vydeleniya", "bol_v_litse"],
+      "min_symptoms_count": 2,
+      "max_duration_days": 84
+    },
+    "child": {
+      "required_symptoms": [],
+      "optional_symptoms": ["zalozhennost", "kashel"],
+      "min_symptoms_count": 2,
+      "max_duration_days": 84
+    }
+  },
+
+  "bacterial_criteria": {
+    "min_signs": 3,
+    "signs": ["gnoinye_vydeleniya", "temp_38_and_above"]
+  },
+
+  "antibiotic_indications": {
+    "adult": {
+      "always": ["oslozhneniya"],
+      "when": [
+        {"condition": "days >= 5", "reason": "симптомы ≥5-7 дней"}
+      ],
+      "exclude": []
+    },
+    "child": {
+      "always": [],
+      "when": [
+        {"condition": "bacterial_signs >= 3", "reason": "3+ признаков"}
+      ]
+    }
+  },
+
+  "antibiotics": {
+    "adult": {
+      "first_line": [
+        {"name": "Амоксициллин", "dosage": "500-1000 мг 3 р/д"}
+      ],
+      "alternatives": []
+    },
+    "child": {
+      "first_line": [
+        {"name": "Амоксициллин", "dosage": "40-60 мг/кг/сут"}
+      ]
+    }
+  },
+
+  "duration": {
+    "default": 7,
+    "complicated": 14
+  },
+
+  "local_therapy": {
+    "decongestants": {
+      "adult": "Ксилометазолин 5-7 дней",
+      "child": {"0-6": "Фенилэфрин 0.125%", "6-12": "Ксилометазолин 0.05%", "12+": "Ксилометазолин"}
+    },
+    "irrigation": "Морская вода 5-7 дней",
+    "topical_gcs": {"age": 12, "drug": "Мометазон", "note": "при аллергии"}
+  },
+
+  "symptomatic": {
+    "nsaids": {"adult": "Кетопрофен", "child": {"0-6": "Парацетамол", "6-12": "Ибупрофен"}},
+    "mucoactive": "Ацетилцистеин",
+    "herbal": "Миртол"
+  },
+
+  "hospitalization_indications": ["tyazhest == 'тяжелая'", "oslozhneniya"],
+
+  "differential_diagnosis": {
+    "adult": ["аллергический ринит"],
+    "child": ["аденоидит"]
+  },
+
+  "diagnostics": {
+    "stage1": "Осмотр ЛОР",
+    "stage2": {"lab": {"when": ["tyazhest == 'тяжелая'"], "tests": ["ОАК"]}},
+    "stage3": {"ct": {"when": ["oslozhneniya"]}}
+  }
+}

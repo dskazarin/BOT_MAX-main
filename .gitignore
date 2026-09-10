@@ -1,46 +1,35 @@
-# Скомпилированные файлы
-*.bin
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Логи
+# Игнорируем мусор
+*.bak
+*.bak2
+*.bak3
+*.broken_*
 *.log
-server.log
-nohup.out
-
-# IDE
-.vscode/
-.idea/
+*.tmp
+*.temp
 *.swp
 *.swo
 *~
 
+# Go
+go.sum
+bot_max_server
+bot_max_test
+/main
+/backend/main
+
+# Бэкапы
+backups/
+*.tar.gz
+*.zip
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# Временные файлы
-*.tmp
-*.temp
-*.bak
-*.backup
-*.old
-
-# Служебные файлы
-*.pid
-*.lock
-
-# Тестовые файлы
-test_*
-*_test.html
-*_backup.html
-update_*.js
-check_*.sh
-
-# Сборка
-dist/
-build/
-node_modules/
+# Не игнорируем важные файлы
+!releases/*.tar.gz

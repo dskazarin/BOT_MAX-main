@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель администратора - BOT_MAX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #e2e8f0;
+        }
+
+        .container { max-width: 1600px; margin: 0 auto; }
+
+        .header {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .logo {
+            font-size: 2em;
+            background: linear-gradient(135deg, #9f7aea, #667eea);
+            width: 50px; height: 50px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .header-title h1 { font-size: 1.3em; color: #fff; }
+        .header-title small { color: #a0aec0; font-size: 0.8em; }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 0.9em;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .btn-success { background: #48bb78; color: white; }
+        .btn-danger { background: #f56565; color: white; }
+        .btn-warning { background: #ed8936; color: white; }
+        .btn-info { background: #4299e1; color: white; }
+        .btn-sm { padding: 5px 12px; font-size: 0.75em; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-header h2 {
+            font-size: 1.1em;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title {
+            color: #a0aec0;
+            font-size: 0.7em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .card-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .card-value.green { color: #48bb78; }
+        .card-value.blue { color: #4299e1; }
+        .card-value.purple { color: #9f7aea; }
+        .card-value.yellow { color: #ed8936; }
+
+        .specialty-list { max-height: 500px; overflow-y: auto; }
+
+        .specialty-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .specialty-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .specialty-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #fff;
+        }
+
+        .version-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin: 2px;
+        }
+
+        .version-active {
+            background: rgba(72, 187, 120, 0.2);
+            color: #48bb78;
+            border: 1px solid rgba(72, 187, 120, 0.3);
+        }
+
+        .version-archive {
+            background: rgba(160, 174, 192, 0.2);
+            color: #a0aec0;
+            border: 1px solid rgba(160, 174, 192, 0.3);
+        }
+
+        .version-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #a0aec0;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: #2d3748;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .modal-content h3 {
+            color: #9f7aea;
+            margin-bottom: 20px;
+        }
+
+        .modal-content textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: #e2e8f0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+            resize: vertical;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 15px;
+            color: #9f7aea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link:hover { text-decoration: underline; }
+
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #48bb78;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            z-index: 3000;
+            font-weight: 600;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #9f7aea; border-radius: 10px; }
+
+        @media (max-width: 992px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .grid-4 { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="index.html" class="back-link">⬅ На главную</a>
+
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">⚙️</div>
+            <div class="header-title">
+                <h1>Панель администратора</h1>
+                <small>Управление клиническими рекомендациями</small>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-info" onclick="refreshAll()">🔄 Обновить</button>
+            <a href="index.html" class="btn btn-danger">🚪 Выйти</a>
+        </div>
+    </div>
+
+    <!-- Статистика -->
+    <div class="grid-4">
+        <div class="card">
+            <div class="card-title">Специальностей</div>
+            <div class="card-value purple" id="totalSpecialties">0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Активных версий</div>
+            <div class="card-value green" id="totalActive">0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">В архиве</div>
+            <div class="card-value yellow" id="totalArchive">0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Всего файлов</div>
+            <div class="card-value blue" id="totalFiles">0</div>
+        </div>
+    </div>
+
+    <!-- Управление -->
+    <div class="grid-2">
+        <!-- Список специальностей -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📋 Клинические рекомендации</h2>
+                <button class="btn btn-sm btn-success" onclick="showAddModal()">➕ Добавить</button>
+            </div>
+            <div class="specialty-list" id="specialtyList">
+                <div class="empty-state">Загрузка...</div>
+            </div>
+        </div>
+
+        <!-- Инструкция -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📖 Инструкция</h2>
+            </div>
+            <div style="color: #a0aec0; line-height: 1.8; font-size: 0.9em;">
+                <p><strong style="color:#fff;">Структура папок:</strong></p>
+                <pre style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; margin: 10px 0; overflow-x: auto;">guidelines/
+├── lor/                    # 👂 ЛОР
+│   ├── active/             # Активные
+│   │   └── v2024/
+│   │       └── guideline.json
+│   └── archive/            # Архив
+│       └── v2023/
+├── therapist/              # 💊 Терапия
+├── pediatrician/           # 👶 Педиатрия
+└── _templates/</pre>
+
+                <p style="margin-top: 15px;"><strong style="color:#fff;">Как добавить новую версию:</strong></p>
+                <ol style="margin-left: 20px;">
+                    <li>Нажмите "➕ Добавить"</li>
+                    <li>Выберите специальность</li>
+                    <li>Введите версию (например, v2025)</li>
+                    <li>Вставьте JSON рекомендации</li>
+                </ol>
+
+                <p style="margin-top: 15px;"><strong style="color:#fff;">Как архивировать:</strong></p>
+                <p>Нажмите "📦 В архив" рядом с версией — она переместится в <code>archive/</code>.</p>
+
+                <p style="margin-top: 15px;"><strong style="color:#fff;">Как удалить:</strong></p>
+                <p>Нажмите "🗑️ Удалить" — файл будет удалён с сервера.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления -->
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <h3>➕ Добавить клиническую рекомендацию</h3>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Специальность</label>
+            <select id="newSpecialty" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                <option value="lor">👂 ЛОР</option>
+                <option value="therapist">💊 Терапия</option>
+                <option value="pediatrician">👶 Педиатрия</option>
+                <option value="cardiologist">❤️ Кардиология</option>
+                <option value="neurologist">🧠 Неврология</option>
+                <option value="surgeon">🔪 Хирургия</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Версия</label>
+            <input type="text" id="newVersion" placeholder="v2025" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">JSON рекомендации</label>
+            <textarea id="newGuidelineJson" placeholder='{
+  "id": "acute_sinusitis_2025",
+  "version": "2025",
+  "specialty": "lor",
+  "title": "Острый синусит 2025",
+  "diagnostic_criteria": { ... },
+  ...
+}'></textarea>
+        </div>
+
+        <div class="modal-buttons">
+            <button class="btn btn-danger" onclick="closeAddModal()">❌ Отмена</button>
+            <button class="btn btn-success" onclick="saveNewGuideline()">✅ Добавить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var guidelines = {};
+
+    // ================================================================
+    //  ЗАГРУЗКА
+    // ================================================================
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadGuidelines();
+    });
+
+    async function loadGuidelines() {
+        try {
+            var response = await fetch('/api/specialties');
+            if (!response.ok) throw new Error('Ошибка загрузки');
+
+            var data = await response.json();
+            guidelines = data;
+            renderSpecialties();
+            updateStats();
+        } catch (error) {
+            document.getElementById('specialtyList').innerHTML =
+                '<div class="empty-state">❌ ' + error.message + '</div>';
+        }
+    }
+
+    function renderSpecialties() {
+        var container = document.getElementById('specialtyList');
+        var specs = Object.keys(guidelines);
+
+        if (specs.length === 0) {
+            container.innerHTML = '<div class="empty-state">Нет рекомендаций. Нажмите "➕ Добавить".</div>';
+            return;
+        }
+
+        var html = '';
+        var icons = {
+            lor: '👂',
+            therapist: '💊',
+            pediatrician: '👶',
+            cardiologist: '❤️',
+            neurologist: '🧠',
+            surgeon: '🔪'
+        };
+
+        specs.forEach(function(spec) {
+            var versions = guidelines[spec];
+            var icon = icons[spec] || '📋';
+
+            html += '<div class="specialty-item">';
+            html += '<div class="specialty-header">';
+            html += '<span class="specialty-name">' + icon + ' ' + spec.toUpperCase() + '</span>';
+            html += '<span class="version-badge version-active">✅ ' + versions.length + ' версий</span>';
+            html += '</div>';
+
+            html += '<div style="margin-bottom: 10px;">';
+            versions.forEach(function(v) {
+                html += '<span class="version-badge version-active">' + v + '</span>';
+            });
+            html += '</div>';
+
+            html += '<div class="version-actions">';
+            html += '<button class="btn btn-sm btn-primary" onclick="viewGuideline(\'' + spec + '\')">👁️ Просмотр</button>';
+            html += '<button class="btn btn-sm btn-warning" onclick="archiveSpecialty(\'' + spec + '\')">📦 В архив</button>';
+            html += '<button class="btn btn-sm btn-danger" onclick="deleteSpecialty(\'' + spec + '\')">🗑️ Удалить</button>';
+            html += '</div>';
+
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function updateStats() {
+        var specs = Object.keys(guidelines);
+        var totalActive = 0;
+        var totalFiles = 0;
+
+        specs.forEach(function(spec) {
+            totalActive += guidelines[spec].length;
+            totalFiles += guidelines[spec].length;
+        });
+
+        document.getElementById('totalSpecialties').textContent = specs.length;
+        document.getElementById('totalActive').textContent = totalActive;
+        document.getElementById('totalArchive').textContent = '—';
+        document.getElementById('totalFiles').textContent = totalFiles;
+    }
+
+    // ================================================================
+    //  ДОБАВЛЕНИЕ
+    // ================================================================
+
+    function showAddModal() {
+        document.getElementById('addModal').classList.add('active');
+        document.getElementById('newSpecialty').value = 'lor';
+        document.getElementById('newVersion').value = '';
+        document.getElementById('newGuidelineJson').value = '';
+    }
+
+    function closeAddModal() {
+        document.getElementById('addModal').classList.remove('active');
+    }
+
+    async function saveNewGuideline() {
+        var specialty = document.getElementById('newSpecialty').value;
+        var version = document.getElementById('newVersion').value.trim();
+        var jsonText = document.getElementById('newGuidelineJson').value.trim();
+
+        if (!version) {
+            alert('Введите версию (например, v2025)');
+            return;
+        }
+
+        if (!jsonText) {
+            alert('Введите JSON рекомендации');
+            return;
+        }
+
+        // Проверка JSON
+        try {
+            JSON.parse(jsonText);
+        } catch (e) {
+            alert('❌ Некорректный JSON: ' + e.message);
+            return;
+        }
+
+        try {
+            var response = await fetch('/api/admin/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    specialty: specialty,
+                    version: version,
+                    content: jsonText
+                })
+            });
+
+            if (!response.ok) {
+                var err = await response.json();
+                throw new Error(err.error || 'Ошибка сервера');
+            }
+
+            showNotification('✅ Рекомендация добавлена');
+            closeAddModal();
+            loadGuidelines();
+        } catch (error) {
+            alert('❌ ' + error.message);
+        }
+    }
+
+    // ================================================================
+    //  АРХИВАЦИЯ / УДАЛЕНИЕ
+    // ================================================================
+
+    async function archiveSpecialty(specialty) {
+        if (!confirm('Переместить все версии "' + specialty + '" в архив?')) return;
+
+        try {
+            var response = await fetch('/api/admin/archive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ specialty: specialty })
+            });
+
+            if (!response.ok) throw new Error('Ошибка');
+            showNotification('📦 Перемещено в архив');
+            loadGuidelines();
+        } catch (error) {
+            alert('❌ ' + error.message);
+        }
+    }
+
+    async function deleteSpecialty(specialty) {
+        if (!confirm('Удалить все версии "' + specialty + '"?')) return;
+
+        try {
+            var response = await fetch('/api/admin/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ specialty: specialty })
+            });
+
+            if (!response.ok) throw new Error('Ошибка');
+            showNotification('🗑️ Удалено');
+            loadGuidelines();
+        } catch (error) {
+            alert('❌ ' + error.message);
+        }
+    }
+
+    function viewGuideline(specialty) {
+        window.open('/api/guideline/' + specialty, '_blank');
+    }
+
+    // ================================================================
+    //  УТИЛИТЫ
+    // ================================================================
+
+    function showNotification(message) {
+        var notif = document.createElement('div');
+        notif.className = 'notification';
+        notif.textContent = message;
+        document.body.appendChild(notif);
+        setTimeout(function() { notif.remove(); }, 2500);
+    }
+
+    function refreshAll() {
+        loadGuidelines();
+    }
+</script>
+
+</body>
+</html>

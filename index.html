@@ -1,40 +1,276 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=patient_cabinet_full.html">
-    <title>Личный кабинет BOT_MAX</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOT_MAX — Медицинская платформа</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            padding: 20px;
+        }
+
+        /* Верхняя панель с админом */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            padding: 20px 30px;
+            z-index: 100;
+        }
+
+        .admin-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(159, 122, 234, 0.15);
+            border: 1px solid rgba(159, 122, 234, 0.3);
+            border-radius: 30px;
+            color: #9f7aea;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+
+        .admin-btn:hover {
+            background: rgba(159, 122, 234, 0.25);
+            border-color: #9f7aea;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(159, 122, 234, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        /* Хедер */
+        .main-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .main-header .logo {
+            font-size: 4em;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .main-header h1 {
+            font-size: 2.5em;
+            color: #fff;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .main-header h1 span {
             background: linear-gradient(135deg, #667eea, #764ba2);
-            margin: 0;
+            padding: 0 15px;
+            border-radius: 10px;
+            font-weight: 700;
         }
-        .loader { text-align: center; color: white; }
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+
+        .main-header p {
+            color: #a0aec0;
+            font-size: 1.1em;
+            margin-top: 10px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+
+        /* Карточки входа */
+        .login-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 40px 35px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.4s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: #e2e8f0;
+            display: block;
+        }
+
+        .login-card:hover {
+            transform: translateY(-10px);
+            border-color: rgba(102, 126, 234, 0.4);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .login-card .icon {
+            font-size: 4em;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        .login-card h2 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+
+        .login-card p {
+            color: #a0aec0;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .login-card .badge {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 6px 20px;
+            border-radius: 30px;
+            font-size: 0.75em;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-patient {
+            background: rgba(66, 153, 225, 0.2);
+            color: #4299e1;
+            border: 1px solid rgba(66, 153, 225, 0.2);
+        }
+
+        .badge-doctor {
+            background: rgba(159, 122, 234, 0.2);
+            color: #9f7aea;
+            border: 1px solid rgba(159, 122, 234, 0.2);
+        }
+
+        .login-card .arrow {
+            display: inline-block;
+            margin-top: 15px;
+            font-size: 1.2em;
+            transition: transform 0.3s;
+        }
+
+        .login-card:hover .arrow {
+            transform: translateX(5px);
+        }
+
+        /* Футер */
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+            color: #4a5568;
+            font-size: 0.85em;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .footer a:hover { text-decoration: underline; }
+
+        /* Анимация */
+        .animate {
+            opacity: 0;
+            animation: fadeUp 0.8s ease forwards;
+        }
+
+        .animate-delay-1 { animation-delay: 0.2s; }
+        .animate-delay-2 { animation-delay: 0.4s; }
+        .animate-delay-3 { animation-delay: 0.6s; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .login-grid {
+                grid-template-columns: 1fr;
+                gap: 25px;
+            }
+            .main-header h1 { font-size: 1.8em; }
+            .main-header .logo { font-size: 3em; }
+            .login-card { padding: 30px 25px; }
+            .top-bar { padding: 15px; }
+            .admin-btn { padding: 8px 15px; font-size: 0.8em; }
         }
     </style>
 </head>
 <body>
-    <div class="loader">
-        <div class="spinner"></div>
-        <p>Загрузка личного кабинета...</p>
-        <p><small><a href="patient_cabinet_full.html" style="color: white;">Перейти</a></small></p>
+
+    <!-- Верхняя панель: вход для администратора -->
+    <div class="top-bar">
+        <a href="admin_panel.html" class="admin-btn" title="Вход для администратора">
+            ⚙️ <span>Администратор</span>
+        </a>
     </div>
+
+    <div class="container">
+
+        <!-- Хедер -->
+        <header class="main-header animate">
+            <span class="logo">🏥</span>
+            <h1>Добро пожаловать в <span>BOT_MAX</span></h1>
+            <p>Интеллектуальная медицинская платформа с ИИ-ассистентом</p>
+        </header>
+
+        <!-- Карточки входа -->
+        <div class="login-grid">
+
+            <!-- Пациент -->
+            <a href="patient_cabinet_full.html" class="login-card animate animate-delay-1">
+                <span class="icon">👤</span>
+                <h2>Личный кабинет пациента</h2>
+                <p>
+                    Ведите дневник здоровья, записывайте симптомы,<br>
+                    отслеживайте прием лекарств и получайте<br>
+                    рекомендации от ИИ-агента.
+                </p>
+                <span class="badge badge-patient">👨‍⚕️ Для пациентов</span>
+                <span class="arrow">→</span>
+            </a>
+
+            <!-- Врач -->
+            <a href="doctor_cabinet.html" class="login-card animate animate-delay-2">
+                <span class="icon">🧠</span>
+                <h2>Кабинет врача</h2>
+                <p>
+                    Управляйте списком пациентов, проводите<br>
+                    диагностику с помощью ИИ-агента,<br>
+                    используйте актуальные клинические рекомендации.
+                </p>
+                <span class="badge badge-doctor">🧬 Для врачей</span>
+                <span class="arrow">→</span>
+            </a>
+
+        </div>
+
+        <!-- Футер -->
+        <footer class="footer animate animate-delay-3">
+            <p>
+                BOT_MAX v2.0 &bull; Клинические рекомендации 2024 &bull;
+                <a href="#" onclick="alert('📧 support@botmax.com')">Поддержка</a>
+            </p>
+            <p style="margin-top: 5px; font-size: 0.8em; color: #2d3748;">
+                🔒 Все данные хранятся локально в вашем браузере
+            </p>
+        </footer>
+
+    </div>
+
 </body>
 </html>

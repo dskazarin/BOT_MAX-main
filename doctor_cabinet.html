@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Личный кабинет врача - BOT_MAX AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #e2e8f0;
+        }
+
+        .container { max-width: 1600px; margin: 0 auto; }
+
+        .header {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .logo {
+            font-size: 2em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 50px; height: 50px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .header-title h1 { font-size: 1.3em; color: #fff; }
+        .header-title small { color: #a0aec0; font-size: 0.8em; }
+
+        .header-right { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .status-badge { padding: 8px 16px; border-radius: 30px; font-size: 0.8em; background: #48bb78; color: white; }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 0.9em;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .btn-success { background: #48bb78; color: white; }
+        .btn-danger { background: #f56565; color: white; }
+        .btn-warning { background: #ed8936; color: white; }
+        .btn-info { background: #4299e1; color: white; }
+        .btn-sm { padding: 5px 12px; font-size: 0.75em; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .card-header h2 { font-size: 1.1em; color: #e2e8f0; display: flex; align-items: center; gap: 10px; }
+
+        .card-title { color: #a0aec0; font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .card-value { font-size: 1.8em; font-weight: bold; color: #fff; }
+        .card-value.green { color: #48bb78; }
+        .card-value.red { color: #f56565; }
+        .card-value.yellow { color: #ed8936; }
+        .card-value.blue { color: #4299e1; }
+
+        .patient-list { max-height: 400px; overflow-y: auto; }
+
+        .patient-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .patient-item:hover { background: rgba(255,255,255,0.08); border-left-color: #667eea; }
+        .patient-item.active { background: rgba(102,126,234,0.15); border-left-color: #667eea; }
+
+        .patient-name { font-weight: 600; color: #e2e8f0; }
+        .patient-id { font-size: 0.8em; color: #a0aec0; }
+        .patient-status { font-size: 0.7em; padding: 4px 10px; border-radius: 20px; }
+        .status-new { background: #4299e1; color: white; }
+        .status-checked { background: #48bb78; color: white; }
+        .status-critical { background: #f56565; color: white; }
+
+        .ai-result { background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; margin-top: 15px; display: none; }
+        .ai-result.show { display: block; }
+        .ai-section { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 12px; }
+        .ai-section-title { font-weight: 600; color: #a0aec0; font-size: 0.8em; text-transform: uppercase; margin-bottom: 8px; }
+        .ai-diagnosis-match { padding: 10px 15px; border-radius: 10px; margin-bottom: 10px; }
+        .ai-diagnosis-match.true { background: rgba(72,187,120,0.2); border-left: 4px solid #48bb78; }
+        .ai-diagnosis-match.false { background: rgba(245,101,101,0.2); border-left: 4px solid #f56565; }
+        .ai-drug { background: rgba(255,255,255,0.05); padding: 10px 15px; border-radius: 8px; margin-top: 5px; }
+        .ai-drug strong { color: #48bb78; }
+
+        .tag { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.7em; margin: 2px; }
+        .tag-green { background: rgba(72,187,120,0.2); color: #48bb78; }
+        .tag-red { background: rgba(245,101,101,0.2); color: #f56565; }
+        .tag-yellow { background: rgba(237,137,54,0.2); color: #ed8936; }
+
+        .symptom-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .symptom-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .symptom-check input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #667eea; }
+        .symptom-check label { font-size: 0.85em; color: #e2e8f0; cursor: pointer; }
+
+        .loading {
+            display: inline-block;
+            width: 20px; height: 20px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .back-link { display: inline-block; margin-bottom: 15px; color: #667eea; text-decoration: none; font-weight: 600; }
+        .back-link:hover { text-decoration: underline; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #667eea; border-radius: 10px; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #2d3748;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px; }
+
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #48bb78;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            z-index: 3000;
+            font-weight: 600;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @media (max-width: 992px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .grid-4 { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 768px) {
+            .grid-4 { grid-template-columns: 1fr; }
+            .symptom-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="index.html" class="back-link">⬅ На главную</a>
+
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">🧠</div>
+            <div class="header-title">
+                <h1>👨‍⚕️ Личный кабинет врача</h1>
+                <small>ИИ-агент для клинических рекомендаций</small>
+            </div>
+        </div>
+        <div class="header-right">
+            <span class="status-badge">🟢 ИИ активен</span>
+            <a href="index.html" class="btn btn-danger">🚪 Выйти</a>
+        </div>
+    </div>
+
+    <div class="grid-4">
+        <div class="card"><div class="card-title">Всего пациентов</div><div class="card-value blue" id="totalPatients">0</div></div>
+        <div class="card"><div class="card-title">Требуют внимания</div><div class="card-value yellow" id="pendingPatients">0</div></div>
+        <div class="card"><div class="card-title">Критические случаи</div><div class="card-value red" id="criticalPatients">0</div></div>
+        <div class="card"><div class="card-title">Проверено ИИ</div><div class="card-value green" id="checkedPatients">0</div></div>
+    </div>
+
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header">
+                <h2>👤 Пациенты</h2>
+                <div>
+                    <button class="btn btn-sm btn-success" onclick="openAddPatientModal()">➕ Добавить</button>
+                    <button class="btn btn-sm btn-info" onclick="loadDemoPatients()">📊 Демо</button>
+                </div>
+            </div>
+            <div class="patient-list" id="patientList"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>🧠 ИИ-диагностика</h2>
+                <span id="selectedPatientName" style="color:#a0aec0;font-size:0.9em;">Выберите пациента</span>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px;">
+                <select id="specialtySelect" style="padding:10px 15px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;flex:1;min-width:150px;">
+                    <option value="lor">👂 ЛОР (острый синусит)</option>
+                </select>
+                <button class="btn btn-primary" onclick="runAICheck()" id="aiCheckBtn">🧠 Проверить диагноз</button>
+                <button class="btn btn-sm btn-warning" onclick="clearAIResult()">🗑️ Очистить</button>
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="color:#a0aec0;font-size:0.8em;">📋 Симптомы пациента</span>
+                    <button class="btn btn-sm btn-info" onclick="syncSymptomsFromPatient()">🔄 Синхронизировать</button>
+                </div>
+                <div class="symptom-grid" id="symptomGrid"></div>
+            </div>
+
+            <div id="aiResult" class="ai-result">
+                <div id="aiResultContent"></div>
+            </div>
+
+            <div id="aiLoading" style="display:none;text-align:center;padding:20px;">
+                <div class="loading"></div>
+                <div style="margin-top:10px;color:#a0aec0;">Анализ данных...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>📊 Все пациенты</h2>
+            <span style="color:#a0aec0;font-size:0.8em;" id="totalPatientsLabel">0 записей</span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">ID</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">ФИО</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Возраст</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Статус</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Диагноз</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">ИИ-проверка</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="patientsTableBody">
+                    <tr><td colspan="7" style="text-align:center;padding:40px;color:#a0aec0;">Нет пациентов</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>📁 Управление клиническими рекомендациями</h2>
+            <button class="btn btn-sm btn-info" onclick="loadGuidelines()">🔄 Обновить список</button>
+        </div>
+        <div id="guidelinesList" style="display:flex;flex-wrap:wrap;gap:10px;">
+            <span style="color:#a0aec0;">Загрузка...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления пациента -->
+<div id="addPatientModal" class="modal">
+    <div class="modal-content">
+        <h3 style="color: #9f7aea; margin-bottom: 20px;">➕ Добавить пациента</h3>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">ФИО *</label>
+                <input type="text" id="newPatientName" placeholder="Иванов Иван Иванович" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Дата рождения *</label>
+                <input type="date" id="newPatientBirthDate" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Пол</label>
+                <select id="newPatientGender" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                    <option value="male">👨 Мужской</option>
+                    <option value="female">👩 Женский</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Рост (см)</label>
+                <input type="number" id="newPatientHeight" placeholder="170" oninput="updateNewPatientBMI()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Вес (г)</label>
+                <input type="number" id="newPatientWeight" placeholder="70000" oninput="updateNewPatientBMI()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">ИМТ</label>
+                <div id="newPatientBMI" style="padding: 12px; background: rgba(102,126,234,0.1); border-radius: 10px; color: #9f7aea; font-weight: 600; text-align: center;">—</div>
+            </div>
+        </div>
+
+        <div class="modal-buttons">
+            <button class="btn btn-danger" onclick="closeAddPatientModal()">❌ Отмена</button>
+            <button class="btn btn-success" onclick="saveNewPatient()">✅ Добавить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ================================================================
+    //  ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+    // ================================================================
+    var patients = [];
+    var selectedPatientId = null;
+
+    var LOR_SYMPTOMS = [
+        { id: 'zalozhennost', label: 'Заложенность носа' },
+        { id: 'vydeleniya', label: 'Выделения из носа' },
+        { id: 'bol_v_litse', label: 'Боль в лице' },
+        { id: 'obonyanie', label: 'Ухудшение обоняния' },
+        { id: 'kashel', label: 'Кашель' },
+        { id: 'golovnaya_bol', label: 'Головная боль' },
+        { id: 'gnoinye_vydeleniya', label: 'Гнойные выделения' },
+        { id: 'temperatura', label: 'Температура ≥38°C' },
+        { id: 'oslozhneniya', label: 'Осложнения' },
+        { id: 'allergicheskiy_rinit', label: 'Аллергический ринит' },
+        { id: 'odnostoronnie_vydeleniya', label: 'Односторонние выделения' },
+        { id: 'vtoraya_volna', label: 'Вторая волна' },
+        { id: 'leikocytoz_15', label: 'Лейкоцитоз >15' }
+    ];
+
+    var statusMap = {
+        'new': '<span class="patient-status status-new">🆕 Новый</span>',
+        'checked': '<span class="patient-status status-checked">✅ Проверен</span>',
+        'critical': '<span class="patient-status status-critical">🚨 Критический</span>'
+    };
+
+    // ================================================================
+    //  ИНИЦИАЛИЗАЦИЯ
+    // ================================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 Инициализация кабинета врача...');
+        loadPatientsFromStorage();
+        renderSymptomGrid();
+        updateStats();
+        loadGuidelines();
+        console.log('✅ Инициализация завершена');
+    });
+
+    // ================================================================
+    //  ЗАГРУЗКА ПАЦИЕНТОВ
+    // ================================================================
+    function loadPatientsFromStorage() {
+        var saved = localStorage.getItem('doctorPatients');
+        if (saved) {
+            try {
+                patients = JSON.parse(saved);
+                console.log('📂 Загружено пациентов:', patients.length);
+            } catch (e) {
+                patients = [];
+            }
+        }
+        if (!patients || patients.length === 0) {
+            patients = getDemoPatients();
+            savePatientsToStorage();
+            console.log('📊 Загружены демо-пациенты');
+        }
+        renderPatientList();
+        renderPatientsTable();
+        updateStats();
+    }
+
+    function savePatientsToStorage() {
+        localStorage.setItem('doctorPatients', JSON.stringify(patients));
+    }
+
+    function getDemoPatients() {
+        return [{
+            id: 'PAT-001',
+            name: 'Иванов Петр Александрович',
+            age: 35,
+            gender: 'male',
+            status: 'new',
+            diagnosis: 'Острый синусит (подозрение)',
+            symptoms: { zalozhennost: true, vydeleniya: true, bol_v_litse: true, gnoinye_vydeleniya: true, temperatura: true },
+            aiChecked: false,
+            aiResult: null
+        }, {
+            id: 'PAT-002',
+            name: 'Сидорова Елена Михайловна',
+            age: 28,
+            gender: 'female',
+            status: 'checked',
+            diagnosis: 'Острая респираторная инфекция',
+            symptoms: { zalozhennost: true, vydeleniya: true, temperatura: true },
+            aiChecked: true,
+            aiResult: { diagnosisMatch: false, diagnosisReason: 'Поствирусный синусит' }
+        }, {
+            id: 'PAT-003',
+            name: 'Петров Дмитрий Сергеевич',
+            age: 67,
+            gender: 'male',
+            status: 'critical',
+            diagnosis: 'Острый гнойный синусит',
+            symptoms: { zalozhennost: true, vydeleniya: true, bol_v_litse: true, gnoinye_vydeleniya: true, temperatura: true, oslozhneniya: true },
+            aiChecked: true,
+            aiResult: {
+                diagnosisMatch: true,
+                diagnosisReason: 'Бактериальный синусит',
+                antibioticNeeded: true,
+                antibioticReason: '3+ признаков',
+                treatment: { antibiotic: { name: 'Амоксициллин 1000 мг 3 р/д', dosage: '1000 мг х 3 р/д' }, duration: 14 },
+                hospitalization: true,
+                specialNotes: ['⚠️ Аллергия на β-лактамы', '🏥 Требуется госпитализация'],
+                confidenceScore: 0.97
+            }
+        }];
+    }
+
+    function loadDemoPatients() {
+        if (patients.length > 0 && !confirm('Загрузить демо-пациентов? Текущие данные будут заменены.')) return;
+        patients = getDemoPatients();
+        savePatientsToStorage();
+        renderPatientList();
+        renderPatientsTable();
+        updateStats();
+        if (patients.length > 0) selectPatient(patients[0].id);
+        showNotification('✅ Демо-пациенты загружены');
+    }
+
+    // ================================================================
+    //  ФУНКЦИИ ПАЦИЕНТОВ
+    // ================================================================
+    function generatePatientId() {
+        return 'PAT-' + String(patients.length + 1).padStart(3, '0');
+    }
+
+    function selectPatient(id) {
+        selectedPatientId = id;
+        var patient = patients.find(function(p) { return p.id === id; });
+        if (!patient) return;
+
+        document.getElementById('selectedPatientName').textContent = patient.name;
+
+        LOR_SYMPTOMS.forEach(function(s) {
+            var cb = document.getElementById('sym_' + s.id);
+            if (cb) cb.checked = patient.symptoms[s.id] || false;
+        });
+
+        if (patient.aiResult && patient.aiChecked) {
+            renderAIResult(patient.aiResult);
+            document.getElementById('aiResult').classList.add('show');
+        } else {
+            document.getElementById('aiResult').classList.remove('show');
+        }
+
+        renderPatientList();
+    }
+
+    function openPatientCard(id) {
+        window.open('patient_card.html?id=' + encodeURIComponent(id), '_blank');
+    }
+
+    function deletePatient(id) {
+        if (!confirm('Удалить пациента?')) return;
+        patients = patients.filter(function(p) { return p.id !== id; });
+        if (selectedPatientId === id) {
+            selectedPatientId = null;
+            document.getElementById('selectedPatientName').textContent = 'Выберите пациента';
+            document.getElementById('aiResult').classList.remove('show');
+        }
+        savePatientsToStorage();
+        renderPatientList();
+        renderPatientsTable();
+        updateStats();
+        showNotification('🗑️ Пациент удалён');
+    }
+
+    // ================================================================
+    //  МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ
+    // ================================================================
+    function openAddPatientModal() {
+        document.getElementById('addPatientModal').classList.add('active');
+        document.getElementById('newPatientName').value = '';
+        document.getElementById('newPatientBirthDate').value = '';
+        document.getElementById('newPatientGender').value = 'male';
+        document.getElementById('newPatientHeight').value = '';
+        document.getElementById('newPatientWeight').value = '';
+        document.getElementById('newPatientBMI').textContent = '—';
+    }
+
+    function closeAddPatientModal() {
+        document.getElementById('addPatientModal').classList.remove('active');
+    }
+
+    function updateNewPatientBMI() {
+        var h = parseFloat(document.getElementById('newPatientHeight').value) / 100;
+        var w = parseFloat(document.getElementById('newPatientWeight').value) / 1000;
+        var bmiEl = document.getElementById('newPatientBMI');
+        if (h > 0 && w > 0) {
+            var bmi = (w / (h * h)).toFixed(1);
+            var status = bmi < 18.5 ? 'Недостаточный' : bmi < 25 ? 'Норма' : bmi < 30 ? 'Избыточный' : 'Ожирение';
+            bmiEl.textContent = bmi + ' (' + status + ')';
+        } else {
+            bmiEl.textContent = '—';
+        }
+    }
+
+    function saveNewPatient() {
+        var name = document.getElementById('newPatientName').value.trim();
+        var birthDate = document.getElementById('newPatientBirthDate').value;
+        var gender = document.getElementById('newPatientGender').value;
+        var height = parseInt(document.getElementById('newPatientHeight').value) || 0;
+        var weight = parseInt(document.getElementById('newPatientWeight').value) || 0;
+
+        if (!name) { alert('Введите ФИО'); return; }
+        if (!birthDate) { alert('Укажите дату рождения'); return; }
+
+        var age = calculateAge(birthDate);
+
+        var newPatient = {
+            id: generatePatientId(),
+            name: name,
+            age: age,
+            birthDate: birthDate,
+            gender: gender,
+            height: height,
+            weight: weight,
+            status: 'new',
+            diagnosis: 'Не установлен',
+            symptoms: {},
+            aiChecked: false,
+            aiResult: null,
+            created: new Date().toISOString()
+        };
+
+        LOR_SYMPTOMS.forEach(function(s) { newPatient.symptoms[s.id] = false; });
+
+        patients.push(newPatient);
+        savePatientsToStorage();
+        renderPatientList();
+        renderPatientsTable();
+        updateStats();
+        closeAddPatientModal();
+        selectPatient(newPatient.id);
+        showNotification('✅ Пациент "' + name + '" добавлен');
+    }
+
+    function calculateAge(birthDate) {
+        var birth = new Date(birthDate);
+        var today = new Date();
+        var age = today.getFullYear() - birth.getFullYear();
+        var m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        return Math.max(0, age);
+    }
+
+    // ================================================================
+    //  ОТРИСОВКА
+    // ================================================================
+    function renderPatientList() {
+        var container = document.getElementById('patientList');
+        if (patients.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0;">Нет пациентов. Нажмите "Демо" или "Добавить".</div>';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < patients.length; i++) {
+            var p = patients[i];
+            var activeClass = (p.id === selectedPatientId) ? 'active' : '';
+            var statusHtml = statusMap[p.status] || statusMap['new'];
+            html += '<div class="patient-item ' + activeClass + '" onclick="selectPatient(\'' + p.id + '\')">';
+            html += '<div><div class="patient-name">' + p.name + '</div>';
+            html += '<div class="patient-id">' + p.id + ' • ' + p.age + ' лет</div></div>';
+            html += '<div style="display:flex;align-items:center;gap:8px;">';
+            html += statusHtml;
+            html += '<button class="btn btn-sm btn-info" onclick="event.stopPropagation();openPatientCard(\'' + p.id + '\')" title="Открыть карту">📋</button>';
+            html += '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
+            html += '</div></div>';
+        }
+        container.innerHTML = html;
+    }
+
+    function renderPatientsTable() {
+        var tbody = document.getElementById('patientsTableBody');
+        if (patients.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#a0aec0;">Нет пациентов</td></tr>';
+            document.getElementById('totalPatientsLabel').textContent = '0 записей';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < patients.length; i++) {
+            var p = patients[i];
+            var statusText = p.status === 'new' ? '🆕 Новый' : (p.status === 'critical' ? '🚨 Критический' : '✅ Проверен');
+            html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+            html += '<td style="padding:10px;">' + p.id + '</td>';
+            html += '<td style="padding:10px;">' + p.name + '</td>';
+            html += '<td style="padding:10px;">' + p.age + ' лет</td>';
+            html += '<td style="padding:10px;">' + statusText + '</td>';
+            html += '<td style="padding:10px;">' + (p.diagnosis || 'Не установлен') + '</td>';
+            html += '<td style="padding:10px;">' + (p.aiChecked ? '✅ Да' : '⏳ Нет') + '</td>';
+            html += '<td style="padding:10px;">';
+            html += '<button class="btn btn-sm btn-info" onclick="selectPatient(\'' + p.id + '\')" title="Выбрать">👁️</button> ';
+            html += '<button class="btn btn-sm btn-success" onclick="openPatientCard(\'' + p.id + '\')" title="Карта">📋</button> ';
+            html += '<button class="btn btn-sm btn-danger" onclick="deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
+            html += '</td></tr>';
+        }
+        tbody.innerHTML = html;
+        document.getElementById('totalPatientsLabel').textContent = patients.length + ' записей';
+    }
+
+    function renderSymptomGrid() {
+        var container = document.getElementById('symptomGrid');
+        var html = '';
+        for (var i = 0; i < LOR_SYMPTOMS.length; i++) {
+            var s = LOR_SYMPTOMS[i];
+            html += '<div class="symptom-check">';
+            html += '<input type="checkbox" id="sym_' + s.id + '" onchange="onSymptomChange(\'' + s.id + '\')">';
+            html += '<label for="sym_' + s.id + '">' + s.label + '</label>';
+            html += '</div>';
+        }
+        container.innerHTML = html;
+    }
+
+    function onSymptomChange(id) {
+        var cb = document.getElementById('sym_' + id);
+        if (!cb) return;
+        var patient = patients.find(function(p) { return p.id === selectedPatientId; });
+        if (patient) {
+            patient.symptoms[id] = cb.checked;
+            savePatientsToStorage();
+        }
+    }
+
+    function syncSymptomsFromPatient() {
+        var patient = patients.find(function(p) { return p.id === selectedPatientId; });
+        if (!patient) { alert('Сначала выберите пациента'); return; }
+        LOR_SYMPTOMS.forEach(function(s) {
+            var cb = document.getElementById('sym_' + s.id);
+            if (cb) cb.checked = patient.symptoms[s.id] || false;
+        });
+        var hasGnoinye = patient.symptoms.gnoinye_vydeleniya || false;
+        var hasZalozhennost = patient.symptoms.zalozhennost || false;
+        var hasVydeleniya = patient.symptoms.vydeleniya || false;
+        patient.diagnosis = (hasZalozhennost && hasVydeleniya && hasGnoinye) ? 'Острый бактериальный синусит' :
+                           (hasZalozhennost && hasVydeleniya) ? 'Острый синусит' : 'Не установлен';
+        savePatientsToStorage();
+        renderPatientList();
+        renderPatientsTable();
+        updateStats();
+    }
+
+    // ================================================================
+    //  СТАТИСТИКА
+    // ================================================================
+    function updateStats() {
+        document.getElementById('totalPatients').textContent = patients.length;
+        document.getElementById('pendingPatients').textContent = patients.filter(function(p) { return p.status === 'new'; }).length;
+        document.getElementById('criticalPatients').textContent = patients.filter(function(p) { return p.status === 'critical'; }).length;
+        document.getElementById('checkedPatients').textContent = patients.filter(function(p) { return p.status === 'checked'; }).length;
+    }
+
+    // ================================================================
+    //  ИИ-ДИАГНОСТИКА
+    // ================================================================
+    async function runAICheck() {
+        var patient = patients.find(function(p) { return p.id === selectedPatientId; });
+        if (!patient) { alert('Сначала выберите пациента'); return; }
+
+        var btn = document.getElementById('aiCheckBtn');
+        var loading = document.getElementById('aiLoading');
+        var resultDiv = document.getElementById('aiResult');
+        var contentDiv = document.getElementById('aiResultContent');
+
+        LOR_SYMPTOMS.forEach(function(s) {
+            var cb = document.getElementById('sym_' + s.id);
+            if (cb) patient.symptoms[s.id] = cb.checked;
+        });
+        savePatientsToStorage();
+
+        var patientData = {
+            age: patient.age,
+            isAdult: patient.age >= 18,
+            days: 5,
+            temp: patient.symptoms.temperatura ? 38.5 : 36.6,
+            tyazhest: patient.symptoms.oslozhneniya ? 'тяжелая' : (patient.symptoms.gnoinye_vydeleniya ? 'средняя' : 'легкая'),
+            leikocytoz: patient.symptoms.leikocytoz_15 ? 18 : 8,
+            epizodovVGod: 0,
+            immunodeficit: false,
+            comorbida: false,
+            allergiya: false,
+            antibiotiki3Mes: false,
+            predugody: false,
+            odontogenniy: false,
+            vozrast65: patient.age > 65,
+            detiVDetSad: false,
+            zakrytieUchrezhd: false,
+            symptoms: {},
+            bacterialSigns: {}
+        };
+
+        var symptomMap = {
+            zalozhennost: 'zalozhennost',
+            vydeleniya: 'vydeleniya',
+            bol_v_litse: 'bol_v_litse',
+            obonyanie: 'obonyanie',
+            kashel: 'kashel',
+            oslozhneniya: 'oslozhneniya',
+            gnoinye_vydeleniya: 'gnoinye_vydeleniya',
+            allergicheskiy_rinit: 'allergicheskiy_rinit'
+        };
+        for (var key in symptomMap) {
+            if (symptomMap.hasOwnProperty(key)) {
+                patientData.symptoms[symptomMap[key]] = patient.symptoms[key] || false;
+            }
+        }
+
+        var bacterialMap = {
+            gnoinye_vydeleniya: 'gnoinye_vydeleniya',
+            odnostoronnie_vydeleniya: 'odnostoronnie_vydeleniya_3_days',
+            golovnaya_bol: 'golovnaya_bol',
+            temp_38_and_above: 'temperatura',
+            vtoraya_volna: 'vtoraya_volna',
+            leikocytoz_15_and_above: 'leikocytoz_15'
+        };
+        for (var key2 in bacterialMap) {
+            if (bacterialMap.hasOwnProperty(key2)) {
+                patientData.bacterialSigns[bacterialMap[key2]] = patient.symptoms[key2] || false;
+            }
+        }
+        if (patient.symptoms.temperatura) patientData.bacterialSigns.temp_38_and_above = true;
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Проверка...';
+        loading.style.display = 'block';
+        resultDiv.classList.remove('show');
+
+        try {
+            var specialty = document.getElementById('specialtySelect').value;
+            var response = await fetch('/api/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ specialty: specialty, patient: patientData })
+            });
+
+            if (!response.ok) throw new Error('Ошибка сервера: ' + response.status);
+            var report = await response.json();
+
+            patient.aiChecked = true;
+            patient.aiResult = report;
+            patient.status = report.diagnosisMatch ? (report.antibioticNeeded ? 'critical' : 'checked') : 'new';
+            if (report.diagnosisMatch && report.treatment && report.treatment.antibiotic) {
+                patient.diagnosis = report.antibioticNeeded ? 'Острый бактериальный синусит' : 'Острый синусит';
+            }
+
+            savePatientsToStorage();
+            renderPatientList();
+            renderPatientsTable();
+            updateStats();
+            renderAIResult(report);
+            resultDiv.classList.add('show');
+        } catch (error) {
+            alert('❌ Ошибка: ' + error.message);
+            contentDiv.innerHTML = '<div style="color:#f56565;">❌ ' + error.message + '</div>';
+            resultDiv.classList.add('show');
+        }
+
+        btn.disabled = false;
+        btn.textContent = '🧠 Проверить диагноз';
+        loading.style.display = 'none';
+    }
+
+    function renderAIResult(report) {
+        var container = document.getElementById('aiResultContent');
+        if (!report) { container.innerHTML = '<div style="color:#a0aec0;">Нет данных</div>'; return; }
+
+        var html = '';
+        var matchClass = report.diagnosisMatch ? 'true' : 'false';
+        var matchText = report.diagnosisMatch ? '✅ ДА' : '❌ НЕТ';
+        html += '<div class="ai-diagnosis-match ' + matchClass + '">';
+        html += '<strong>🔍 Соответствие диагнозу:</strong> ' + matchText;
+        html += '<br><small>' + (report.diagnosisReason || 'Причина не указана') + '</small>';
+        if (report.postviral) html += '<br><span class="tag tag-yellow">🦠 Поствирусный</span>';
+        if (report.recurrent) html += '<span class="tag tag-purple">🔄 Рецидивирующий</span>';
+        if (report.bacterialSignsCount >= 3) html += '<span class="tag tag-red">🧬 Бактериальный</span>';
+        html += '</div>';
+
+        html += '<div class="ai-section" style="border-left: 4px solid ' + (report.antibioticNeeded ? '#f56565' : '#48bb78') + ';">';
+        html += '<div class="ai-section-title">💊 Антибиотик</div>';
+        html += '<strong>' + (report.antibioticNeeded ? '🟡 ПОКАЗАН' : '🟢 НЕ ПОКАЗАН') + '</strong>';
+        html += '<br><small>' + (report.antibioticReason || '—') + '</small>';
+        if (report.antibioticNeeded && report.treatment && report.treatment.antibiotic) {
+            html += '<div class="ai-drug">';
+            html += '<strong>Препарат:</strong> ' + report.treatment.antibiotic.name + '<br>';
+            html += '<strong>Дозировка:</strong> ' + report.treatment.antibiotic.dosage + '<br>';
+            html += '<strong>Длительность:</strong> ' + (report.treatment.duration || 7) + ' дней';
+            html += '</div>';
+        }
+        html += '</div>';
+
+        if (report.specialNotes && report.specialNotes.length > 0) {
+            html += '<div class="ai-section" style="border-left: 4px solid #ed8936;">';
+            html += '<div class="ai-section-title">⚠️ Особые указания</div>';
+            for (var i = 0; i < report.specialNotes.length; i++) {
+                html += '<div>' + report.specialNotes[i] + '</div>';
+            }
+            html += '</div>';
+        }
+
+        if (report.hospitalization) {
+            html += '<div class="ai-section" style="border-left: 4px solid #f56565;">';
+            html += '<div style="color:#f56565;font-weight:bold;">🏥 ТРЕБУЕТСЯ ГОСПИТАЛИЗАЦИЯ!</div>';
+            html += '</div>';
+        }
+
+        html += '<div style="margin-top:10px;font-size:0.8em;color:#a0aec0;">🎯 Доверие: ' + ((report.confidenceScore || 0.9) * 100) + '%</div>';
+        container.innerHTML = html;
+    }
+
+    function clearAIResult() {
+        document.getElementById('aiResult').classList.remove('show');
+        document.getElementById('aiResultContent').innerHTML = '';
+        var patient = patients.find(function(p) { return p.id === selectedPatientId; });
+        if (patient) {
+            patient.aiChecked = false;
+            patient.aiResult = null;
+            savePatientsToStorage();
+            renderPatientList();
+            renderPatientsTable();
+            updateStats();
+        }
+    }
+
+    // ================================================================
+    //  РЕКОМЕНДАЦИИ
+    // ================================================================
+    async function loadGuidelines() {
+        var container = document.getElementById('guidelinesList');
+        try {
+            var response = await fetch('/api/specialties');
+            if (!response.ok) throw new Error('Ошибка');
+            var data = await response.json();
+            var html = '';
+            for (var spec in data) {
+                if (data.hasOwnProperty(spec)) {
+                    html += '<div style="background:rgba(255,255,255,0.05);padding:10px 15px;border-radius:12px;">';
+                    html += '<strong>' + spec.toUpperCase() + '</strong>';
+                    html += '<span style="color:#a0aec0;font-size:0.8em;margin-left:10px;">версии: ' + data[spec].join(', ') + '</span>';
+                    html += '<span class="tag tag-green">✅ активны</span>';
+                    html += '</div>';
+                }
+            }
+            container.innerHTML = html || '<span style="color:#f56565;">⚠️ Нет активных рекомендаций</span>';
+        } catch (error) {
+            container.innerHTML = '<span style="color:#f56565;">❌ ' + error.message + '</span>';
+        }
+    }
+
+    // ================================================================
+    //  УТИЛИТЫ
+    // ================================================================
+    function showNotification(message) {
+        var notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(function() { notification.remove(); }, 2500);
+    }
+
+    // ================================================================
+    //  HOTKEYS
+    // ================================================================
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            runAICheck();
+        }
+        if (e.ctrlKey && e.key === 'n') {
+            e.preventDefault();
+            openAddPatientModal();
+        }
+        if (e.key === 'Escape') {
+            closeAddPatientModal();
+            clearAIResult();
+        }
+    });
+
+    console.log('🧠 BOT_MAX Doctor Cabinet loaded');
+    console.log('📋 Функции: selectPatient, openPatientCard, addPatient, runAICheck');
+</script>
+
+</body>
+</html>

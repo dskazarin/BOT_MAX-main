@@ -335,7 +335,11 @@
                 <span class="sync-badge" id="syncBadge" onclick="manualSync()">🔄 Синхронизация</span>
             </div>
         </div>
-        <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="logout-btn" onclick="openDoctorCard()" style="background: linear-gradient(135deg, #667eea, #764ba2);">📋 Карта врача</button>
+            <button class="logout-btn" onclick="openDoctorCabinet()" style="background: linear-gradient(135deg, #48bb78, #38a169);">🧠 Кабинет врача</button>
+            <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
+        </div>
     </div>
 
     <div class="current-date">
@@ -1225,6 +1229,105 @@
     }
     
     loadData();
+
+    function openDoctorCard() {
+        var patientId = (typeof patientData !== 'undefined' && patientData.patientId) ? patientData.patientId : 'PAT-001';
+        savePatientToDoctorStorage(patientId);
+        window.open('patient_card.html?id=' + encodeURIComponent(patientId), '_blank');
+    }
+
+    function openDoctorCabinet() {
+        var patientId = (typeof patientData !== 'undefined' && patientData.patientId) ? patientData.patientId : 'PAT-001';
+        savePatientToDoctorStorage(patientId);
+        window.open('doctor_cabinet.html', '_blank');
+    }
+
+    function savePatientToDoctorStorage(patientId) {
+        var doctorPatients = [];
+        var saved = localStorage.getItem('doctorPatients');
+        if (saved) {
+            try { doctorPatients = JSON.parse(saved); } catch (e) { doctorPatients = []; }
+        }
+        var existingIndex = -1;
+        for (var i = 0; i < doctorPatients.length; i++) {
+            if (doctorPatients[i].id === patientId) { existingIndex = i; break; }
+        }
+        var birthDate = (typeof patientData !== 'undefined') ? patientData.birthDate : null;
+        var age = 30;
+        if (birthDate) {
+            var birth = new Date(birthDate);
+            var today = new Date();
+            age = today.getFullYear() - birth.getFullYear();
+            var m = today.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        }
+        var doctorPatient = {
+            id: patientId,
+            name: (typeof patientData !== 'undefined' && patientData.fullName) ? patientData.fullName : 'Неизвестный',
+            age: age,
+            birthDate: birthDate,
+            gender: (typeof patientData !== 'undefined' && patientData.gender) ? patientData.gender : 'male',
+            height: (typeof patientData !== 'undefined' && patientData.height) ? patientData.height : 0,
+            weight: (typeof patientData !== 'undefined' && patientData.weight) ? patientData.weight : 0,
+            status: 'new',
+            diagnosis: 'Не установлен',
+            symptoms: {
+                zalozhennost: false, vydeleniya: false, bol_v_litse: false, obonyanie: false,
+                kashel: false, golovnaya_bol: false, gnoinye_vydeleniya: false, temperatura: false,
+                oslozhneniya: false, allergicheskiy_rinit: false, odnostoronnie_vydeleniya: false,
+                vtoraya_volna: false, leikocytoz_15: false
+            },
+            aiChecked: false,
+            aiResult: null,
+            created: new Date().toISOString(),
+            fromPatientCabinet: true,
+            allergies: (typeof patientData !== 'undefined' && patientData.allergies) ? patientData.allergies : [],
+            vaccinations: (typeof patientData !== 'undefined' && patientData.vaccinations) ? patientData.vaccinations : [],
+            medications: (typeof patientData !== 'undefined' && patientData.medications) ? patientData.medications : [],
+            constantMedications: (typeof patientData !== 'undefined' && patientData.constantMedications) ? patientData.constantMedications : [],
+            symptomsHistory: (typeof patientData !== 'undefined' && patientData.symptoms) ? patientData.symptoms : [],
+            diagnoses: (typeof patientData !== 'undefined' && patientData.diagnoses) ? patientData.diagnoses : [],
+            files: (typeof patientData !== 'undefined' && patientData.files) ? patientData.files : []
+        };
+        detectSymptoms(doctorPatient);
+        if (existingIndex >= 0) {
+            for (var key in doctorPatient) {
+                if (doctorPatient.hasOwnProperty(key)) {
+                    doctorPatients[existingIndex][key] = doctorPatient[key];
+                }
+            }
+        } else {
+            doctorPatients.push(doctorPatient);
+        }
+        localStorage.setItem('doctorPatients', JSON.stringify(doctorPatients));
+        console.log('Пациент сохранен:', patientId);
+    }
+
+    function detectSymptoms(patient) {
+        var text = '';
+        if (patient.symptomsHistory) {
+            for (var i = 0; i < patient.symptomsHistory.length; i++) {
+                text += ' ' + (patient.symptomsHistory[i].text || '');
+            }
+        }
+        text = text.toLowerCase();
+        if (text.indexOf('заложенность') >= 0 || text.indexOf('нос не дышит') >= 0) patient.symptoms.zalozhennost = true;
+        if (text.indexOf('выделения') >= 0 || text.indexOf('насморк') >= 0) patient.symptoms.vydeleniya = true;
+        if (text.indexOf('боль в лице') >= 0) patient.symptoms.bol_v_litse = true;
+        if (text.indexOf('обоняние') >= 0) patient.symptoms.obonyanie = true;
+        if (text.indexOf('кашель') >= 0) patient.symptoms.kashel = true;
+        if (text.indexOf('головная боль') >= 0) patient.symptoms.golovnaya_bol = true;
+        if (text.indexOf('гнойные') >= 0 || text.indexOf('гной') >= 0) patient.symptoms.gnoinye_vydeleniya = true;
+        if (text.indexOf('температура') >= 0 || text.indexOf('38') >= 0 || text.indexOf('39') >= 0) patient.symptoms.temperatura = true;
+        if (text.indexOf('осложнени') >= 0) patient.symptoms.oslozhneniya = true;
+        if (text.indexOf('аллерг') >= 0) patient.symptoms.allergicheskiy_rinit = true;
+        if (patient.symptoms.zalozhennost && patient.symptoms.vydeleniya && patient.symptoms.gnoinye_vydeleniya) {
+            patient.diagnosis = 'Острый бактериальный синусит (подозрение)';
+            patient.status = 'critical';
+        } else if (patient.symptoms.zalozhennost && patient.symptoms.vydeleniya) {
+            patient.diagnosis = 'Острый синусит (подозрение)';
+        }
+    }
 </script>
 </body>
 </html>
