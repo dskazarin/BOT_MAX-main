@@ -1,5 +1,6 @@
-# Игнорируем мусор
+# Мусор
 *.bak
+*.bak.*
 *.bak2
 *.bak3
 *.broken_*
@@ -17,11 +18,6 @@ bot_max_test
 /main
 /backend/main
 
-# Бэкапы
-backups/
-*.tar.gz
-*.zip
-
 # IDE
 .vscode/
 .idea/
@@ -31,5 +27,16 @@ backups/
 .DS_Store
 Thumbs.db
 
-# Не игнорируем важные файлы
+# Node
+node_modules/
+package-lock.json
+
+# Архивы
+*.tar.gz
+*.zip
 !releases/*.tar.gz
+
+# Бэкапы
+backups/
+*.save
+*.save.*

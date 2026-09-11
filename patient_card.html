@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта пациента - BOT_MAX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #e2e8f0;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: rgba(26, 32, 44, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 10px;
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        .patient-header { display: flex; align-items: center; gap: 20px; }
+        .patient-avatar {
+            width: 60px; height: 60px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8em;
+        }
+        .patient-info h1 { font-size: 1.4em; color: #fff; margin-bottom: 5px; }
+        .patient-info small { color: #a0aec0; font-size: 0.9em; }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 0.9em;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .btn-success { background: #48bb78; color: white; }
+        .btn-info { background: #4299e1; color: white; }
+        .btn-danger { background: #f56565; color: white; }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            cursor: pointer;
+        }
+        .section-title {
+            font-size: 1.1em;
+            color: #9f7aea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toggle-icon {
+            font-size: 1.2em;
+            transition: transform 0.3s;
+            color: #a0aec0;
+        }
+        .toggle-icon.collapsed { transform: rotate(-90deg); }
+        .section-content { transition: all 0.3s; }
+        .section-content.collapsed { display: none; }
+        .field-group { margin-bottom: 15px; position: relative; }
+        .field-label {
+            display: block;
+            font-size: 0.85em;
+            color: #a0aec0;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .field-textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #e2e8f0;
+            font-family: inherit;
+            font-size: 0.95em;
+            line-height: 1.6;
+            resize: none;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+        .field-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        .field-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            justify-content: flex-end;
+        }
+        .ai-check-btn {
+            background: rgba(159, 122, 234, 0.2);
+            color: #9f7aea;
+            border: 1px solid rgba(159, 122, 234, 0.3);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .ai-check-btn:hover { background: rgba(159, 122, 234, 0.3); }
+        .fields-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .mkb-input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+        .mkb-input-wrapper input {
+            flex: 1;
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #e2e8f0;
+            font-size: 0.95em;
+        }
+        .mkb-input-wrapper input:focus { outline: none; border-color: #667eea; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 15px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link:hover { text-decoration: underline; }
+        .ai-suggestion-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .ai-suggestion-modal.active { display: flex; }
+        .ai-suggestion-content {
+            background: #2d3748;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .ai-suggestion-content h3 { color: #9f7aea; margin-bottom: 15px; }
+        .ai-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .ai-comparison > div {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .ai-comparison .label {
+            font-size: 0.7em;
+            color: #a0aec0;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .ai-comparison .text { color: #e2e8f0; line-height: 1.5; }
+        .ai-comparison .original { border-left: 3px solid #f56565; }
+        .ai-comparison .suggested { border-left: 3px solid #48bb78; }
+        .ai-modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #48bb78;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            z-index: 3000;
+            font-weight: 600;
+        }
+        @media (max-width: 768px) {
+            .fields-row { grid-template-columns: 1fr; }
+            .ai-comparison { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="doctor_cabinet.html" class="back-link">⬅ Назад к пациентам</a>
+
+    <div class="header">
+        <div class="patient-header">
+            <div class="patient-avatar" id="patientAvatar">👨</div>
+            <div class="patient-info">
+                <h1 id="patientName">Загрузка...</h1>
+                <small>ID: <span id="patientId">-</span> • <span id="patientAge">-</span> лет</small>
+            </div>
+        </div>
+        <div>
+            <button class="btn btn-info" onclick="saveAll()">💾 Сохранить всё</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('complaintsContent', 'complaintsIcon')">
+            <div class="section-title"><span>💬</span> Жалобы</div>
+            <span class="toggle-icon" id="complaintsIcon">▼</span>
+        </div>
+        <div class="section-content" id="complaintsContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_complaints" placeholder="Опишите жалобы пациента..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_complaints')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('anamnesisContent', 'anamnesisIcon')">
+            <div class="section-title"><span>📋</span> Анамнез заболевания</div>
+            <span class="toggle-icon" id="anamnesisIcon">▼</span>
+        </div>
+        <div class="section-content" id="anamnesisContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_anamnesis" placeholder="Когда началось заболевание, как развивалось..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_anamnesis')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('allergyContent', 'allergyIcon')">
+            <div class="section-title"><span>⚠️</span> Аллергия</div>
+            <span class="toggle-icon" id="allergyIcon">▼</span>
+        </div>
+        <div class="section-content" id="allergyContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_allergy" placeholder="Аллергические реакции..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_allergy')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('lifeContent', 'lifeIcon')">
+            <div class="section-title"><span>🌟</span> Анамнез жизни</div>
+            <span class="toggle-icon" id="lifeIcon">▼</span>
+        </div>
+        <div class="section-content" id="lifeContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_life" placeholder="Условия жизни, перенесённые заболевания..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_life')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('epiContent', 'epiIcon')">
+            <div class="section-title"><span>🦠</span> Эпиданамнез</div>
+            <span class="toggle-icon" id="epiIcon">▼</span>
+        </div>
+        <div class="section-content" id="epiContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_epi" placeholder="Контакт с инфекционными больными..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_epi')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('objectiveContent', 'objectiveIcon')">
+            <div class="section-title"><span>🩺</span> Объективный осмотр</div>
+            <span class="toggle-icon" id="objectiveIcon">▼</span>
+        </div>
+        <div class="section-content" id="objectiveContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_objective" placeholder="Общее состояние, ЛОР-статус..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_objective')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('manipulationsContent', 'manipulationsIcon')">
+            <div class="section-title"><span>💉</span> Манипуляции</div>
+            <span class="toggle-icon" id="manipulationsIcon">▼</span>
+        </div>
+        <div class="section-content" id="manipulationsContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_manipulations" placeholder="Выполненные манипуляции..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_manipulations')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('studiesContent', 'studiesIcon')">
+            <div class="section-title"><span>🔬</span> Обследования</div>
+            <span class="toggle-icon" id="studiesIcon">▼</span>
+        </div>
+        <div class="section-content" id="studiesContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_studies" placeholder="Пройденные обследования..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_studies')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('diagnosisContent', 'diagnosisIcon')">
+            <div class="section-title"><span>📊</span> Диагноз и МКБ-10</div>
+            <span class="toggle-icon" id="diagnosisIcon">▼</span>
+        </div>
+        <div class="section-content" id="diagnosisContent">
+            <div class="fields-row">
+                <div class="field-group">
+                    <label class="field-label">Клинический диагноз</label>
+                    <textarea class="field-textarea" id="field_diagnosis_clinical" placeholder="Острый гнойный верхнечелюстной синусит..."></textarea>
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Код МКБ-10</label>
+                    <div class="mkb-input-wrapper">
+                        <input type="text" id="field_mkb" placeholder="J01.0">
+                        <button class="btn btn-info" onclick="suggestMKB()">🔍 Подобрать</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('referralsContent', 'referralsIcon')">
+            <div class="section-title"><span>📤</span> Направления на диагностику</div>
+            <span class="toggle-icon" id="referralsIcon">▼</span>
+        </div>
+        <div class="section-content" id="referralsContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_referrals" placeholder="Направления: КТ ОНП, ОАК..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_referrals')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recommendationsContent', 'recommendationsIcon')">
+            <div class="section-title"><span>💊</span> Рекомендации</div>
+            <span class="toggle-icon" id="recommendationsIcon">▼</span>
+        </div>
+        <div class="section-content" id="recommendationsContent">
+            <div class="field-group">
+                <textarea class="field-textarea" id="field_recommendations" placeholder="Режим, диета, медикаменты..."></textarea>
+                <div class="field-actions">
+                    <button class="ai-check-btn" onclick="checkSpelling('field_recommendations')">✨ Проверить орфографию</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="ai-suggestion-modal" id="aiModal">
+    <div class="ai-suggestion-content">
+        <h3>✨ ИИ-проверка орфографии</h3>
+        <p style="color: #a0aec0; font-size: 0.9em;">Найдены предложения по исправлению:</p>
+        <div class="ai-comparison">
+            <div class="original">
+                <div class="label">❌ Ваш текст</div>
+                <div class="text" id="aiOriginal"></div>
+            </div>
+            <div class="suggested">
+                <div class="label">✅ Предложенный вариант</div>
+                <div class="text" id="aiSuggested"></div>
+            </div>
+        </div>
+        <div class="ai-modal-buttons">
+            <button class="btn btn-danger" onclick="closeAIModal()">Отклонить</button>
+            <button class="btn btn-success" onclick="applyAISuggestion()">Применить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var patientId = null;
+    var patientData = null;
+    var currentFieldId = null;
+
+    var spellingRules = [
+        { wrong: /\bпацыент\b/gi, right: 'пациент' },
+        { wrong: /\bврачь\b/gi, right: 'врач' },
+        { wrong: /\bзаложеность\b/gi, right: 'заложенность' },
+        { wrong: /\bдиагнос\b/gi, right: 'диагноз' },
+    ];
+
+    function loadPatient() {
+        var urlParams = new URLSearchParams(window.location.search);
+        patientId = urlParams.get('id');
+
+        if (!patientId) {
+            document.getElementById('patientName').textContent = 'ID не указан';
+            return;
+        }
+
+        var saved = localStorage.getItem('doctorPatients');
+        if (saved) {
+            try {
+                var patients = JSON.parse(saved);
+                patientData = patients.find(function(p) { return p.id === patientId; });
+            } catch (e) {}
+        }
+
+        if (patientData) {
+            document.getElementById('patientName').textContent = patientData.name;
+            document.getElementById('patientId').textContent = patientData.id;
+            document.getElementById('patientAge').textContent = patientData.age;
+            document.getElementById('patientAvatar').textContent = patientData.gender === 'female' ? '👩' : '👨';
+        }
+
+        loadCardData();
+    }
+
+    function loadCardData() {
+        var cardKey = 'patient_card_' + patientId;
+        var saved = localStorage.getItem(cardKey);
+        if (saved) {
+            try {
+                var cardData = JSON.parse(saved);
+                Object.keys(cardData).forEach(function(key) {
+                    var field = document.getElementById('field_' + key);
+                    if (field) field.value = cardData[key] || '';
+                });
+            } catch (e) {}
+        }
+
+        document.querySelectorAll('.field-textarea').forEach(function(ta) {
+            autoResize(ta);
+            ta.addEventListener('input', function() { autoResize(this); scheduleAutoSave(); });
+        });
+    }
+
+    function autoResize(textarea) {
+        var minHeight = 80;
+        textarea.style.height = 'auto';
+        var newHeight = Math.max(textarea.scrollHeight + 10, minHeight);
+        textarea.style.height = newHeight + 'px';
+    }
+
+    function saveAll() {
+        var cardKey = 'patient_card_' + patientId;
+        var cardData = {};
+        document.querySelectorAll('.field-textarea, .mkb-input-wrapper input').forEach(function(el) {
+            var id = el.id.replace('field_', '');
+            cardData[id] = el.value;
+        });
+        localStorage.setItem(cardKey, JSON.stringify(cardData));
+        syncToDoctor();
+        showNotification('✅ Все данные сохранены!');
+    }
+
+    function checkSpelling(fieldId) {
+        var field = document.getElementById(fieldId);
+        if (!field || !field.value.trim()) {
+            showNotification('⚠️ Поле пустое');
+            return;
+        }
+
+        currentFieldId = fieldId;
+        var text = field.value;
+        var corrected = applySpellingRules(text);
+
+        if (corrected === text) {
+            showNotification('✅ Ошибок не найдено!');
+            return;
+        }
+
+        document.getElementById('aiOriginal').textContent = text;
+        document.getElementById('aiSuggested').textContent = corrected;
+        document.getElementById('aiModal').classList.add('active');
+    }
+
+    function applySpellingRules(text) {
+        var result = text;
+        spellingRules.forEach(function(rule) {
+            result = result.replace(rule.wrong, rule.right);
+        });
+        result = result.replace(/\s+([,.:;!?])/g, '$1');
+        result = result.replace(/([,.:;!?])([^\s\d])/g, '$1 $2');
+        result = result.replace(/\s{2,}/g, ' ');
+        return result;
+    }
+
+    function applyAISuggestion() {
+        var suggested = document.getElementById('aiSuggested').textContent;
+        if (currentFieldId) {
+            var field = document.getElementById(currentFieldId);
+            if (field) {
+                field.value = suggested;
+                autoResize(field);
+                showNotification('✅ Исправление применено');
+            }
+        }
+        closeAIModal();
+    }
+
+    function closeAIModal() {
+        document.getElementById('aiModal').classList.remove('active');
+        currentFieldId = null;
+    }
+
+    function suggestMKB() {
+        var clinical = document.getElementById('field_diagnosis_clinical').value.toLowerCase();
+        var mkb = '';
+
+        if (clinical.includes('синусит') && clinical.includes('верхнечелюстн')) mkb = 'J01.0';
+        else if (clinical.includes('синусит') && clinical.includes('фронт')) mkb = 'J01.1';
+        else if (clinical.includes('синусит') && clinical.includes('этмоид')) mkb = 'J01.2';
+        else if (clinical.includes('синусит') && clinical.includes('сфеноид')) mkb = 'J01.3';
+        else if (clinical.includes('пансинусит')) mkb = 'J01.4';
+        else if (clinical.includes('синусит')) mkb = 'J01.9';
+
+        if (mkb) {
+            document.getElementById('field_mkb').value = mkb;
+            showNotification('✅ Код МКБ-10: ' + mkb);
+        } else {
+            showNotification('⚠️ Не удалось подобрать МКБ-10');
+        }
+    }
+
+    function toggleSection(contentId, iconId) {
+        var content = document.getElementById(contentId);
+        var icon = document.getElementById(iconId);
+        if (content.classList.contains('collapsed')) {
+            content.classList.remove('collapsed');
+            icon.classList.remove('collapsed');
+        } else {
+            content.classList.add('collapsed');
+            icon.classList.add('collapsed');
+        }
+    }
+
+    function showNotification(message) {
+        var notif = document.createElement('div');
+        notif.className = 'notification';
+        notif.textContent = message;
+        document.body.appendChild(notif);
+        setTimeout(function() { notif.remove(); }, 2500);
+    }
+
+    document.addEventListener('DOMContentLoaded', loadPatient);
+
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            saveAll();
+        }
+        if (e.key === 'Escape') closeAIModal();
+    });
+
+    // ============================================================
+    //  СИНХРОНИЗАЦИЯ С КАБИНЕТОМ ВРАЧА
+    // ============================================================
+
+    function syncToDoctor() {
+        if (!patientId) return;
+
+        var cardKey = 'patient_card_' + patientId;
+        var cardData = {};
+        var saved = localStorage.getItem(cardKey);
+        if (saved) {
+            try { cardData = JSON.parse(saved); } catch(e) {}
+        }
+
+        var doctorPatients = [];
+        var dpSaved = localStorage.getItem('doctorPatients');
+        if (dpSaved) {
+            try { doctorPatients = JSON.parse(dpSaved); } catch(e) {}
+        }
+
+        var idx = -1;
+        for (var i = 0; i < doctorPatients.length; i++) {
+            if (doctorPatients[i].id === patientId) {
+                idx = i;
+                break;
+            }
+        }
+
+        if (idx === -1) return;
+
+        var p = doctorPatients[idx];
+        p.cardData = cardData;
+        p.complaints = cardData.complaints || p.complaints || '';
+        p.anamnesis = cardData.anamnesis || p.anamnesis || '';
+        p.allergy = cardData.allergy || p.allergy || '';
+        p.objective = cardData.objective || p.objective || '';
+        p.diagnosis_clinical = cardData.diagnosis_clinical || p.diagnosis || '';
+        p.mkb = cardData.mkb || p.mkb || '';
+        p.recommendations = cardData.recommendations || p.recommendations || '';
+        p.lastSync = new Date().toISOString();
+
+        detectSymptomsFromCard(p, cardData);
+
+        localStorage.setItem('doctorPatients', JSON.stringify(doctorPatients));
+        localStorage.setItem('syncSignal', Date.now().toString());
+        console.log('✅ Синхронизировано с врачом');
+    }
+
+    function detectSymptomsFromCard(patient, cardData) {
+        var text = '';
+        if (cardData.complaints) text += ' ' + cardData.complaints;
+        if (cardData.anamnesis) text += ' ' + cardData.anamnesis;
+        text = text.toLowerCase();
+
+        if (!patient.symptoms) patient.symptoms = {};
+
+        if (text.indexOf('заложенность') >= 0 || text.indexOf('нос не дышит') >= 0) {
+            patient.symptoms.zalozhennost = true;
+        }
+        if (text.indexOf('выделения') >= 0 || text.indexOf('насморк') >= 0) {
+            patient.symptoms.vydeleniya = true;
+        }
+        if (text.indexOf('гнойные') >= 0 || text.indexOf('гной') >= 0) {
+            patient.symptoms.gnoinye_vydeleniya = true;
+            patient.status = 'critical';
+        }
+        if (text.indexOf('температура') >= 0 || text.indexOf('38') >= 0) {
+            patient.symptoms.temperatura = true;
+        }
+        if (text.indexOf('головная боль') >= 0) {
+            patient.symptoms.golovnaya_bol = true;
+        }
+        if (text.indexOf('боль в лице') >= 0 || text.indexOf('боль в области') >= 0) {
+            patient.symptoms.bol_v_litse = true;
+        }
+    }
+
+    function autoSaveWithSync() {
+        if (!patientId) return;
+        var cardKey = 'patient_card_' + patientId;
+        var cardData = {};
+        document.querySelectorAll('.field-textarea, .mkb-input-wrapper input').forEach(function(el) {
+            var id = el.id.replace('field_', '');
+            cardData[id] = el.value;
+        });
+        localStorage.setItem(cardKey, JSON.stringify(cardData));
+        syncToDoctor();
+    }
+
+    var autoSaveTimer;
+    function scheduleAutoSave() {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(autoSaveWithSync, 2000);
+    }
+
+</script>
+
+</body>
+</html>

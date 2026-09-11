@@ -4,7 +4,73 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Личный кабинет пациента - BOT_MAX</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js">
+    // ============================================================
+    //  СИНХРОНИЗАЦИЯ С КАБИНЕТОМ ВРАЧА
+    // ============================================================
+
+    function syncToDoctorCabinet() {
+        if (typeof patientData === 'undefined' || !patientData) return;
+
+        var patientId = patientData.patientId || 'PAT-001';
+
+        var doctorPatients = [];
+        var saved = localStorage.getItem('doctorPatients');
+        if (saved) {
+            try { doctorPatients = JSON.parse(saved); } catch(e) {}
+        }
+
+        var idx = -1;
+        for (var i = 0; i < doctorPatients.length; i++) {
+            if (doctorPatients[i].id === patientId) {
+                idx = i;
+                break;
+            }
+        }
+
+        var existing = idx >= 0 ? doctorPatients[idx] : {};
+
+        var updated = {
+            id: patientId,
+            name: patientData.fullName || existing.name || 'Неизвестный',
+            age: patientData.age || existing.age || 30,
+            birthDate: patientData.birthDate || existing.birthDate,
+            gender: patientData.gender || existing.gender || 'male',
+            height: patientData.height || existing.height || 0,
+            weight: patientData.weight || existing.weight || 0,
+            status: existing.status || 'new',
+            diagnosis: existing.diagnosis || 'Не установлен',
+            symptoms: existing.symptoms || {},
+            aiChecked: existing.aiChecked || false,
+            aiResult: existing.aiResult || null,
+            allergies: patientData.allergies || [],
+            vaccinations: patientData.vaccinations || [],
+            medications: patientData.medications || [],
+            constantMedications: patientData.constantMedications || [],
+            symptomsHistory: patientData.symptoms || [],
+            diagnoses: patientData.diagnoses || [],
+            files: patientData.files || [],
+            lastSync: new Date().toISOString()
+        };
+
+        if (idx >= 0) {
+            doctorPatients[idx] = updated;
+        } else {
+            doctorPatients.push(updated);
+        }
+
+        localStorage.setItem('doctorPatients', JSON.stringify(doctorPatients));
+        localStorage.setItem('syncSignal', Date.now().toString());
+        console.log('✅ Данные отправлены врачу');
+    }
+
+    // Синхронизация при загрузке + каждые 5 сек
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(syncToDoctorCabinet, 1000);
+    });
+    setInterval(syncToDoctorCabinet, 5000);
+
+</script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -336,8 +402,6 @@
             </div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="logout-btn" onclick="openDoctorCard()" style="background: linear-gradient(135deg, #667eea, #764ba2);">📋 Карта врача</button>
-            <button class="logout-btn" onclick="openDoctorCabinet()" style="background: linear-gradient(135deg, #48bb78, #38a169);">🧠 Кабинет врача</button>
             <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
         </div>
     </div>
@@ -389,16 +453,6 @@
             <div class="info-item"><div class="info-label">Артериальное давление</div><div class="info-value"><select id="bpSystolicSelect" onchange="updateBP()"><option value="70">70</option><option value="80">80</option><option value="90">90</option><option value="100">100</option><option value="110">110</option><option value="120">120</option><option value="130">130</option><option value="140" selected>140</option><option value="150">150</option><option value="160">160</option><option value="170">170</option><option value="180">180</option></select>/<select id="bpDiastolicSelect" onchange="updateBP()"><option value="40">40</option><option value="50">50</option><option value="60">60</option><option value="70">70</option><option value="80" selected>80</option><option value="90">90</option><option value="100">100</option><option value="110">110</option><option value="120">120</option></select><span class="edit-icon" onclick="showBPHistory()">📊</span></div></div>
             <div class="info-item"><div class="info-label">Сатурация (SpO2)</div><div class="info-value"><select id="spo2Select" onchange="updateSpO2()"><option value="85">85%</option><option value="86">86%</option><option value="87">87%</option><option value="88">88%</option><option value="89">89%</option><option value="90">90%</option><option value="91">91%</option><option value="92">92%</option><option value="93">93%</option><option value="94">94%</option><option value="95">95%</option><option value="96">96%</option><option value="97">97%</option><option value="98" selected>98%</option><option value="99">99%</option><option value="100">100%</option></select><span class="edit-icon" onclick="showSpO2History()">📊</span></div></div>
             <div class="info-item"><div class="info-label">Температура</div><div class="info-value"><select id="tempSelect"><option value="35.0">35.0°C</option><option value="35.5">35.5°C</option><option value="36.0">36.0°C</option><option value="36.1">36.1°C</option><option value="36.2">36.2°C</option><option value="36.3">36.3°C</option><option value="36.4">36.4°C</option><option value="36.5">36.5°C</option><option value="36.6" selected>36.6°C</option><option value="36.7">36.7°C</option><option value="36.8">36.8°C</option><option value="36.9">36.9°C</option><option value="37.0">37.0°C</option><option value="37.1">37.1°C</option><option value="37.2">37.2°C</option><option value="37.3">37.3°C</option><option value="37.4">37.4°C</option><option value="37.5">37.5°C</option><option value="38.0">38.0°C</option><option value="38.5">38.5°C</option><option value="39.0">39.0°C</option><option value="39.5">39.5°C</option><option value="40.0">40.0°C</option></select><button onclick="addTemperatureFromSelect()" class="btn-small btn-info">🌡️ Добавить</button><span class="edit-icon" onclick="showTemperatureChart()">📊</span></div></div>
-        </div>
-    </div>
-
-    <!-- Динамика развития (до 1 года) -->
-    <div class="card">
-        <div class="card-header" onclick="toggleSection('growthSection', 'growthIcon')">
-            <h2>📈 Динамика развития (до 1 года) <span class="toggle-icon" id="growthIcon">▼</span></h2>
-        </div>
-        <div id="growthSection" class="card-content">
-            <div class="growth-table"><table id="growthTable"><thead><tr><th>Возраст</th><th>Масса (г)</th><th>Норма массы</th><th>Рост (см)</th><th>Норма роста</th><th>Окружность головы (см)</th><th>Норма</th></tr></thead><tbody></tbody></table></div>
         </div>
     </div>
 
@@ -1230,104 +1284,9 @@
     
     loadData();
 
-    function openDoctorCard() {
-        var patientId = (typeof patientData !== 'undefined' && patientData.patientId) ? patientData.patientId : 'PAT-001';
-        savePatientToDoctorStorage(patientId);
-        window.open('patient_card.html?id=' + encodeURIComponent(patientId), '_blank');
-    }
 
-    function openDoctorCabinet() {
-        var patientId = (typeof patientData !== 'undefined' && patientData.patientId) ? patientData.patientId : 'PAT-001';
-        savePatientToDoctorStorage(patientId);
-        window.open('doctor_cabinet.html', '_blank');
-    }
 
-    function savePatientToDoctorStorage(patientId) {
-        var doctorPatients = [];
-        var saved = localStorage.getItem('doctorPatients');
-        if (saved) {
-            try { doctorPatients = JSON.parse(saved); } catch (e) { doctorPatients = []; }
-        }
-        var existingIndex = -1;
-        for (var i = 0; i < doctorPatients.length; i++) {
-            if (doctorPatients[i].id === patientId) { existingIndex = i; break; }
-        }
-        var birthDate = (typeof patientData !== 'undefined') ? patientData.birthDate : null;
-        var age = 30;
-        if (birthDate) {
-            var birth = new Date(birthDate);
-            var today = new Date();
-            age = today.getFullYear() - birth.getFullYear();
-            var m = today.getMonth() - birth.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-        }
-        var doctorPatient = {
-            id: patientId,
-            name: (typeof patientData !== 'undefined' && patientData.fullName) ? patientData.fullName : 'Неизвестный',
-            age: age,
-            birthDate: birthDate,
-            gender: (typeof patientData !== 'undefined' && patientData.gender) ? patientData.gender : 'male',
-            height: (typeof patientData !== 'undefined' && patientData.height) ? patientData.height : 0,
-            weight: (typeof patientData !== 'undefined' && patientData.weight) ? patientData.weight : 0,
-            status: 'new',
-            diagnosis: 'Не установлен',
-            symptoms: {
-                zalozhennost: false, vydeleniya: false, bol_v_litse: false, obonyanie: false,
-                kashel: false, golovnaya_bol: false, gnoinye_vydeleniya: false, temperatura: false,
-                oslozhneniya: false, allergicheskiy_rinit: false, odnostoronnie_vydeleniya: false,
-                vtoraya_volna: false, leikocytoz_15: false
-            },
-            aiChecked: false,
-            aiResult: null,
-            created: new Date().toISOString(),
-            fromPatientCabinet: true,
-            allergies: (typeof patientData !== 'undefined' && patientData.allergies) ? patientData.allergies : [],
-            vaccinations: (typeof patientData !== 'undefined' && patientData.vaccinations) ? patientData.vaccinations : [],
-            medications: (typeof patientData !== 'undefined' && patientData.medications) ? patientData.medications : [],
-            constantMedications: (typeof patientData !== 'undefined' && patientData.constantMedications) ? patientData.constantMedications : [],
-            symptomsHistory: (typeof patientData !== 'undefined' && patientData.symptoms) ? patientData.symptoms : [],
-            diagnoses: (typeof patientData !== 'undefined' && patientData.diagnoses) ? patientData.diagnoses : [],
-            files: (typeof patientData !== 'undefined' && patientData.files) ? patientData.files : []
-        };
-        detectSymptoms(doctorPatient);
-        if (existingIndex >= 0) {
-            for (var key in doctorPatient) {
-                if (doctorPatient.hasOwnProperty(key)) {
-                    doctorPatients[existingIndex][key] = doctorPatient[key];
-                }
-            }
-        } else {
-            doctorPatients.push(doctorPatient);
-        }
-        localStorage.setItem('doctorPatients', JSON.stringify(doctorPatients));
-        console.log('Пациент сохранен:', patientId);
-    }
 
-    function detectSymptoms(patient) {
-        var text = '';
-        if (patient.symptomsHistory) {
-            for (var i = 0; i < patient.symptomsHistory.length; i++) {
-                text += ' ' + (patient.symptomsHistory[i].text || '');
-            }
-        }
-        text = text.toLowerCase();
-        if (text.indexOf('заложенность') >= 0 || text.indexOf('нос не дышит') >= 0) patient.symptoms.zalozhennost = true;
-        if (text.indexOf('выделения') >= 0 || text.indexOf('насморк') >= 0) patient.symptoms.vydeleniya = true;
-        if (text.indexOf('боль в лице') >= 0) patient.symptoms.bol_v_litse = true;
-        if (text.indexOf('обоняние') >= 0) patient.symptoms.obonyanie = true;
-        if (text.indexOf('кашель') >= 0) patient.symptoms.kashel = true;
-        if (text.indexOf('головная боль') >= 0) patient.symptoms.golovnaya_bol = true;
-        if (text.indexOf('гнойные') >= 0 || text.indexOf('гной') >= 0) patient.symptoms.gnoinye_vydeleniya = true;
-        if (text.indexOf('температура') >= 0 || text.indexOf('38') >= 0 || text.indexOf('39') >= 0) patient.symptoms.temperatura = true;
-        if (text.indexOf('осложнени') >= 0) patient.symptoms.oslozhneniya = true;
-        if (text.indexOf('аллерг') >= 0) patient.symptoms.allergicheskiy_rinit = true;
-        if (patient.symptoms.zalozhennost && patient.symptoms.vydeleniya && patient.symptoms.gnoinye_vydeleniya) {
-            patient.diagnosis = 'Острый бактериальный синусит (подозрение)';
-            patient.status = 'critical';
-        } else if (patient.symptoms.zalozhennost && patient.symptoms.vydeleniya) {
-            patient.diagnosis = 'Острый синусит (подозрение)';
-        }
-    }
 </script>
 </body>
 </html>

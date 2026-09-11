@@ -330,7 +330,7 @@
             </div>
             <div>
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Дата рождения *</label>
-                <input type="date" id="newPatientBirthDate" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                <input type="date" id="newPatientBirthDate" onchange="updateWeightUnit()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
             </div>
             <div>
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Пол</label>
@@ -344,8 +344,8 @@
                 <input type="number" id="newPatientHeight" placeholder="170" oninput="updateNewPatientBMI()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
             </div>
             <div>
-                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Вес (г)</label>
-                <input type="number" id="newPatientWeight" placeholder="70000" oninput="updateNewPatientBMI()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;" id="weightLabel">Вес (кг)</label>
+                <input type="number" id="newPatientWeight" placeholder="70" oninput="updateNewPatientBMI()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
             </div>
             <div style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">ИМТ</label>
@@ -490,6 +490,8 @@
     }
 
     function selectPatient(id) {
+        window.open("patient_card.html?id=" + encodeURIComponent(id), "_blank");
+        window.open("patient_card.html?id=" + encodeURIComponent(id), "_blank");
         selectedPatientId = id;
         var patient = patients.find(function(p) { return p.id === id; });
         if (!patient) return;
@@ -943,6 +945,65 @@
 
     console.log('🧠 BOT_MAX Doctor Cabinet loaded');
     console.log('📋 Функции: selectPatient, openPatientCard, addPatient, runAICheck');
+    function getAgeInMonths(birthDate) {
+        var birth = new Date(birthDate);
+        var today = new Date();
+        return (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+    }
+
+    function updateWeightUnit() {
+        var birthDate = document.getElementById("newPatientBirthDate").value;
+        var label = document.getElementById("weightLabel");
+        var input = document.getElementById("newPatientWeight");
+        if (!birthDate) {
+            label.textContent = "Вес (кг)";
+            input.placeholder = "70";
+            return;
+        }
+        var ageMonths = getAgeInMonths(birthDate);
+        if (ageMonths < 12) {
+            label.textContent = "Вес (г) — ребёнок до 1 года";
+            input.placeholder = "7000";
+            input.min = "500";
+            input.max = "20000";
+        } else {
+            label.textContent = "Вес (кг)";
+            input.placeholder = "70";
+            input.min = "1";
+            input.max = "300";
+        }
+        if (typeof updateNewPatientBMI === "function") updateNewPatientBMI();
+    }
+
+    // ============================================================
+    //  СЛУШАТЕЛЬ СИНХРОНИЗАЦИИ С ПАЦИЕНТОМ
+    // ============================================================
+
+    function listenPatientSync() {
+        // Storage event — для других вкладок
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'doctorPatients' || e.key === 'syncSignal') {
+                console.log('🔄 Обнаружено обновление');
+                loadPatientsFromStorage();
+            }
+        });
+
+        // Polling — для той же вкладки
+        var lastSync = 0;
+        setInterval(function() {
+            var signal = localStorage.getItem('syncSignal');
+            if (signal && signal !== lastSync) {
+                lastSync = signal;
+                console.log('🔄 Синхронизация');
+                loadPatientsFromStorage();
+            }
+        }, 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(listenPatientSync, 500);
+    });
+
 </script>
 
 </body>
