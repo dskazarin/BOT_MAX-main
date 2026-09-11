@@ -15,21 +15,23 @@
         }
         .container { max-width: 1400px; margin: 0 auto; }
         .header {
-            background: rgba(26, 32, 44, 0.95);
-            backdrop-filter: blur(15px);
+            background: rgba(26, 32, 44, 0.98);
+            backdrop-filter: blur(20px);
             border-radius: 20px;
             padding: 20px 30px;
             margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             position: sticky;
             top: 10px;
             z-index: 100;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
         }
         .patient-header { display: flex; align-items: center; gap: 20px; }
         .patient-avatar {
@@ -64,6 +66,14 @@
             padding: 25px;
             margin-bottom: 20px;
             border: 1px solid rgba(255, 255, 255, 0.08);
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 100%;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
         }
         .section-header {
             display: flex;
@@ -121,17 +131,7 @@
             margin-top: 8px;
             justify-content: flex-end;
         }
-        .ai-check-btn {
-            background: rgba(159, 122, 234, 0.2);
-            color: #9f7aea;
-            border: 1px solid rgba(159, 122, 234, 0.3);
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.75em;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .ai-check-btn:hover { background: rgba(159, 122, 234, 0.3); }
+
         .fields-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -159,47 +159,9 @@
             font-weight: 600;
         }
         .back-link:hover { text-decoration: underline; }
-        .ai-suggestion-modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-        .ai-suggestion-modal.active { display: flex; }
-        .ai-suggestion-content {
-            background: #2d3748;
-            border-radius: 20px;
-            padding: 30px;
-            max-width: 600px;
-            width: 90%;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
+
         .ai-suggestion-content h3 { color: #9f7aea; margin-bottom: 15px; }
-        .ai-comparison {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin: 20px 0;
-        }
-        .ai-comparison > div {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 10px;
-        }
-        .ai-comparison .label {
-            font-size: 0.7em;
-            color: #a0aec0;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-        .ai-comparison .text { color: #e2e8f0; line-height: 1.5; }
-        .ai-comparison .original { border-left: 3px solid #f56565; }
-        .ai-comparison .suggested { border-left: 3px solid #48bb78; }
-        .ai-modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
         .notification {
             position: fixed;
             bottom: 20px;
@@ -211,9 +173,461 @@
             z-index: 3000;
             font-weight: 600;
         }
+
+        .vitals-panel {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            padding: 15px 20px;
+            background: rgba(159, 122, 234, 0.08);
+            border-radius: 15px;
+            border: 1px solid rgba(159, 122, 234, 0.2);
+            flex: 1;
+            min-width: 0;
+        }
+        .vital-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .vital-item label {
+            font-size: 0.7em;
+            color: #a0aec0;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .vital-item input {
+            width: 80px;
+            padding: 6px 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .vital-item input:focus {
+            outline: none;
+            border-color: #9f7aea;
+            background: rgba(159, 122, 234, 0.1);
+        }
+        .vital-value {
+            padding: 6px 8px;
+            background: rgba(159, 122, 234, 0.15);
+            border-radius: 6px;
+            color: #9f7aea;
+            font-size: 0.9em;
+            font-weight: 700;
+            min-width: 80px;
+            text-align: center;
+        }
+        .vital-item .btn {
+            padding: 6px 12px;
+            font-size: 0.75em;
+        }
+
+        .chart-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+        .chart-modal.active { display: flex; }
+        .chart-modal-content {
+            background: #2d3748;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 900px;
+            width: 95%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .chart-modal-content h3 { color: #9f7aea; margin-bottom: 20px; }
+        .chart-modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+        @media (max-width: 1200px) {
+            .vitals-panel { justify-content: flex-start; }
+        }
+
         @media (max-width: 768px) {
             .fields-row { grid-template-columns: 1fr; }
-            .ai-comparison { grid-template-columns: 1fr; }
+            
+        }
+
+        .vital-bp-group {
+            min-width: 280px;
+        }
+        .bp-inputs {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .bp-inputs select {
+            width: 70px;
+            padding: 6px 8px;
+            background: rgba(159, 122, 234, 0.15);
+            border: 1px solid rgba(159, 122, 234, 0.3);
+            border-radius: 6px;
+            color: #9f7aea;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .bp-inputs select:focus {
+            outline: none;
+            border-color: #9f7aea;
+        }
+        .bp-inputs input {
+            width: 60px;
+            padding: 6px 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .bp-inputs input:focus {
+            outline: none;
+            border-color: #9f7aea;
+            background: rgba(159, 122, 234, 0.1);
+        }
+        .bp-sep {
+            color: #a0aec0;
+            font-weight: 700;
+            font-size: 1.2em;
+        }
+
+        .chart-menu {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+        .chart-menu.active { display: flex; }
+        .chart-menu-content {
+            background: #2d3748;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .chart-menu-content h3 {
+            color: #9f7aea;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .chart-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .chart-option-btn {
+            padding: 15px;
+            background: rgba(159, 122, 234, 0.1);
+            border: 2px solid rgba(159, 122, 234, 0.3);
+            border-radius: 12px;
+            color: #e2e8f0;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .chart-option-btn:hover {
+            background: rgba(159, 122, 234, 0.25);
+            border-color: #9f7aea;
+            transform: translateY(-2px);
+        }
+        .chart-option-btn.selected {
+            background: rgba(159, 122, 234, 0.3);
+            border-color: #9f7aea;
+        }
+        .chart-menu-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .vital-buttons {
+            display: flex;
+            gap: 8px;
+            flex-direction: row;
+            align-items: flex-end;
+        }
+        .vital-buttons .btn {
+            padding: 8px 16px;
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 1400px) {
+            .header-top {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .vitals-panel {
+                width: 100%;
+            }
+        }
+
+        
+        
+        /* ============================================================ */
+        /*  AI SPELL-CHECKER v2.0                                       */
+        /* ============================================================ */
+
+        .field-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .field-textarea {
+            position: relative;
+            z-index: 1;
+            background: transparent !important;
+            color: transparent !important;
+            caret-color: #e2e8f0 !important;
+            width: 100%;
+            min-height: 80px;
+            padding: 15px;
+            font-family: inherit;
+            font-size: 0.95em;
+            line-height: 1.6;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            resize: none;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        .field-textarea::selection {
+            background: rgba(102, 126, 234, 0.4);
+            color: transparent;
+        }
+
+        .spell-highlight-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 15px;
+            font-family: inherit;
+            font-size: 0.95em;
+            line-height: 1.6;
+            color: #e2e8f0;
+            pointer-events: none;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow: hidden;
+            z-index: 2;
+            box-sizing: border-box;
+            border-radius: 12px;
+        }
+
+        .spell-error {
+            background: rgba(245, 101, 101, 0.25);
+            border-bottom: 2px wavy #f56565;
+            border-radius: 3px;
+            padding: 0 2px;
+            cursor: pointer;
+            pointer-events: auto;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .spell-error:hover {
+            background: rgba(245, 101, 101, 0.5);
+        }
+
+        .spell-error.suggestion-1 {
+            border-bottom-color: #ed8936;
+            background: rgba(237, 137, 54, 0.2);
+        }
+
+        .spell-error.learned {
+            border-bottom-color: #9f7aea;
+            background: rgba(159, 122, 234, 0.15);
+        }
+
+        /* Tooltip */
+        .spell-tooltip {
+            position: fixed;
+            background: #1a202c;
+            border: 2px solid #48bb78;
+            border-radius: 12px;
+            padding: 10px 14px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.8);
+            z-index: 99999;
+            display: none;
+            font-family: 'Segoe UI', sans-serif;
+            min-width: 220px;
+            max-width: 380px;
+            animation: tooltipFadeIn 0.15s ease-out;
+        }
+
+        @keyframes tooltipFadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .spell-tooltip.active { display: block; }
+
+        .spell-tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 20px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #48bb78;
+        }
+
+        .spell-tooltip-header {
+            font-size: 0.7em;
+            color: #a0aec0;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .spell-tooltip-header .badge {
+            background: rgba(159, 122, 234, 0.2);
+            color: #9f7aea;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 0.85em;
+        }
+
+        .spell-tooltip-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .spell-tooltip-item:hover {
+            background: rgba(72, 187, 120, 0.15);
+            transform: translateX(3px);
+        }
+
+        .spell-tooltip-item:last-child { margin-bottom: 0; }
+
+        .spell-tooltip-wrong {
+            color: #f56565;
+            text-decoration: line-through;
+            font-size: 0.85em;
+            opacity: 0.7;
+        }
+
+        .spell-tooltip-arrow {
+            color: #a0aec0;
+            font-size: 0.9em;
+        }
+
+        .spell-tooltip-right {
+            color: #48bb78;
+            font-weight: 700;
+            font-size: 1em;
+        }
+
+        .spell-tooltip-confidence {
+            margin-left: auto;
+            font-size: 0.65em;
+            color: #a0aec0;
+            background: rgba(159, 122, 234, 0.15);
+            padding: 2px 6px;
+            border-radius: 8px;
+        }
+
+        .spell-tooltip-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .spell-tooltip-actions button {
+            flex: 1;
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75em;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+
+        .btn-learn {
+            background: rgba(159, 122, 234, 0.2);
+            color: #9f7aea;
+        }
+        .btn-learn:hover { background: rgba(159, 122, 234, 0.35); }
+
+        .btn-ignore {
+            background: rgba(160, 174, 192, 0.15);
+            color: #a0aec0;
+        }
+        .btn-ignore:hover { background: rgba(160, 174, 192, 0.3); }
+
+        /* Counter */
+        .spell-counter {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.7em;
+            font-weight: 700;
+            z-index: 5;
+            display: none;
+            transition: all 0.3s;
+        }
+
+        .spell-counter.active { display: block; }
+
+        .spell-counter.errors {
+            background: rgba(245, 101, 101, 0.9);
+            color: white;
+            animation: counterPulse 2s infinite;
+        }
+
+        .spell-counter.ok {
+            background: rgba(72, 187, 120, 0.9);
+            color: white;
+        }
+
+        .spell-counter.learning {
+            background: rgba(159, 122, 234, 0.9);
+            color: white;
+        }
+
+        @keyframes counterPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
         }
     </style>
 </head>
@@ -223,15 +637,78 @@
     <a href="doctor_cabinet.html" class="back-link">⬅ Назад к пациентам</a>
 
     <div class="header">
-        <div class="patient-header">
-            <div class="patient-avatar" id="patientAvatar">👨</div>
-            <div class="patient-info">
-                <h1 id="patientName">Загрузка...</h1>
-                <small>ID: <span id="patientId">-</span> • <span id="patientAge">-</span> лет</small>
+        <div class="header-top">
+            <div class="patient-header">
+                <div class="patient-avatar" id="patientAvatar">👨</div>
+                <div class="patient-info">
+                    <h1 id="patientName">Загрузка...</h1>
+                    <small>
+                        ID: <span id="patientId">-</span> •
+                        <span id="patientBirthDate">-</span> •
+                        <span id="patientAge">-</span> лет
+                    </small>
+                </div>
             </div>
-        </div>
-        <div>
-            <button class="btn btn-info" onclick="saveAll()">💾 Сохранить всё</button>
+
+            <div class="vitals-panel">
+                <div class="vital-item">
+                    <label>Рост (см)</label>
+                    <input type="number" id="vital_height" onchange="updateBMI()" oninput="updateBMI()">
+                </div>
+                <div class="vital-item">
+                    <label>Вес (кг)</label>
+                    <input type="number" id="vital_weight" onchange="updateBMI()" oninput="updateBMI()">
+                </div>
+                <div class="vital-item">
+                    <label>ИМТ</label>
+                    <span id="vital_bmi" class="vital-value">—</span>
+                </div>
+                <div class="vital-item vital-bp-group">
+                    <label>АД (мм рт.ст.)</label>
+                    <div class="bp-inputs">
+                        <select id="vital_bp_sys_select" onchange="syncBPFromSelect()">
+                            <option value="">—</option>
+                            <option value="90">90</option>
+                            <option value="100">100</option>
+                            <option value="110">110</option>
+                            <option value="120" selected>120</option>
+                            <option value="130">130</option>
+                            <option value="140">140</option>
+                            <option value="150">150</option>
+                            <option value="160">160</option>
+                            <option value="170">170</option>
+                            <option value="180">180</option>
+                        </select>
+                        <input type="number" id="vital_bp_sys" placeholder="120" oninput="syncBPToSelect()">
+                        <span class="bp-sep">/</span>
+                        <select id="vital_bp_dia_select" onchange="syncBPFromSelect()">
+                            <option value="">—</option>
+                            <option value="40">40</option>
+                            <option value="50">50</option>
+                            <option value="60">60</option>
+                            <option value="70">70</option>
+                            <option value="80" selected>80</option>
+                            <option value="90">90</option>
+                            <option value="100">100</option>
+                            <option value="110">110</option>
+                            <option value="120">120</option>
+                        </select>
+                        <input type="number" id="vital_bp_dia" placeholder="80" oninput="syncBPToSelect()">
+                    </div>
+                </div>
+                <div class="vital-item">
+                    <label>Температура</label>
+                    <input type="number" step="0.1" id="vital_temp" placeholder="36.6">
+                </div>
+                <div class="vital-item">
+                    <label>SpO2 (%)</label>
+                    <input type="number" id="vital_spo2" placeholder="98">
+                </div>
+                <div class="vital-item vital-buttons">
+                    <button class="btn btn-success" onclick="saveVitals()">💾 Сохранить</button>
+                    <button class="btn btn-info" onclick="showChartMenu()">📊 Диаграмма</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -242,10 +719,8 @@
         </div>
         <div class="section-content" id="complaintsContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_complaints" placeholder="Опишите жалобы пациента..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_complaints')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_complaints" placeholder="Опишите жалобы пациента..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -257,10 +732,8 @@
         </div>
         <div class="section-content" id="anamnesisContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_anamnesis" placeholder="Когда началось заболевание, как развивалось..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_anamnesis')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_anamnesis" placeholder="Когда началось заболевание, как развивалось..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -272,10 +745,8 @@
         </div>
         <div class="section-content" id="allergyContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_allergy" placeholder="Аллергические реакции..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_allergy')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_allergy" placeholder="Аллергические реакции..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -287,10 +758,8 @@
         </div>
         <div class="section-content" id="lifeContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_life" placeholder="Условия жизни, перенесённые заболевания..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_life')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_life" placeholder="Условия жизни, перенесённые заболевания..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -302,10 +771,8 @@
         </div>
         <div class="section-content" id="epiContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_epi" placeholder="Контакт с инфекционными больными..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_epi')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_epi" placeholder="Контакт с инфекционными больными..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -317,10 +784,8 @@
         </div>
         <div class="section-content" id="objectiveContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_objective" placeholder="Общее состояние, ЛОР-статус..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_objective')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_objective" placeholder="Общее состояние, ЛОР-статус..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -332,10 +797,8 @@
         </div>
         <div class="section-content" id="manipulationsContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_manipulations" placeholder="Выполненные манипуляции..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_manipulations')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_manipulations" placeholder="Выполненные манипуляции..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -347,10 +810,8 @@
         </div>
         <div class="section-content" id="studiesContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_studies" placeholder="Пройденные обследования..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_studies')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_studies" placeholder="Пройденные обследования..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -364,7 +825,7 @@
             <div class="fields-row">
                 <div class="field-group">
                     <label class="field-label">Клинический диагноз</label>
-                    <textarea class="field-textarea" id="field_diagnosis_clinical" placeholder="Острый гнойный верхнечелюстной синусит..."></textarea>
+                    <div class="field-wrapper"><textarea class="field-textarea" id="field_diagnosis_clinical" placeholder="Острый гнойный верхнечелюстной синусит..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
                 </div>
                 <div class="field-group">
                     <label class="field-label">Код МКБ-10</label>
@@ -384,10 +845,8 @@
         </div>
         <div class="section-content" id="referralsContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_referrals" placeholder="Направления: КТ ОНП, ОАК..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_referrals')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_referrals" placeholder="Направления: КТ ОНП, ОАК..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
@@ -399,30 +858,14 @@
         </div>
         <div class="section-content" id="recommendationsContent">
             <div class="field-group">
-                <textarea class="field-textarea" id="field_recommendations" placeholder="Режим, диета, медикаменты..."></textarea>
-                <div class="field-actions">
-                    <button class="ai-check-btn" onclick="checkSpelling('field_recommendations')">✨ Проверить орфографию</button>
-                </div>
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_recommendations" placeholder="Режим, диета, медикаменты..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
             </div>
         </div>
     </div>
 
 </div>
 
-<div class="ai-suggestion-modal" id="aiModal">
-    <div class="ai-suggestion-content">
-        <h3>✨ ИИ-проверка орфографии</h3>
-        <p style="color: #a0aec0; font-size: 0.9em;">Найдены предложения по исправлению:</p>
-        <div class="ai-comparison">
-            <div class="original">
-                <div class="label">❌ Ваш текст</div>
-                <div class="text" id="aiOriginal"></div>
-            </div>
-            <div class="suggested">
-                <div class="label">✅ Предложенный вариант</div>
-                <div class="text" id="aiSuggested"></div>
-            </div>
-        </div>
         <div class="ai-modal-buttons">
             <button class="btn btn-danger" onclick="closeAIModal()">Отклонить</button>
             <button class="btn btn-success" onclick="applyAISuggestion()">Применить</button>
@@ -464,6 +907,11 @@
             document.getElementById('patientId').textContent = patientData.id;
             document.getElementById('patientAge').textContent = patientData.age;
             document.getElementById('patientAvatar').textContent = patientData.gender === 'female' ? '👩' : '👨';
+            if (patientData.birthDate) {
+                var bd = new Date(patientData.birthDate);
+                document.getElementById('patientBirthDate').textContent = bd.toLocaleDateString('ru-RU');
+            }
+            document.getElementById('patientAge').textContent = patientData.age;
         }
 
         loadCardData();
@@ -505,56 +953,6 @@
         localStorage.setItem(cardKey, JSON.stringify(cardData));
         syncToDoctor();
         showNotification('✅ Все данные сохранены!');
-    }
-
-    function checkSpelling(fieldId) {
-        var field = document.getElementById(fieldId);
-        if (!field || !field.value.trim()) {
-            showNotification('⚠️ Поле пустое');
-            return;
-        }
-
-        currentFieldId = fieldId;
-        var text = field.value;
-        var corrected = applySpellingRules(text);
-
-        if (corrected === text) {
-            showNotification('✅ Ошибок не найдено!');
-            return;
-        }
-
-        document.getElementById('aiOriginal').textContent = text;
-        document.getElementById('aiSuggested').textContent = corrected;
-        document.getElementById('aiModal').classList.add('active');
-    }
-
-    function applySpellingRules(text) {
-        var result = text;
-        spellingRules.forEach(function(rule) {
-            result = result.replace(rule.wrong, rule.right);
-        });
-        result = result.replace(/\s+([,.:;!?])/g, '$1');
-        result = result.replace(/([,.:;!?])([^\s\d])/g, '$1 $2');
-        result = result.replace(/\s{2,}/g, ' ');
-        return result;
-    }
-
-    function applyAISuggestion() {
-        var suggested = document.getElementById('aiSuggested').textContent;
-        if (currentFieldId) {
-            var field = document.getElementById(currentFieldId);
-            if (field) {
-                field.value = suggested;
-                autoResize(field);
-                showNotification('✅ Исправление применено');
-            }
-        }
-        closeAIModal();
-    }
-
-    function closeAIModal() {
-        document.getElementById('aiModal').classList.remove('active');
-        currentFieldId = null;
     }
 
     function suggestMKB() {
@@ -701,7 +1099,1086 @@
         autoSaveTimer = setTimeout(autoSaveWithSync, 2000);
     }
 
+    // ============================================================
+    //  РАСШИРЕННЫЕ ФУНКЦИИ ПАЦИЕНТА
+    // ============================================================
+
+    // ============================================================
+    //  VITALS — РАБОТА С ПОКАЗАТЕЛЯМИ
+    // ============================================================
+
+    function loadVitals() {
+        var vitalsKey = 'patient_vitals_' + patientId;
+        var saved = localStorage.getItem(vitalsKey);
+        var vitals = saved ? JSON.parse(saved) : {
+            height: (patientData && patientData.height) || 0,
+            weight: (patientData && patientData.weight) || 0,
+            bp_sys: 120,
+            bp_dia: 80,
+            temp: 36.6,
+            spo2: 98
+        };
+
+        var hEl = document.getElementById('vital_height');
+        var wEl = document.getElementById('vital_weight');
+        var sysEl = document.getElementById('vital_bp_sys');
+        var diaEl = document.getElementById('vital_bp_dia');
+        var sysSel = document.getElementById('vital_bp_sys_select');
+        var diaSel = document.getElementById('vital_bp_dia_select');
+        var tempEl = document.getElementById('vital_temp');
+        var spo2El = document.getElementById('vital_spo2');
+
+        if (hEl) hEl.value = vitals.height || '';
+        if (wEl) wEl.value = vitals.weight ? (vitals.weight / 1000).toFixed(1) : '';
+
+        var sysVal = vitals.bp_sys || 120;
+        var diaVal = vitals.bp_dia || 80;
+
+        if (sysEl) sysEl.value = sysVal;
+        if (diaEl) diaEl.value = diaVal;
+        if (sysSel) sysSel.value = sysVal;
+        if (diaSel) diaSel.value = diaVal;
+        if (tempEl) tempEl.value = vitals.temp || '';
+        if (spo2El) spo2El.value = vitals.spo2 || '';
+
+        updateBMI();
+    }
+
+    function updateBMI() {
+        var h = parseFloat((document.getElementById('vital_height') || {}).value) / 100;
+        var w = parseFloat((document.getElementById('vital_weight') || {}).value);
+        var bmiEl = document.getElementById('vital_bmi');
+
+        if (h > 0 && w > 0) {
+            var bmi = (w / (h * h)).toFixed(1);
+            var status = bmi < 18.5 ? 'Недостаточный' : bmi < 25 ? 'Норма' : bmi < 30 ? 'Избыточный' : 'Ожирение';
+            bmiEl.textContent = bmi + ' (' + status + ')';
+            bmiEl.style.color = (bmi >= 18.5 && bmi < 25) ? '#48bb78' : '#ed8936';
+        } else {
+            bmiEl.textContent = '—';
+        }
+    }
+
+    function syncBPFromSelect() {
+        var sysSel = document.getElementById('vital_bp_sys_select');
+        var diaSel = document.getElementById('vital_bp_dia_select');
+        var sysEl = document.getElementById('vital_bp_sys');
+        var diaEl = document.getElementById('vital_bp_dia');
+        
+        if (sysSel && sysEl && sysSel.value) sysEl.value = sysSel.value;
+        if (diaSel && diaEl && diaSel.value) diaEl.value = diaSel.value;
+    }
+
+    function syncBPToSelect() {
+        var sysEl = document.getElementById('vital_bp_sys');
+        var diaEl = document.getElementById('vital_bp_dia');
+        var sysSel = document.getElementById('vital_bp_sys_select');
+        var diaSel = document.getElementById('vital_bp_dia_select');
+        
+        if (sysEl && sysSel && sysEl.value) {
+            var sysOpt = Array.from(sysSel.options).find(function(o) { return o.value === sysEl.value; });
+            if (sysOpt) sysSel.value = sysEl.value;
+        }
+        if (diaEl && diaSel && diaEl.value) {
+            var diaOpt = Array.from(diaSel.options).find(function(o) { return o.value === diaEl.value; });
+            if (diaOpt) diaSel.value = diaEl.value;
+        }
+    }
+
+    function saveVitals() {
+        console.log('💾 saveVitals вызван');
+        
+        var height = parseFloat((document.getElementById('vital_height') || {}).value) || 0;
+        var weight = (parseFloat((document.getElementById('vital_weight') || {}).value) || 0) * 1000;
+        var bp_sys = parseInt((document.getElementById('vital_bp_sys') || {}).value) || 120;
+        var bp_dia = parseInt((document.getElementById('vital_bp_dia') || {}).value) || 80;
+        var temp = parseFloat((document.getElementById('vital_temp') || {}).value) || 36.6;
+        var spo2 = parseInt((document.getElementById('vital_spo2') || {}).value) || 98;
+
+        var vitals = {
+            height: height,
+            weight: weight,
+            bp_sys: bp_sys,
+            bp_dia: bp_dia,
+            bp: bp_sys + '/' + bp_dia,
+            temp: temp,
+            spo2: spo2,
+            date: new Date().toISOString()
+        };
+
+        console.log('📋 Данные:', vitals);
+
+        // Текущие
+        localStorage.setItem('patient_vitals_' + patientId, JSON.stringify(vitals));
+
+        // История
+        var historyKey = 'patient_vitals_history_' + patientId;
+        var history = [];
+        try {
+            var saved = localStorage.getItem(historyKey);
+            if (saved) history = JSON.parse(saved);
+        } catch(e) {}
+        history.push(vitals);
+        if (history.length > 50) history.shift();
+        localStorage.setItem(historyKey, JSON.stringify(history));
+
+        // Обновить пациента
+        if (patientData) {
+            patientData.height = height;
+            patientData.weight = weight;
+            patientData.bp = vitals.bp;
+            patientData.temp = temp;
+            patientData.spo2 = spo2;
+        }
+
+        // Синхронизация
+        if (typeof syncToDoctor === 'function') {
+            try { syncToDoctor(); } catch(e) { console.warn(e); }
+        }
+
+        // Уведомление
+        showNotification('✅ Показатели сохранены');
+    }
+
+    // ============================================================
+    //  МЕНЮ ВЫБОРА СТАТИСТИКИ
+    // ============================================================
+
+    function showChartMenu() {
+        var menu = document.getElementById('chartMenu');
+        if (menu) menu.classList.add('active');
+    }
+
+    function closeChartMenu() {
+        var menu = document.getElementById('chartMenu');
+        if (menu) menu.classList.remove('active');
+    }
+
+    function backToChartMenu() {
+        closeChart();
+        setTimeout(showChartMenu, 200);
+    }
+
+    // ============================================================
+    //  ГРАФИКИ
+    // ============================================================
+
+    function showChart(metric) {
+        console.log('📊 showChart:', metric);
+        
+        closeChartMenu();
+
+        var historyKey = 'patient_vitals_history_' + patientId;
+        var history = [];
+        try {
+            var saved = localStorage.getItem(historyKey);
+            if (saved) history = JSON.parse(saved);
+        } catch(e) {}
+
+        if (history.length === 0) {
+            showNotification('⚠️ Нет данных для графика');
+            return;
+        }
+
+        var modal = document.getElementById('chartModal');
+        if (modal) modal.classList.add('active');
+
+        var titleEl = document.getElementById('chartTitle');
+        var metricNames = {
+            height: '📏 Рост (см)',
+            weight: '⚖️ Вес (кг)',
+            bmi: '📊 ИМТ',
+            bp: '🩸 Артериальное давление',
+            temp: '🌡️ Температура (°C)',
+            spo2: '💨 SpO2 (%)'
+        };
+        if (titleEl) titleEl.textContent = metricNames[metric] || '📊 Диаграмма';
+
+        var ctx = document.getElementById('vitalsChart').getContext('2d');
+        if (window.vitalsChartInstance) {
+            window.vitalsChartInstance.destroy();
+        }
+
+        var labels = history.map(function(v) {
+            var d = new Date(v.date);
+            return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+        });
+
+        var datasets = [];
+        var yAxisOptions = {};
+
+        if (metric === 'bp') {
+            datasets = [
+                {
+                    label: 'Систолическое',
+                    data: history.map(function(v) { return v.bp_sys || 0; }),
+                    borderColor: '#f56565',
+                    backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                    tension: 0.3
+                },
+                {
+                    label: 'Диастолическое',
+                    data: history.map(function(v) { return v.bp_dia || 0; }),
+                    borderColor: '#4299e1',
+                    backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                    tension: 0.3
+                }
+            ];
+        } else {
+            var config = {
+                height: { label: 'Рост (см)', color: '#48bb78' },
+                weight: { label: 'Вес (кг)', color: '#ed8936' },
+                bmi: { label: 'ИМТ', color: '#9f7aea' },
+                temp: { label: 'Температура (°C)', color: '#f56565' },
+                spo2: { label: 'SpO2 (%)', color: '#4299e1' }
+            }[metric];
+
+            datasets = [{
+                label: config.label,
+                data: history.map(function(v) {
+                    if (metric === 'weight') return (v.weight || 0) / 1000;
+                    if (metric === 'bmi') {
+                        var h = (v.height || 0) / 100;
+                        var w = (v.weight || 0) / 1000;
+                        return h > 0 ? parseFloat((w / (h * h)).toFixed(1)) : 0;
+                    }
+                    return v[metric] || 0;
+                }),
+                borderColor: config.color,
+                backgroundColor: config.color + '20',
+                tension: 0.3,
+                fill: true
+            }];
+        }
+
+        window.vitalsChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { labels: { color: '#e2e8f0' } }
+                },
+                scales: {
+                    y: {
+                        ticks: { color: '#a0aec0' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    },
+                    x: {
+                        ticks: { color: '#a0aec0' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    }
+                }
+            }
+        });
+    }
+
+    function closeChart() {
+        var modal = document.getElementById('chartModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    function showNotification(message) {
+        var notif = document.createElement('div');
+        notif.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#48bb78;color:white;padding:12px 24px;border-radius:30px;z-index:9999;font-weight:600;';
+        notif.textContent = message;
+        document.body.appendChild(notif);
+        setTimeout(function() { notif.remove(); }, 2500);
+    }
+
+    // Закрытие меню по клику вне
+    document.addEventListener('click', function(e) {
+        var menu = document.getElementById('chartMenu');
+        if (menu && menu.classList.contains('active')) {
+            if (e.target === menu) closeChartMenu();
+        }
+        var modal = document.getElementById('chartModal');
+        if (modal && modal.classList.contains('active')) {
+            if (e.target === modal) closeChart();
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeChartMenu();
+            closeChart();
+        }
+    });
+
+    console.log('✅ VITALS функции загружены');
+
+    // ============================================================
+    //  🤖 ИИ-АГЕНТ ПРОВЕРКИ ОРФОГРАФИИ И ПУНКТУАЦИИ
+    //  Работает в фоновом режиме для всех полей
+    // ============================================================
+
+    // Словарь ошибок → правильные варианты
+    
+
+    // Правила пунктуации
+    
+
+    var spellPopupEl = null;
+    var currentSuggestion = null;
+    var currentTextarea = null;
+    var currentWordData = null;
+
+    // Создать popup
+    function createSpellPopup() {
+        if (spellPopupEl) return spellPopupEl;
+
+        spellPopupEl = document.createElement('div');
+        spellPopupEl.className = 'spell-popup';
+        spellPopupEl.id = 'spellPopup';
+        spellPopupEl.innerHTML = `
+            <div class="spell-popup-title">🤖 ИИ-агент предлагает</div>
+            <div class="spell-popup-word" id="spellPopupWord"></div>
+            <div class="spell-popup-actions">
+                <button class="btn-apply" onclick="applySpellSuggestion()">✅ Исправить</button>
+                <button class="btn-ignore" onclick="ignoreSpellSuggestion()">❌ Игнорировать</button>
+            </div>
+        `;
+        document.body.appendChild(spellPopupEl);
+        return spellPopupEl;
+    }
+
+    // Найти ошибки в тексте
+    
+
+    // Проверить пунктуацию
+    
+
+    // Обработчик ввода с debounce
+    
+
+    // Показать подсказку над полем
+    
+
+    // Клик по тексту — показать popup с предложением
+    
+
+    // Показать popup
+    
+
+    // Применить исправление
+    // Игнорировать
+    
+
+    // Закрыть popup
+    
+
+    // Инициализация всех textarea
+    
+
+    // Показать все ошибки в поле
+    
+
+    // Исправить конкретную ошибку
+    
+
+    // Исправить все ошибки
+    
+
+    // Показать уведомление
+    function showNotification(message) {
+        var notif = document.createElement('div');
+        notif.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#48bb78;color:white;padding:12px 24px;border-radius:30px;z-index:9999;font-weight:600;box-shadow:0 5px 20px rgba(0,0,0,0.3);';
+        notif.textContent = message;
+        document.body.appendChild(notif);
+        setTimeout(function() { notif.remove(); }, 2500);
+    }
+
+    // Закрытие popup при клике вне
+    document.addEventListener('click', function(e) {
+        if (spellPopupEl && spellPopupEl.classList.contains('active')) {
+            if (!spellPopupEl.contains(e.target) && !e.target.classList.contains('field-textarea')) {
+                closeSpellPopup();
+            }
+        }
+    });
+
+    // Escape — закрыть popup
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeSpellPopup();
+    });
+
+    // Запуск при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initSpellCheck, 1000);
+    });
+
+    // Если DOM уже загружен
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(initSpellCheck, 500);
+    }
+
+    console.log('✅ Модуль ИИ-агента орфографии загружен');
+
+
+    // ============================================================
+    //  🤖 ПРОФЕССИОНАЛЬНЫЙ SPELL-CHECKER
+    //  Проверяет после каждого слова + подсветка в реальном времени
+    // ============================================================
+
+    // Расширенный словарь
+    
+
+    // Правила пунктуации
+    var PUNCT_RULES = [
+        { find: /\s+([,.:;!?])/g, repl: '$1', name: 'пробел перед знаком' },
+        { find: /([,.:;!?])([^\s\d])/g, repl: '$1 $2', name: 'нет пробела после знака' },
+        { find: /\s{2,}/g, repl: ' ', name: 'двойной пробел' },
+    ];
+
+    var activeTooltip = null;
+    var currentActiveError = null;
+    var typingTimers = new WeakMap();
+
+    // ============================================================
+    //  ГЛАВНАЯ ФУНКЦИЯ — ОБНОВИТЬ ПОДСВЕТКУ
+    // ============================================================
+    // Найти все ошибки
+    // Построить HTML с подсветкой
+    // ============================================================
+    //  ВСПЛЫВАЮЩАЯ ПОДСКАЗКА ПОД СЛОВОМ
+    // ============================================================
+    // ============================================================
+    //  ПРИМЕНИТЬ ИСПРАВЛЕНИЕ
+    // ============================================================
+    // ============================================================
+    //  ОБРАБОТЧИКИ
+    // ============================================================
+
+    // ============================================================
+    //  ИНИЦИАЛИЗАЦИЯ
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initProSpellCheck, 500);
+    });
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(initProSpellCheck, 300);
+    }
+
+    // Escape — закрыть
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') hideTooltip();
+    });
+
+    console.log('✅ Профессиональный spell-checker загружен');
+
+
+    // ============================================================
+    //  🤖 AI SPELL-CHECKER v2.0
+    //  - Расстояние Левенштейна
+    //  - Фонетические алгоритмы
+    //  - Обнаружение опечаток (пропуск, перестановка, замена)
+    //  - Дообучение
+    //  - Проверка на лету
+    // ============================================================
+
+    // ===== БАЗОВЫЙ СЛОВАРЬ =====
+    var BASE_DICTIONARY = {
+        // Медицина
+        'пациент': 1, 'врач': 1, 'диагноз': 1, 'симптом': 1, 'синдром': 1,
+        'лечение': 1, 'терапия': 1, 'рекомендация': 1, 'обследование': 1,
+        'анамнез': 1, 'аллергия': 1, 'эпиданамнез': 1, 'манипуляция': 1,
+        'антибиотик': 1, 'препарат': 1, 'дозировка': 1, 'таблетка': 1,
+        'температура': 1, 'давление': 1, 'сатурация': 1, 'пульс': 1,
+        'дыхание': 1, 'одышка': 1, 'кашель': 1, 'насморк': 1, 'чихание': 1,
+        'боль': 1, 'слабость': 1, 'усталость': 1, 'головокружение': 1,
+        'тошнота': 1, 'рвота': 1, 'аппетит': 1, 'сон': 1, 'бессонница': 1,
+        'зуд': 1, 'сыпь': 1, 'покраснение': 1, 'отек': 1, 'воспаление': 1,
+        'инфекция': 1, 'вирус': 1, 'бактерия': 1, 'грибок': 1,
+        'синусит': 1, 'гайморит': 1, 'фронтит': 1, 'тонзиллит': 1, 'ангина': 1,
+        'бронхит': 1, 'пневмония': 1, 'грипп': 1, 'орви': 1, 'орз': 1,
+        'заложенность': 1, 'выделения': 1, 'обоняние': 1, 'слух': 1, 'зрение': 1,
+        'голова': 1, 'головная': 1, 'лицо': 1, 'шея': 1, 'горло': 1,
+        'нос': 1, 'ухо': 1, 'глаз': 1, 'рука': 1, 'нога': 1, 'спина': 1,
+        'живот': 1, 'грудь': 1, 'сердце': 1, 'легкие': 1, 'печень': 1,
+        'почки': 1, 'желудок': 1, 'кишечник': 1, 'мозг': 1, 'кожа': 1,
+        'сустав': 1, 'мышца': 1, 'кость': 1, 'палец': 1, 'колено': 1,
+        'локоть': 1, 'плечо': 1, 'бедро': 1, 'стопа': 1, 'кисть': 1,
+        'в': 1, 'на': 1, 'с': 1, 'по': 1, 'за': 1, 'из': 1, 'к': 1, 'о': 1,
+        'и': 1, 'а': 1, 'но': 1, 'или': 1, 'если': 1, 'что': 1, 'как': 1,
+        'это': 1, 'не': 1, 'ни': 1, 'же': 1, 'бы': 1, 'ли': 1,
+        'при': 1, 'для': 1, 'без': 1, 'под': 1, 'над': 1, 'около': 1,
+        'после': 1, 'перед': 1, 'между': 1, 'через': 1,
+        'очень': 1, 'немного': 1, 'сильно': 1, 'слабо': 1, 'умеренно': 1,
+        'часто': 1, 'редко': 1, 'всегда': 1, 'никогда': 1, 'иногда': 1,
+        'есть': 1, 'быть': 1, 'стал': 1, 'может': 1, 'нужно': 1, 'надо': 1,
+        'день': 1, 'ночь': 1, 'утро': 1, 'вечер': 1, 'неделя': 1,
+        'месяц': 1, 'год': 1, 'час': 1, 'минута': 1, 'секунда': 1,
+        'вчера': 1, 'сегодня': 1, 'завтра': 1, 'сейчас': 1, 'потом': 1,
+        'хорошо': 1, 'плохо': 1, 'нормально': 1, 'отлично': 1,
+        'да': 1, 'нет': 1, 'возможно': 1, 'вероятно': 1, 'точно': 1,
+        'жалоба': 1, 'жалобы': 1, 'больной': 1, 'здоровый': 1,
+        'правый': 1, 'левый': 1, 'верхний': 1, 'нижний': 1, 'передний': 1,
+        'задний': 1, 'боковой': 1, 'центральный': 1, 'общий': 1,
+        'острый': 1, 'хронический': 1, 'легкий': 1, 'средний': 1, 'тяжелый': 1,
+        'первый': 1, 'второй': 1, 'третий': 1, 'последний': 1,
+        'один': 1, 'два': 1, 'три': 1, 'четыре': 1, 'пять': 1,
+        'много': 1, 'мало': 1, 'несколько': 1, 'все': 1, 'каждый': 1,
+        'здравствуйте': 1, 'пожалуйста': 1, 'спасибо': 1, 'извините': 1,
+    };
+
+    // ===== ДИНАМИЧЕСКИЙ СЛОВАРЬ (дообучение) =====
+    var LEARNED_WORDS = {};
+    var USER_FIXES = {}; // Автоматически запоминаемые исправления
+
+    // Загрузить из localStorage
+    try {
+        var saved = localStorage.getItem('spellLearned');
+        if (saved) LEARNED_WORDS = JSON.parse(saved);
+        var savedFixes = localStorage.getItem('spellUserFixes');
+        if (savedFixes) USER_FIXES = JSON.parse(savedFixes);
+    } catch(e) {}
+
+    // Сохранить
+    function saveLearned() {
+        try {
+            localStorage.setItem('spellLearned', JSON.stringify(LEARNED_WORDS));
+            localStorage.setItem('spellUserFixes', JSON.stringify(USER_FIXES));
+        } catch(e) {}
+    }
+
+    // ===== РАССТОЯНИЕ ЛЕВЕНШТЕЙНА =====
+    // С учётом транспозиций (расстояние Дамерау-Левенштейна)
+    function levenshtein(a, b) {
+        if (a === b) return 0;
+        if (a.length === 0) return b.length;
+        if (b.length === 0) return a.length;
+
+        var matrix = [];
+        for (var i = 0; i <= b.length; i++) {
+            matrix[i] = [i];
+        }
+        for (var j = 0; j <= a.length; j++) {
+            matrix[0][j] = j;
+        }
+
+        for (var i = 1; i <= b.length; i++) {
+            for (var j = 1; j <= a.length; j++) {
+                var cost = a[j - 1] === b[i - 1] ? 0 : 1;
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,      // удаление
+                    matrix[i][j - 1] + 1,      // вставка
+                    matrix[i - 1][j - 1] + cost // замена
+                );
+                // Транспозиция (перестановка)
+                if (i > 1 && j > 1 && a[j - 1] === b[i - 2] && a[j - 2] === b[i - 1]) {
+                    matrix[i][j] = Math.min(matrix[i][j], matrix[i - 2][j - 2] + cost);
+                }
+            }
+        }
+
+        return matrix[b.length][a.length];
+    }
+
+    // ===== ФОНЕТИЧЕСКИЙ АЛГОРИТМ (упрощённый русский Soundex) =====
+    function phoneticCode(word) {
+        var w = word.toLowerCase();
+        
+        // Замены похожих по звучанию
+        var replacements = [
+            [/[бп]/g, 'B'],
+            [/[вф]/g, 'F'],
+            [/[гкх]/g, 'G'],
+            [/[дт]/g, 'D'],
+            [/[жшщч]/g, 'S'],
+            [/[зсц]/g, 'Z'],
+            [/[йий]/g, 'Y'],
+            [/[л]/g, 'L'],
+            [/[м]/g, 'M'],
+            [/[н]/g, 'N'],
+            [/[р]/g, 'R'],
+            [/[аоуыэеёюяи]/g, 'A'],
+        ];
+
+        var code = w;
+        replacements.forEach(function(r) {
+            code = code.replace(r[0], r[1]);
+        });
+
+        // Убрать повторяющиеся символы
+        code = code.replace(/(.)\1+/g, '$1');
+
+        return code;
+    }
+
+    // ===== НАЙТИ КАНДИДАТОВ ДЛЯ ИСПРАВЛЕНИЯ =====
+    function findCandidates(word, maxResults) {
+        maxResults = maxResults || 5;
+        var lower = word.toLowerCase();
+        var candidates = [];
+
+        // Объединить все словари
+        var allWords = {};
+        for (var w in BASE_DICTIONARY) allWords[w] = 'base';
+        for (var w2 in LEARNED_WORDS) allWords[w2] = 'learned';
+        for (var w3 in USER_FIXES) allWords[w3] = 'fix';
+
+        var wordPhonetic = phoneticCode(lower);
+
+        for (var dictWord in allWords) {
+            if (dictWord === lower) continue;
+
+            // 1. Расстояние Левенштейна
+            var dist = levenshtein(lower, dictWord);
+
+            // 2. Фонетическое совпадение
+            var phoneticMatch = phoneticCode(dictWord) === wordPhonetic;
+
+            // 3. Длина
+            var lengthDiff = Math.abs(lower.length - dictWord.length);
+
+            // Порог: расстояние <= 2 или фонетическое совпадение
+            if (dist <= 2 || (phoneticMatch && lengthDiff <= 3)) {
+                var confidence = 100 - dist * 15;
+                if (phoneticMatch) confidence += 15;
+                if (allWords[dictWord] === 'learned') confidence += 10;
+                if (allWords[dictWord] === 'fix') confidence += 20;
+
+                candidates.push({
+                    word: dictWord,
+                    distance: dist,
+                    phonetic: phoneticMatch,
+                    confidence: Math.min(99, Math.round(confidence)),
+                    source: allWords[dictWord]
+                });
+            }
+        }
+
+        // Сортировать по уверенности
+        candidates.sort(function(a, b) {
+            return b.confidence - a.confidence;
+        });
+
+        return candidates.slice(0, maxResults);
+    }
+
+    // ===== ПРОВЕРКА СЛОВА =====
+    function checkWord(word) {
+        var lower = word.toLowerCase();
+
+        // Игнорировать короткие слова
+        if (lower.length < 2) return { ok: true };
+
+        // Проверить в базовом словаре
+        if (BASE_DICTIONARY[lower]) return { ok: true };
+
+        // Проверить в выученных
+        if (LEARNED_WORDS[lower]) return { ok: true };
+
+        // Проверить в пользовательских исправлениях
+        if (USER_FIXES[lower]) {
+            return {
+                ok: false,
+                suggestions: [{ word: USER_FIXES[lower], confidence: 95, source: 'fix' }]
+            };
+        }
+
+        // Найти кандидатов
+        var candidates = findCandidates(lower);
+        if (candidates.length > 0) {
+            return {
+                ok: false,
+                suggestions: candidates
+            };
+        }
+
+        return { ok: false, suggestions: [] };
+    }
+
+    // ===== НАЙТИ ВСЕ ОШИБКИ В ТЕКСТЕ =====
+    function findAllErrors(text) {
+        var errors = [];
+        var regex = /[а-яёa-z]+/gi;
+        var match;
+
+        while ((match = regex.exec(text)) !== null) {
+            var word = match[0];
+            var result = checkWord(word);
+
+            if (!result.ok && result.suggestions.length > 0) {
+                errors.push({
+                    start: match.index,
+                    end: match.index + word.length,
+                    word: word,
+                    suggestions: result.suggestions,
+                    best: result.suggestions[0]
+                });
+            }
+        }
+
+        return errors;
+    }
+
+    // ===== ОБНОВИТЬ ПОДСВЕТКУ =====
+    function updateHighlight(textarea, wrapper) {
+        var text = textarea.value;
+        var highlightLayer = wrapper.querySelector('.spell-highlight-layer');
+        var counter = wrapper.querySelector('.spell-counter');
+
+        if (!highlightLayer) return;
+
+        var errors = findAllErrors(text);
+
+        // Построить HTML
+        var html = buildHighlightedHTML(text, errors);
+        highlightLayer.innerHTML = html;
+
+        // Счётчик
+        if (counter) {
+            if (errors.length > 0) {
+                counter.textContent = '🤖 ' + errors.length;
+                counter.className = 'spell-counter active errors';
+            } else if (text.trim().length > 0) {
+                counter.textContent = '✓';
+                counter.className = 'spell-counter active ok';
+            } else {
+                counter.className = 'spell-counter';
+            }
+        }
+
+        textarea._spellErrors = errors;
+    }
+
+    function buildHighlightedHTML(text, errors) {
+        if (errors.length === 0) {
+            return escapeHtml(text) + '<br>';
+        }
+
+        errors.sort(function(a, b) { return a.start - b.start; });
+
+        var html = '';
+        var lastEnd = 0;
+
+        errors.forEach(function(err) {
+            html += escapeHtml(text.substring(lastEnd, err.start));
+            
+            var cls = 'spell-error';
+            if (err.best.source === 'learned') cls += ' learned';
+            else if (err.best.confidence >= 85) cls += ' suggestion-1';
+            
+            html += '<span class="' + cls + '" data-start="' + err.start + '" data-end="' + err.end + '">';
+            html += escapeHtml(err.word);
+            html += '</span>';
+            lastEnd = err.end;
+        });
+
+        html += escapeHtml(text.substring(lastEnd));
+        html += '<br>';
+        return html;
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ===== ПОКАЗАТЬ TOOLTIP =====
+    function showTooltip(errorEl, textarea, wrapper) {
+        hideTooltip();
+
+        var start = parseInt(errorEl.dataset.start);
+        var end = parseInt(errorEl.dataset.end);
+        var errors = textarea._spellErrors || [];
+
+        var error = null;
+        for (var i = 0; i < errors.length; i++) {
+            if (errors[i].start === start && errors[i].end === end) {
+                error = errors[i];
+                break;
+            }
+        }
+        if (!error) return;
+
+        var rect = errorEl.getBoundingClientRect();
+        var tooltip = document.getElementById('spellTooltip');
+
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'spellTooltip';
+            tooltip.className = 'spell-tooltip';
+            document.body.appendChild(tooltip);
+        }
+
+        // Построить содержимое
+        var html = '<div class="spell-tooltip-header">🤖 ИИ предлагает <span class="badge">' + error.suggestions.length + '</span></div>';
+
+        error.suggestions.forEach(function(s, i) {
+            html += '<div class="spell-tooltip-item" data-idx="' + i + '">';
+            html += '<span style="color:#48bb78;">' + (i === 0 ? '✅' : '•') + '</span>';
+            html += '<span class="spell-tooltip-wrong">' + error.word + '</span>';
+            html += '<span class="spell-tooltip-arrow">→</span>';
+            html += '<span class="spell-tooltip-right">' + s.word + '</span>';
+            html += '<span class="spell-tooltip-confidence">' + s.confidence + '%</span>';
+            html += '</div>';
+        });
+
+        html += '<div class="spell-tooltip-actions">';
+        html += '<button class="btn-learn" onclick="learnWord(\'' + error.word + '\')">📚 Запомнить</button>';
+        html += '<button class="btn-ignore" onclick="ignoreWord(\'' + error.word + '\')">🚫 Игнорировать</button>';
+        html += '</div>';
+
+        tooltip.innerHTML = html;
+
+        // Обработчики на варианты
+        tooltip.querySelectorAll('.spell-tooltip-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+                var idx = parseInt(this.dataset.idx);
+                applyFix(textarea, wrapper, error, error.suggestions[idx].word);
+            });
+        });
+
+        // Позиция
+        tooltip.style.left = Math.max(10, rect.left) + 'px';
+        tooltip.style.top = (rect.bottom + 8) + 'px';
+
+        // Если не влезает вниз — показать сверху
+        setTimeout(function() {
+            var tr = tooltip.getBoundingClientRect();
+            if (tr.bottom > window.innerHeight - 10) {
+                tooltip.style.top = (rect.top - tr.height - 12) + 'px';
+            }
+        }, 0);
+
+        tooltip.classList.add('active');
+        window._currentError = error;
+        window._currentTextarea = textarea;
+        window._currentWrapper = wrapper;
+    }
+
+    function hideTooltip() {
+        var t = document.getElementById('spellTooltip');
+        if (t) t.classList.remove('active');
+    }
+
+    // ===== ПРИМЕНИТЬ ИСПРАВЛЕНИЕ =====
+    function applyFix(textarea, wrapper, error, correctWord) {
+        var text = textarea.value;
+        var wrongWord = error.word;
+
+        // Сохранить регистр
+        var finalWord = correctWord;
+        if (wrongWord[0] === wrongWord[0].toUpperCase()) {
+            finalWord = correctWord.charAt(0).toUpperCase() + correctWord.slice(1);
+        }
+
+        var newText = text.substring(0, error.start) + finalWord + text.substring(error.end);
+        textarea.value = newText;
+
+        // ⚡ ЗАПОМНИТЬ ИСПРАВЛЕНИЕ (дообучение)
+        USER_FIXES[wrongWord.toLowerCase()] = correctWord.toLowerCase();
+        saveLearned();
+
+        // Обновить подсветку
+        updateHighlight(textarea, wrapper);
+        hideTooltip();
+
+        // Автосохранение
+        if (typeof autoSaveWithSync === 'function') autoSaveWithSync();
+
+        textarea.focus();
+
+        // Уведомление
+        showNotification('✅ ' + wrongWord + ' → ' + correctWord + ' (запомнено)');
+    }
+
+    // ===== ДООБУЧЕНИЕ =====
+    function learnWord(word) {
+        var lower = word.toLowerCase();
+        LEARNED_WORDS[lower] = 1;
+        delete USER_FIXES[lower];
+        saveLearned();
+        
+        // Обновить все поля
+        document.querySelectorAll('.field-textarea').forEach(function(ta) {
+            var wrapper = ta.closest('.field-wrapper');
+            if (wrapper) updateHighlight(ta, wrapper);
+        });
+        
+        hideTooltip();
+        showNotification('📚 Слово "' + word + '" запомнено');
+    }
+
+    function ignoreWord(word) {
+        hideTooltip();
+        // Можно добавить в игнор-лист
+        showNotification('🚫 Слово "' + word + '" пропущено');
+    }
+
+    // ===== ПОДКЛЮЧЕНИЕ К ПОЛЮ =====
+    function attachSpellCheck(textarea) {
+        var wrapper = textarea.closest('.field-wrapper');
+        if (!wrapper) return;
+
+        var highlightLayer = wrapper.querySelector('.spell-highlight-layer');
+
+        if (!highlightLayer) return;
+
+        // Синхронизация скролла
+        textarea.addEventListener('scroll', function() {
+            highlightLayer.scrollTop = textarea.scrollTop;
+            highlightLayer.scrollLeft = textarea.scrollLeft;
+            hideTooltip();
+        });
+
+        // Клик по ошибке
+        highlightLayer.addEventListener('click', function(e) {
+            if (e.target.classList.contains('spell-error')) {
+                e.preventDefault();
+                e.stopPropagation();
+                showTooltip(e.target, textarea, wrapper);
+            }
+        });
+
+        // Наведение — показать через 300мс
+        var hoverTimer;
+        highlightLayer.addEventListener('mouseover', function(e) {
+            if (e.target.classList.contains('spell-error')) {
+                clearTimeout(hoverTimer);
+                hoverTimer = setTimeout(function() {
+                    showTooltip(e.target, textarea, wrapper);
+                }, 300);
+            }
+        });
+
+        highlightLayer.addEventListener('mouseout', function() {
+            clearTimeout(hoverTimer);
+        });
+
+        // ⚡ ПРОВЕРКА НА ЛЕТУ (при каждом вводе)
+        var typingTimer;
+        textarea.addEventListener('input', function() {
+            highlightLayer.scrollTop = textarea.scrollTop;
+            highlightLayer.scrollLeft = textarea.scrollLeft;
+
+            // Мгновенная подсветка (без задержки для скорости)
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(function() {
+                updateHighlight(textarea, wrapper);
+            }, 50); // 50ms — очень быстро
+        });
+
+        // Первичная проверка
+        updateHighlight(textarea, wrapper);
+
+        // Синхронизация при загрузке данных
+        var observer = setInterval(function() {
+            if (textarea.value !== textarea._lastCheckedValue) {
+                textarea._lastCheckedValue = textarea.value;
+                updateHighlight(textarea, wrapper);
+            }
+        }, 500);
+    }
+
+    // ===== ИНИЦИАЛИЗАЦИЯ =====
+    function initAISpellCheck() {
+        var textareas = document.querySelectorAll('.field-textarea');
+        console.log('🤖 AI Spell-Checker v2.0: полей —', textareas.length);
+        console.log('📚 Базовый словарь:', Object.keys(BASE_DICTIONARY).length, 'слов');
+        console.log('🧠 Выучено:', Object.keys(LEARNED_WORDS).length, 'слов');
+        console.log('🔧 Исправлений:', Object.keys(USER_FIXES).length);
+
+        textareas.forEach(function(textarea) {
+            attachSpellCheck(textarea);
+        });
+
+        console.log('✅ AI Spell-Checker запущен');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initAISpellCheck, 500);
+    });
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(initAISpellCheck, 300);
+    }
+
+    // Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') hideTooltip();
+    });
+
+    // Клик вне tooltip
+    document.addEventListener('click', function(e) {
+        var t = document.getElementById('spellTooltip');
+        if (t && t.classList.contains('active')) {
+            if (!t.contains(e.target) && !e.target.classList.contains('spell-error')) {
+                hideTooltip();
+            }
+        }
+    });
+
+    // Глобальные функции
+    window.learnWord = learnWord;
+    window.ignoreWord = ignoreWord;
+    window.applyFix = applyFix;
+
+    // Экспорт для отладки
+    window.AISpellCheck = {
+        dictionary: BASE_DICTIONARY,
+        learned: LEARNED_WORDS,
+        fixes: USER_FIXES,
+        levenshtein: levenshtein,
+        phonetic: phoneticCode,
+        findCandidates: findCandidates,
+        checkWord: checkWord,
+        reset: function() {
+            LEARNED_WORDS = {};
+            USER_FIXES = {};
+            saveLearned();
+            console.log('🔄 Словарь сброшен');
+        },
+        stats: function() {
+            return {
+                base: Object.keys(BASE_DICTIONARY).length,
+                learned: Object.keys(LEARNED_WORDS).length,
+                fixes: Object.keys(USER_FIXES).length
+            };
+        }
+    };
+
+    console.log('✅ AI Spell-Checker v2.0 загружен');
+    console.log('💡 Команды: AISpellCheck.stats(), AISpellCheck.reset()');
+
 </script>
+
+<!-- Меню выбора статистики -->
+<div class="chart-menu" id="chartMenu">
+    <div class="chart-menu-content">
+        <h3>📊 Выберите показатель</h3>
+        <div class="chart-options">
+            <button class="chart-option-btn" data-metric="height" onclick="showChart('height')">📏 Рост (см)</button>
+            <button class="chart-option-btn" data-metric="weight" onclick="showChart('weight')">⚖️ Вес (кг)</button>
+            <button class="chart-option-btn" data-metric="bmi" onclick="showChart('bmi')">📊 ИМТ</button>
+            <button class="chart-option-btn" data-metric="bp" onclick="showChart('bp')">🩸 АД</button>
+            <button class="chart-option-btn" data-metric="temp" onclick="showChart('temp')">🌡️ Температура</button>
+            <button class="chart-option-btn" data-metric="spo2" onclick="showChart('spo2')">💨 SpO2 (%)</button>
+        </div>
+        <div class="chart-menu-buttons">
+            <button class="btn btn-danger" onclick="closeChartMenu()">❌ Отмена</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно диаграммы -->
+<div class="chart-modal" id="chartModal">
+    <div class="chart-modal-content">
+        <h3 id="chartTitle">📊 Диаграмма показателей</h3>
+        <canvas id="vitalsChart" width="800" height="400"></canvas>
+        <div class="chart-modal-buttons">
+            <button class="btn btn-info" onclick="backToChartMenu()">← Назад</button>
+            <button class="btn btn-danger" onclick="closeChart()">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </body>
 </html>

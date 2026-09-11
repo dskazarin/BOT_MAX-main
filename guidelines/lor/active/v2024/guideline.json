@@ -1,0 +1,139 @@
+{
+  "id": "acute_sinusitis_2024",
+  "version": "2024",
+  "specialty": "lor",
+  "title": "Острый синусит",
+  "mkh10_codes": ["J01.0", "J01.1", "J01.2", "J01.3", "J01.4", "J01.8", "J01.9"],
+  "age_groups": ["adult", "child"],
+  "severity_levels": ["легкая", "средняя", "тяжелая"],
+  "diagnostic_criteria": {
+    "adult": {
+      "required_symptoms": ["zalozhennost"],
+      "optional_symptoms": ["vydeleniya", "bol_v_litse", "obonyanie", "kashel", "golovnaya_bol"],
+      "min_symptoms_count": 2,
+      "max_duration_days": 84
+    },
+    "child": {
+      "required_symptoms": [],
+      "optional_symptoms": ["zalozhennost", "vydeleniya", "kashel"],
+      "min_symptoms_count": 2,
+      "max_duration_days": 84
+    }
+  },
+  "bacterial_criteria": {
+    "min_signs": 3,
+    "signs": ["gnoinye_vydeleniya", "odnostoronnie_vydeleniya_3_days", "golovnaya_bol", "temp_38_and_above", "vtoraya_volna", "leikocytoz_15_and_above"]
+  },
+  "antibiotic_indications": {
+    "adult": {
+      "always": ["tyazhest == 'тяжелая'", "oslozhneniya"],
+      "when": [
+        {"condition": "epizodov_v_god >= 4", "reason": "рецидивирующий ОС"},
+        {"condition": "days >= 5", "reason": "симптомы >= 5-7 дней"},
+        {"condition": "immunodeficit || comorbida", "reason": "иммунодефицит/коморбидность"},
+        {"condition": "vozrast_65", "reason": "возраст > 65 лет"}
+      ],
+      "exclude": [
+        {"condition": "days > 10 && !bacterial_signs", "reason": "поствирусный синусит"}
+      ]
+    },
+    "child": {
+      "always": ["oslozhneniya"],
+      "when": [
+        {"condition": "bacterial_signs >= 3", "reason": "3+ признаков бактериального синусита"},
+        {"condition": "immunodeficit", "reason": "иммунодефицит"},
+        {"condition": "comorbida", "reason": "отягощающая патология"},
+        {"condition": "epizodov_v_god >= 4", "reason": "рецидивирующее течение"}
+      ]
+    }
+  },
+  "antibiotics": {
+    "adult": {
+      "first_line": [
+        {
+          "name": "Амоксициллин",
+          "dosage": "500 мг 3 раза в сутки",
+          "conditions": {
+            "resistance_risk": "1000 мг 3 раза в сутки",
+            "default": "500 мг 3 раза в сутки"
+          }
+        }
+      ],
+      "alternatives": [
+        {"name": "Амоксициллин+клавуланат", "dosage": "875/125 мг 2 раза в сутки", "when": ["comorbida", "predugody", "vozrast_65"]},
+        {"name": "Кларитромицин", "dosage": "250-500 мг 2 раза в сутки", "when": ["allergiya"]},
+        {"name": "Левофлоксацин", "dosage": "500 мг 1 раз в сутки", "when": ["allergiya"]}
+      ]
+    },
+    "child": {
+      "first_line": [
+        {
+          "name": "Амоксициллин",
+          "dosage": "40-60 мг/кг/сут",
+          "conditions": {
+            "resistance_risk": "80-90 мг/кг/сут",
+            "default": "40-60 мг/кг/сут"
+          }
+        }
+      ],
+      "alternatives": [
+        {"name": "Амоксициллин+клавуланат", "dosage": "45-60 мг/кг/сут", "when": ["comorbida", "predugody"]},
+        {"name": "Кларитромицин", "dosage": "15 мг/кг/сут", "when": ["allergiya"]}
+      ]
+    }
+  },
+  "duration": {"default": 7, "complicated": 14},
+  "local_therapy": {
+    "decongestants": {
+      "adult": "Ксилометазолин/оксиметазолин 5-7 дней",
+      "child": {
+        "0-6": "Фенилэфрин 0.125% 5-7 дней",
+        "6-12": "Ксилометазолин 0.05% 5-7 дней",
+        "12+": "Ксилометазолин 5-7 дней"
+      }
+    },
+    "irrigation": "Изотоническая морская вода 5-7 дней",
+    "topical_gcs": {
+      "age": 12,
+      "drug": "Мометазон",
+      "note": "только при аллергическом рините до 12 лет"
+    }
+  },
+  "symptomatic": {
+    "nsaids": {
+      "adult": "Кетопрофен/ибупрофен при боли",
+      "child": {
+        "0-6": "Парацетамол до 60 мг/кг/сут или ибупрофен до 30 мг/кг/сут",
+        "6-12": "Парацетамол/ибупрофен по возрасту"
+      }
+    },
+    "mucoactive": "Ацетилцистеин/карбоцистеин",
+    "herbal": "Миртол/пеларгония/фитопрепараты"
+  },
+  "surgery_indications": [
+    {"condition": "oslozhneniya", "action": "вскрытие пазухи, дренирование"},
+    {"condition": "tyazhest == 'средняя' && days > 7 && antibiotiki_3_mes", "action": "пункция"}
+  ],
+  "hospitalization_indications": [
+    "tyazhest == 'тяжелая'",
+    "oslozhneniya",
+    "no_effect_3_5_days"
+  ],
+  "differential_diagnosis": {
+    "adult": ["обострение хронического риносинусита", "аллергический ринит", "хронические риниты"],
+    "child": ["обострение хронического риносинусита", "аллергический ринит", "аденоидит", "инородное тело"]
+  },
+  "diagnostics": {
+    "stage1": "Осмотр врача-оториноларинголога",
+    "stage2": {
+      "lab": {
+        "when": ["tyazhest == 'средняя' || tyazhest == 'тяжелая'"],
+        "tests": ["ОАК развернутый"]
+      }
+    },
+    "stage3": {
+      "ct": {"when": ["oslozhneniya", "tyazhest == 'тяжелая'"]},
+      "xray": {"when": ["tyazhest == 'средняя'"]}
+    }
+  }
+}

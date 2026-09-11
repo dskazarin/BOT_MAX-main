@@ -210,6 +210,295 @@
             .symptom-grid { grid-template-columns: 1fr 1fr; }
         }
     </style>
+
+<script>
+// ============================================================
+//  ГЛОБАЛЬНЫЕ ФУНКЦИИ (попадают в window)
+// ============================================================
+
+window.openAddPatientModal = function() {
+    console.log('🟢 openAddPatientModal вызван');
+    var modal = document.getElementById('addPatientModal');
+    if (!modal) {
+        console.error('❌ modal не найден!');
+        alert('Ошибка: модальное окно не найдено!');
+        return;
+    }
+    console.log('✅ modal найден:', modal);
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+    console.log('✅ modal.style.display =', modal.style.display);
+    
+    try {
+        document.getElementById('newPatientName').value = '';
+        document.getElementById('newPatientBirthDate').value = '';
+        document.getElementById('newPatientGender').value = 'male';
+        document.getElementById('newPatientHeight').value = '';
+        document.getElementById('newPatientWeight').value = '';
+        document.getElementById('newPatientBMI').textContent = '—';
+        console.log('✅ поля сброшены');
+    } catch(e) {
+        console.warn('⚠️ поле не найдено:', e.message);
+    }
+};
+
+window.closeAddPatientModal = function() {
+    console.log('🔴 closeAddPatientModal вызван');
+    var modal = document.getElementById('addPatientModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+    }
+};
+
+
+</script>
+
+
+<script>
+// ============================================================
+//  ГЛОБАЛЬНЫЕ ФУНКЦИИ СОХРАНЕНИЯ (AUTO-FIX)
+// ============================================================
+
+// Гарантировать массив patients
+if (typeof window.patients === 'undefined') {
+    window.patients = [];
+}
+
+// Загрузка из localStorage
+window.loadPatientsFromStorage = function() {
+    var saved = localStorage.getItem('doctorPatients');
+    if (saved) {
+        try {
+            window.patients = JSON.parse(saved);
+            console.log('📂 Загружено пациентов:', window.patients.length);
+        } catch(e) {
+            console.error('❌ Ошибка парсинга:', e);
+            window.patients = [];
+        }
+    } else {
+        window.patients = [];
+    }
+    return window.patients;
+};
+
+// Сохранение в localStorage
+window.savePatientsToStorage = function() {
+    try {
+        localStorage.setItem('doctorPatients', JSON.stringify(window.patients));
+        console.log('💾 Сохранено пациентов:', window.patients.length);
+        localStorage.setItem('syncSignal', Date.now().toString());
+    } catch(e) {
+        console.error('❌ Ошибка сохранения:', e);
+    }
+};
+
+// Отрисовка списка пациентов
+window.renderPatientList = function() {
+    var container = document.getElementById('patientList');
+    if (!container) {
+        console.error('❌ #patientList не найден');
+        return;
+    }
+    
+    console.log('🎨 renderPatientList, пациентов:', window.patients.length);
+    
+    if (window.patients.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0;">Нет пациентов. Нажмите "Демо" или "Добавить".</div>';
+        return;
+    }
+    
+    var statusMap = {
+        'new': '<span class="patient-status status-new" style="background:#4299e1;color:white;padding:4px 10px;border-radius:20px;font-size:0.7em;">🆕 Новый</span>',
+        'checked': '<span class="patient-status status-checked" style="background:#48bb78;color:white;padding:4px 10px;border-radius:20px;font-size:0.7em;">✅ Проверен</span>',
+        'critical': '<span class="patient-status status-critical" style="background:#f56565;color:white;padding:4px 10px;border-radius:20px;font-size:0.7em;">🚨 Критический</span>'
+    };
+    
+    var html = '';
+    for (var i = 0; i < window.patients.length; i++) {
+        var p = window.patients[i];
+        var activeClass = (p.id === window.selectedPatientId) ? 'active' : '';
+        var statusHtml = statusMap[p.status] || statusMap['new'];
+        
+        html += '<div class="patient-item ' + activeClass + '" onclick="selectPatient(\'' + p.id + '\')">';
+        html += '<div><div class="patient-name">' + p.name + '</div>';
+        html += '<div class="patient-id">' + p.id + ' • ' + p.age + ' лет</div></div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;">';
+        html += statusHtml;
+        html += '<button class="btn btn-sm btn-info" onclick="event.stopPropagation();openPatientCard(\'' + p.id + '\')" title="Карта">📋</button>';
+        html += '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
+        html += '</div></div>';
+    }
+    container.innerHTML = html;
+    console.log('✅ Список пациентов отрисован');
+};
+
+// Отрисовка таблицы
+window.renderPatientsTable = function() {
+    var tbody = document.getElementById('patientsTableBody');
+    if (!tbody) return;
+    
+    if (window.patients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#a0aec0;">Нет пациентов</td></tr>';
+        var label = document.getElementById('totalPatientsLabel');
+        if (label) label.textContent = '0 записей';
+        return;
+    }
+    
+    var html = '';
+    for (var i = 0; i < window.patients.length; i++) {
+        var p = window.patients[i];
+        var statusText = p.status === 'new' ? '🆕 Новый' : (p.status === 'critical' ? '🚨 Критический' : '✅ Проверен');
+        html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+        html += '<td style="padding:10px;">' + p.id + '</td>';
+        html += '<td style="padding:10px;">' + p.name + '</td>';
+        html += '<td style="padding:10px;">' + p.age + ' лет</td>';
+        html += '<td style="padding:10px;">' + statusText + '</td>';
+        html += '<td style="padding:10px;">' + (p.diagnosis || 'Не установлен') + '</td>';
+        html += '<td style="padding:10px;">' + (p.aiChecked ? '✅ Да' : '⏳ Нет') + '</td>';
+        html += '<td style="padding:10px;">';
+        html += '<button class="btn btn-sm btn-info" onclick="selectPatient(\'' + p.id + '\')">👁️</button> ';
+        html += '<button class="btn btn-sm btn-success" onclick="openPatientCard(\'' + p.id + '\')">📋</button> ';
+        html += '<button class="btn btn-sm btn-danger" onclick="deletePatient(\'' + p.id + '\')">🗑️</button>';
+        html += '</td></tr>';
+    }
+    tbody.innerHTML = html;
+    var label = document.getElementById('totalPatientsLabel');
+    if (label) label.textContent = window.patients.length + ' записей';
+};
+
+// Статистика
+window.updateStats = function() {
+    var totalEl = document.getElementById('totalPatients');
+    var pendingEl = document.getElementById('pendingPatients');
+    var criticalEl = document.getElementById('criticalPatients');
+    var checkedEl = document.getElementById('checkedPatients');
+    
+    if (totalEl) totalEl.textContent = window.patients.length;
+    if (pendingEl) pendingEl.textContent = window.patients.filter(function(p) { return p.status === 'new'; }).length;
+    if (criticalEl) criticalEl.textContent = window.patients.filter(function(p) { return p.status === 'critical'; }).length;
+    if (checkedEl) checkedEl.textContent = window.patients.filter(function(p) { return p.status === 'checked'; }).length;
+};
+
+// ГЛАВНАЯ ФУНКЦИЯ СОХРАНЕНИЯ
+window.saveNewPatient = function() {
+    console.log('💾 saveNewPatient вызван');
+    
+    var nameEl = document.getElementById('newPatientName');
+    var birthDateEl = document.getElementById('newPatientBirthDate');
+    var genderEl = document.getElementById('newPatientGender');
+    var heightEl = document.getElementById('newPatientHeight');
+    var weightEl = document.getElementById('newPatientWeight');
+    
+    var name = nameEl ? nameEl.value.trim() : '';
+    var birthDate = birthDateEl ? birthDateEl.value : '';
+    var gender = genderEl ? genderEl.value : 'male';
+    var height = heightEl ? parseInt(heightEl.value) || 0 : 0;
+    var weightRaw = weightEl ? parseInt(weightEl.value) || 0 : 0;
+    
+    console.log('📋 Данные:', {name: name, birthDate: birthDate, gender: gender, height: height, weight: weightRaw});
+    
+    if (!name) { alert('Введите ФИО'); return; }
+    if (!birthDate) { alert('Укажите дату рождения'); return; }
+    
+    // Возраст
+    var birth = new Date(birthDate);
+    var today = new Date();
+    var age = today.getFullYear() - birth.getFullYear();
+    var m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    age = Math.max(0, age);
+    
+    // Загрузить текущих
+    window.loadPatientsFromStorage();
+    
+    // Создать нового пациента
+    var newPatient = {
+        id: 'PAT-' + String(window.patients.length + 1).padStart(3, '0'),
+        name: name,
+        age: age,
+        birthDate: birthDate,
+        gender: gender,
+        height: height,
+        weight: weightRaw * 1000,
+        status: 'new',
+        diagnosis: 'Не установлен',
+        symptoms: {},
+        aiChecked: false,
+        aiResult: null,
+        bp: '120/80',
+        temp: 36.6,
+        spo2: 98,
+        created: new Date().toISOString()
+    };
+    
+    // Симптомы по умолчанию
+    if (typeof LOR_SYMPTOMS !== 'undefined' && LOR_SYMPTOMS) {
+        LOR_SYMPTOMS.forEach(function(s) { newPatient.symptoms[s.id] = false; });
+    }
+    
+    // Добавить в массив
+    window.patients.push(newPatient);
+    console.log('✅ Пациент добавлен в массив, всего:', window.patients.length);
+    
+    // СОХРАНИТЬ В LOCALSTORAGE
+    window.savePatientsToStorage();
+    
+    // ОТРИСОВАТЬ
+    window.renderPatientList();
+    window.renderPatientsTable();
+    window.updateStats();
+    
+    console.log('✅ renderPatientList вызван');
+    
+    // Закрыть модальное окно
+    window.closeAddPatientModal();
+    
+    // Уведомление
+    var notif = document.createElement('div');
+    notif.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#48bb78;color:white;padding:12px 24px;border-radius:30px;z-index:3000;font-weight:600;';
+    notif.textContent = '✅ Пациент "' + name + '" добавлен';
+    document.body.appendChild(notif);
+    setTimeout(function() { notif.remove(); }, 2500);
+};
+
+// Удалить пациента
+window.deletePatient = function(id) {
+    if (!confirm('Удалить пациента?')) return;
+    window.loadPatientsFromStorage();
+    window.patients = window.patients.filter(function(p) { return p.id !== id; });
+    window.savePatientsToStorage();
+    window.renderPatientList();
+    window.renderPatientsTable();
+    window.updateStats();
+};
+
+// Выбрать пациента
+window.selectPatient = function(id) {
+    window.selectedPatientId = id;
+    window.renderPatientList();
+};
+
+// Открыть карту пациента
+window.openPatientCard = function(id) {
+    window.open('patient_card.html?id=' + encodeURIComponent(id), '_blank');
+};
+
+// Загрузка при старте
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Автозагрузка пациентов...');
+    setTimeout(function() {
+        window.loadPatientsFromStorage();
+        window.renderPatientList();
+        window.renderPatientsTable();
+        window.updateStats();
+        console.log('✅ Пациенты загружены:', window.patients.length);
+    }, 500);
+});
+
+console.log('✅ ГЛОБАЛЬНЫЕ ФУНКЦИИ СОХРАНЕНИЯ ЗАГРУЖЕНЫ');
+</script>
+
 </head>
 <body>
 
@@ -242,7 +531,7 @@
             <div class="card-header">
                 <h2>👤 Пациенты</h2>
                 <div>
-                    <button class="btn btn-sm btn-success" onclick="openAddPatientModal()">➕ Добавить</button>
+                    <button type="button" id="addPatientBtn" class="btn btn-sm btn-success" onclick="openAddPatientModal(); return false;" style="cursor:pointer;">➕ Добавить</button>
                     <button class="btn btn-sm btn-info" onclick="loadDemoPatients()">📊 Демо</button>
                 </div>
             </div>
@@ -535,72 +824,46 @@
     // ================================================================
     //  МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ
     // ================================================================
-    function openAddPatientModal() {
-        document.getElementById('addPatientModal').classList.add('active');
-        document.getElementById('newPatientName').value = '';
-        document.getElementById('newPatientBirthDate').value = '';
-        document.getElementById('newPatientGender').value = 'male';
-        document.getElementById('newPatientHeight').value = '';
-        document.getElementById('newPatientWeight').value = '';
-        document.getElementById('newPatientBMI').textContent = '—';
-    }
+    
 
     function closeAddPatientModal() {
         document.getElementById('addPatientModal').classList.remove('active');
     }
 
     function updateNewPatientBMI() {
-        var h = parseFloat(document.getElementById('newPatientHeight').value) / 100;
-        var w = parseFloat(document.getElementById('newPatientWeight').value) / 1000;
-        var bmiEl = document.getElementById('newPatientBMI');
-        if (h > 0 && w > 0) {
-            var bmi = (w / (h * h)).toFixed(1);
-            var status = bmi < 18.5 ? 'Недостаточный' : bmi < 25 ? 'Норма' : bmi < 30 ? 'Избыточный' : 'Ожирение';
-            bmiEl.textContent = bmi + ' (' + status + ')';
+            var h = parseFloat(document.getElementById('newPatientHeight').value) / 100;
+            var weightInput = document.getElementById('newPatientWeight');
+            var weight = parseFloat(weightInput.value) || 0;
+
+            var birthDate = document.getElementById('newPatientBirthDate').value;
+            var isInfant = false;
+            if (birthDate) {
+                var ageMonths = getAgeInMonths(birthDate);
+                isInfant = ageMonths < 12;
+            }
+
+            var weightKg = isInfant ? weight / 1000 : weight;
+            var bmiEl = document.getElementById('newPatientBMI');
+
+            if (h > 0 && weightKg > 0) {
+                var bmi = (weightKg / (h * h)).toFixed(1);
+                var status = '';
+                if (bmi < 18.5) status = 'Недостаточный';
+                else if (bmi < 25) status = 'Норма';
+                else if (bmi < 30) status = 'Избыточный';
+                else status = 'Ожирение';
+                bmiEl.textContent = bmi + ' (' + status + ')';
+                bmiEl.style.color = (bmi >= 18.5 && bmi < 25) ? '#48bb78' : '#ed8936';
+            } else {
+                bmiEl.textContent = '—';
+                bmiEl.style.color = '#9f7aea';
+            }
         } else {
             bmiEl.textContent = '—';
         }
     }
 
-    function saveNewPatient() {
-        var name = document.getElementById('newPatientName').value.trim();
-        var birthDate = document.getElementById('newPatientBirthDate').value;
-        var gender = document.getElementById('newPatientGender').value;
-        var height = parseInt(document.getElementById('newPatientHeight').value) || 0;
-        var weight = parseInt(document.getElementById('newPatientWeight').value) || 0;
-
-        if (!name) { alert('Введите ФИО'); return; }
-        if (!birthDate) { alert('Укажите дату рождения'); return; }
-
-        var age = calculateAge(birthDate);
-
-        var newPatient = {
-            id: generatePatientId(),
-            name: name,
-            age: age,
-            birthDate: birthDate,
-            gender: gender,
-            height: height,
-            weight: weight,
-            status: 'new',
-            diagnosis: 'Не установлен',
-            symptoms: {},
-            aiChecked: false,
-            aiResult: null,
-            created: new Date().toISOString()
-        };
-
-        LOR_SYMPTOMS.forEach(function(s) { newPatient.symptoms[s.id] = false; });
-
-        patients.push(newPatient);
-        savePatientsToStorage();
-        renderPatientList();
-        renderPatientsTable();
-        updateStats();
-        closeAddPatientModal();
-        selectPatient(newPatient.id);
-        showNotification('✅ Пациент "' + name + '" добавлен');
-    }
+    
 
     function calculateAge(birthDate) {
         var birth = new Date(birthDate);
@@ -1004,6 +1267,160 @@
         setTimeout(listenPatientSync, 500);
     });
 
+
+    // ============================================================
+    //  МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ ПАЦИЕНТА (AUTO-FIX)
+    // ============================================================
+
+    function openAddPatientModal() {
+        var modal = document.getElementById('addPatientModal');
+        if (!modal) {
+            alert('Ошибка: модальное окно не найдено');
+            return;
+        }
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+        try {
+            document.getElementById('newPatientName').value = '';
+            document.getElementById('newPatientBirthDate').value = '';
+            document.getElementById('newPatientGender').value = 'male';
+            document.getElementById('newPatientHeight').value = '';
+            document.getElementById('newPatientWeight').value = '';
+            document.getElementById('newPatientBMI').textContent = '—';
+        } catch(e) {}
+    }
+
+    function closeAddPatientModal() {
+        var modal = document.getElementById('addPatientModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('active');
+        }
+    }
+
+    function updateNewPatientBMI() {
+        try {
+            var h = parseFloat(document.getElementById('newPatientHeight').value) / 100;
+            var weight = parseFloat(document.getElementById('newPatientWeight').value) || 0;
+            var weightKg = weight;
+            var bmiEl = document.getElementById('newPatientBMI');
+            if (h > 0 && weightKg > 0) {
+                var bmi = (weightKg / (h * h)).toFixed(1);
+                var status = bmi < 18.5 ? 'Недостаточный' : bmi < 25 ? 'Норма' : bmi < 30 ? 'Избыточный' : 'Ожирение';
+                bmiEl.textContent = bmi + ' (' + status + ')';
+                bmiEl.style.color = (bmi >= 18.5 && bmi < 25) ? '#48bb78' : '#ed8936';
+            } else {
+                bmiEl.textContent = '—';
+            }
+        } catch(e) {}
+    }
+
+    function getAgeInMonths(birthDate) {
+        var birth = new Date(birthDate);
+        var today = new Date();
+        return (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+    }
+
+    function updateWeightUnit() {}
+
+    function calculateAge(birthDate) {
+        var birth = new Date(birthDate);
+        var today = new Date();
+        var age = today.getFullYear() - birth.getFullYear();
+        var m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        return Math.max(0, age);
+    }
+
+    function saveNewPatient() {
+        var name = document.getElementById('newPatientName').value.trim();
+        var birthDate = document.getElementById('newPatientBirthDate').value;
+        var gender = document.getElementById('newPatientGender').value;
+        var height = parseInt(document.getElementById('newPatientHeight').value) || 0;
+        var weightRaw = parseInt(document.getElementById('newPatientWeight').value) || 0;
+
+        if (!name) { alert('Введите ФИО'); return; }
+        if (!birthDate) { alert('Укажите дату рождения'); return; }
+
+        var age = calculateAge(birthDate);
+        var weight = weightRaw * 1000;
+
+        var newPatient = {
+            id: 'PAT-' + String((typeof patients !== 'undefined' ? patients.length : 0) + 1).padStart(3, '0'),
+            name: name,
+            age: age,
+            birthDate: birthDate,
+            gender: gender,
+            height: height,
+            weight: weight,
+            status: 'new',
+            diagnosis: 'Не установлен',
+            symptoms: {},
+            aiChecked: false,
+            aiResult: null,
+            bp: '120/80',
+            temp: 36.6,
+            spo2: 98,
+            created: new Date().toISOString()
+        };
+
+        if (typeof LOR_SYMPTOMS !== 'undefined') {
+            LOR_SYMPTOMS.forEach(function(s) { newPatient.symptoms[s.id] = false; });
+        }
+
+        if (typeof patients !== 'undefined') {
+            patients.push(newPatient);
+            if (typeof savePatientsToStorage === 'function') savePatientsToStorage();
+            if (typeof renderPatientList === 'function') renderPatientList();
+            if (typeof renderPatientsTable === 'function') renderPatientsTable();
+            if (typeof updateStats === 'function') updateStats();
+        }
+
+        closeAddPatientModal();
+        showNotification('✅ Пациент "' + name + '" добавлен');
+    }
+
+    function showNotification(message) {
+        var notif = document.createElement('div');
+        notif.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#48bb78; color:white; padding:12px 24px; border-radius:30px; z-index:3000; font-weight:600;';
+        notif.textContent = message;
+        document.body.appendChild(notif);
+        setTimeout(function() { notif.remove(); }, 2500);
+    }
+
+</script>
+
+
+<script>
+// ============================================================
+//  ДУБЛИРУЮЩИЙ СЛУШАТЕЛЬ ДЛЯ КНОПКИ
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        var btn = document.getElementById('addPatientBtn');
+        if (btn) {
+            console.log('🔧 addEventListener: кнопка найдена');
+            // Удалить старые слушатели
+            var newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            
+            newBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('🖱️ Клик по кнопке!');
+                if (window.openAddPatientModal) {
+                    window.openAddPatientModal();
+                } else {
+                    console.error('❌ openAddPatientModal не найден!');
+                    alert('Ошибка: функция не найдена!');
+                }
+            });
+            console.log('✅ Слушатель добавлен');
+        } else {
+            console.warn('⚠️ Кнопка #addPatientBtn не найдена');
+        }
+    }, 1000);
+});
 </script>
 
 </body>
