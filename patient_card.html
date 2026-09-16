@@ -664,38 +664,38 @@
                     <span id="vital_bmi" class="vital-value">—</span>
                 </div>
                 <div class="vital-item vital-bp-group">
-                    <label>АД (мм рт.ст.)</label>
-                    <div class="bp-inputs">
-                        <select id="vital_bp_sys_select" onchange="syncBPFromSelect()">
-                            <option value="">—</option>
-                            <option value="90">90</option>
-                            <option value="100">100</option>
-                            <option value="110">110</option>
-                            <option value="120" selected>120</option>
-                            <option value="130">130</option>
-                            <option value="140">140</option>
-                            <option value="150">150</option>
-                            <option value="160">160</option>
-                            <option value="170">170</option>
-                            <option value="180">180</option>
-                        </select>
-                        <input type="number" id="vital_bp_sys" placeholder="120" oninput="syncBPToSelect()">
-                        <span class="bp-sep">/</span>
-                        <select id="vital_bp_dia_select" onchange="syncBPFromSelect()">
-                            <option value="">—</option>
-                            <option value="40">40</option>
-                            <option value="50">50</option>
-                            <option value="60">60</option>
-                            <option value="70">70</option>
-                            <option value="80" selected>80</option>
-                            <option value="90">90</option>
-                            <option value="100">100</option>
-                            <option value="110">110</option>
-                            <option value="120">120</option>
-                        </select>
-                        <input type="number" id="vital_bp_dia" placeholder="80" oninput="syncBPToSelect()">
-                    </div>
+                <label>АД (мм рт.ст.)</label>
+                <div class="bp-inputs">
+                    <select id="vital_bp_sys_select" onchange="syncBPFromSelect()">
+                        <option value="">—</option>
+                        <option value="90">90</option>
+                        <option value="100">100</option>
+                        <option value="110">110</option>
+                        <option value="120" selected>120</option>
+                        <option value="130">130</option>
+                        <option value="140">140</option>
+                        <option value="150">150</option>
+                        <option value="160">160</option>
+                        <option value="170">170</option>
+                        <option value="180">180</option>
+                    </select>
+                    <input type="number" id="vital_bp_sys" placeholder="120" oninput="syncBPToSelect()">
+                    <span class="bp-sep">/</span>
+                    <select id="vital_bp_dia_select" onchange="syncBPFromSelect()">
+                        <option value="">—</option>
+                        <option value="40">40</option>
+                        <option value="50">50</option>
+                        <option value="60">60</option>
+                        <option value="70">70</option>
+                        <option value="80" selected>80</option>
+                        <option value="90">90</option>
+                        <option value="100">100</option>
+                        <option value="110">110</option>
+                        <option value="120">120</option>
+                    </select>
+                    <input type="number" id="vital_bp_dia" placeholder="80" oninput="syncBPToSelect()">
                 </div>
+            </div>
                 <div class="vital-item">
                     <label>Температура</label>
                     <input type="number" step="0.1" id="vital_temp" placeholder="36.6">
@@ -713,19 +713,6 @@
     </div>
 
     <div class="section">
-        <div class="section-header" onclick="toggleSection('complaintsContent', 'complaintsIcon')">
-            <div class="section-title"><span>💬</span> Жалобы</div>
-            <span class="toggle-icon" id="complaintsIcon">▼</span>
-        </div>
-        <div class="section-content" id="complaintsContent">
-            <div class="field-group">
-                <div class="field-wrapper"><textarea class="field-textarea" id="field_complaints" placeholder="Опишите жалобы пациента..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
-                
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
         <div class="section-header" onclick="toggleSection('anamnesisContent', 'anamnesisIcon')">
             <div class="section-title"><span>📋</span> Анамнез заболевания</div>
             <span class="toggle-icon" id="anamnesisIcon">▼</span>
@@ -733,6 +720,19 @@
         <div class="section-content" id="anamnesisContent">
             <div class="field-group">
                 <div class="field-wrapper"><textarea class="field-textarea" id="field_anamnesis" placeholder="Когда началось заболевание, как развивалось..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
+                
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('complaintsContent', 'complaintsIcon')">
+            <div class="section-title"><span>💬</span> Жалобы</div>
+            <span class="toggle-icon" id="complaintsIcon">▼</span>
+        </div>
+        <div class="section-content" id="complaintsContent">
+            <div class="field-group">
+                <div class="field-wrapper"><textarea class="field-textarea" id="field_complaints" placeholder="Опишите жалобы пациента..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
                 
             </div>
         </div>
@@ -986,13 +986,7 @@
         }
     }
 
-    function showNotification(message) {
-        var notif = document.createElement('div');
-        notif.className = 'notification';
-        notif.textContent = message;
-        document.body.appendChild(notif);
-        setTimeout(function() { notif.remove(); }, 2500);
-    }
+    
 
     document.addEventListener('DOMContentLoaded', loadPatient);
 
@@ -1381,13 +1375,7 @@
         if (modal) modal.classList.remove('active');
     }
 
-    function showNotification(message) {
-        var notif = document.createElement('div');
-        notif.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#48bb78;color:white;padding:12px 24px;border-radius:30px;z-index:9999;font-weight:600;';
-        notif.textContent = message;
-        document.body.appendChild(notif);
-        setTimeout(function() { notif.remove(); }, 2500);
-    }
+    
 
     // Закрытие меню по клику вне
     document.addEventListener('click', function(e) {
