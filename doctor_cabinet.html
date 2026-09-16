@@ -674,8 +674,9 @@
             var activeClass = (p.id === selectedPatientId) ? 'active' : '';
             var statusHtml = statusMap[p.status] || statusMap['new'];
             html += '<div class="patient-item ' + activeClass + '" onclick="selectPatient(\'' + p.id + '\')">';
+            var phoneLine = p.phone ? '<div class="patient-phone" style="font-size:0.75em;color:#68d391;margin-top:2px;">📞 ' + p.phone + '</div>' : '';
             html += '<div><div class="patient-name">' + p.name + '</div>';
-            html += '<div class="patient-id">' + p.id + ' • ' + p.age + ' лет</div></div>';
+            html += '<div class="patient-id">' + p.id + ' • ' + p.age + ' лет</div>' + phoneLine + '</div>';
             html += '<div style="display:flex;align-items:center;gap:8px;">';
             html += statusHtml;
             html += '<button class="btn btn-sm btn-info" onclick="event.stopPropagation();openPatientCard(\'' + p.id + '\')" title="Открыть карту">📋</button>';
