@@ -647,6 +647,10 @@
                         <span id="patientBirthDate">-</span> •
                         <span id="patientAge">-</span> лет
                     </small>
+                    <div class="patient-contact" style="margin-top:6px;font-size:0.85em;color:#a0aec0;">
+                        <span id="patientPhone">📞 —</span>
+                        <span style="margin-left:12px;" id="patientEmail">✉️ —</span>
+                    </div>
                 </div>
             </div>
 
@@ -912,6 +916,11 @@
                 document.getElementById('patientBirthDate').textContent = bd.toLocaleDateString('ru-RU');
             }
             document.getElementById('patientAge').textContent = patientData.age;
+            
+            var phoneEl = document.getElementById('patientPhone');
+            if (phoneEl) phoneEl.textContent = '📞 ' + (patientData.phone || '—');
+            var emailEl = document.getElementById('patientEmail');
+            if (emailEl) emailEl.textContent = '✉️ ' + (patientData.email || '—');
         }
 
         loadCardData();
