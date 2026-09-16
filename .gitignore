@@ -40,3 +40,12 @@ package-lock.json
 backups/
 *.save
 *.save.*
+
+# === Локальные бэкапы от 2026-09 ===
+*.backup-*
+*.backup_*
+*.before-*
+*.before_*
+*.broken-*
+_backup_*/
+*-backup
