@@ -244,6 +244,8 @@
                 <div>
                     <button class="btn btn-sm btn-success" onclick="openAddPatientModal()">➕ Добавить</button>
                     <button class="btn btn-sm btn-info" onclick="loadDemoPatients()">📊 Демо</button>
+                    <button class="btn btn-sm btn-warning" onclick="exportPatients()" title="Скачать JSON со всеми пациентами">📥 Экспорт</button>
+                    <button class="btn btn-sm btn-warning" onclick="importPatients()" title="Загрузить JSON с пациентами">📤 Импорт</button>
                 </div>
             </div>
             <div class="patient-list" id="patientList"></div>
@@ -781,6 +783,100 @@
         if (typeof updateStats === 'function') updateStats();
         if (typeof closeEditPatientModal === 'function') closeEditPatientModal();
         if (typeof showNotification === 'function') showNotification('✅ Пациент обновлён');
+    }
+
+    // ================================================================
+    //  ЭКСПОРТ / ИМПОРТ ПАЦИЕНТОВ (JSON)
+    // ================================================================
+    function exportPatients() {
+        try {
+            var data = {
+                version: 1,
+                exported: new Date().toISOString(),
+                patients: JSON.parse(localStorage.getItem('doctorPatients') || '[]'),
+                vitals: {},
+                vitalsHistory: {},
+                cards: {}
+            };
+            
+            Object.keys(localStorage).forEach(function(k) {
+                if (k.indexOf('patient_vitals_history_') === 0) {
+                    data.vitalsHistory[k] = JSON.parse(localStorage.getItem(k) || 'null');
+                } else if (k.indexOf('patient_vitals_') === 0) {
+                    data.vitals[k] = JSON.parse(localStorage.getItem(k) || 'null');
+                } else if (k.indexOf('patient_card_') === 0) {
+                    data.cards[k] = JSON.parse(localStorage.getItem(k) || 'null');
+                }
+            });
+            
+            var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'bot_max_patients_' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            if (typeof showNotification === 'function') {
+                showNotification('📥 Экспортировано: ' + data.patients.length + ' пациентов');
+            }
+        } catch(e) {
+            console.error('Ошибка экспорта:', e);
+            alert('❌ Ошибка экспорта: ' + e.message);
+        }
+    }
+
+    function importPatients() {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        
+        input.onchange = function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                try {
+                    var data = JSON.parse(ev.target.result);
+                    
+                    if (!data.patients || !Array.isArray(data.patients)) {
+                        alert('❌ Неверный формат файла: отсутствует массив patients');
+                        return;
+                    }
+                    
+                    var msg = 'Импортировать ' + data.patients.length + ' пациентов?\n\n' +
+                              '⚠️ Текущие данные будут ЗАМЕНЕНЫ импортируемыми.';
+                    if (!confirm(msg)) return;
+                    
+                    localStorage.setItem('doctorPatients', JSON.stringify(data.patients));
+                    
+                    Object.keys(data.vitals || {}).forEach(function(k) {
+                        localStorage.setItem(k, JSON.stringify(data.vitals[k]));
+                    });
+                    Object.keys(data.vitalsHistory || {}).forEach(function(k) {
+                        localStorage.setItem(k, JSON.stringify(data.vitalsHistory[k]));
+                    });
+                    Object.keys(data.cards || {}).forEach(function(k) {
+                        localStorage.setItem(k, JSON.stringify(data.cards[k]));
+                    });
+                    
+                    if (typeof showNotification === 'function') {
+                        showNotification('📤 Импортировано: ' + data.patients.length + ' пациентов');
+                    }
+                    
+                    setTimeout(function() { location.reload(); }, 800);
+                } catch(err) {
+                    console.error('Ошибка импорта:', err);
+                    alert('❌ Ошибка чтения файла: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        };
+        
+        input.click();
     }
 
     function calculateAge(birthDate) {
