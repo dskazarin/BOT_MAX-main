@@ -661,6 +661,12 @@
             return;
         }
         
+        // Проверка email (если не пустой)
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            alert('Неверный формат email. Пример: patient@example.com');
+            return;
+        }
+        
         var age = 0;
         try {
             if (typeof calculateAge === 'function') age = calculateAge(birthDate);
@@ -777,6 +783,12 @@
         if (bdCheck > todayCheck) { alert('Дата рождения не может быть в будущем'); return; }
         var ageCheck = todayCheck.getFullYear() - bdCheck.getFullYear();
         if (ageCheck > 130) { alert('Возраст пациента больше 130 лет — проверьте дату рождения'); return; }
+        
+        // Проверка email (если не пустой)
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            alert('Неверный формат email. Пример: patient@example.com');
+            return;
+        }
         
         // Обновляем данные
         p.name = name;
