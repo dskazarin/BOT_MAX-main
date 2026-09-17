@@ -588,6 +588,23 @@
         if (!name) { alert('Введите ФИО'); return; }
         if (!birthDate) { alert('Укажите дату рождения'); return; }
         
+        // Проверка разумности даты рождения
+        var bdCheck = new Date(birthDate);
+        var todayCheck = new Date();
+        if (isNaN(bdCheck.getTime())) {
+            alert('Неверная дата рождения');
+            return;
+        }
+        if (bdCheck > todayCheck) {
+            alert('Дата рождения не может быть в будущем');
+            return;
+        }
+        var ageCheck = todayCheck.getFullYear() - bdCheck.getFullYear();
+        if (ageCheck > 130) {
+            alert('Возраст пациента больше 130 лет — проверьте дату рождения');
+            return;
+        }
+        
         var age = 0;
         try {
             if (typeof calculateAge === 'function') age = calculateAge(birthDate);
@@ -652,9 +669,12 @@
     function calculateAge(birthDate) {
         var birth = new Date(birthDate);
         var today = new Date();
+        if (isNaN(birth.getTime())) return 0;
+        if (birth > today) return 0;
         var age = today.getFullYear() - birth.getFullYear();
         var m = today.getMonth() - birth.getMonth();
         if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        if (age > 130) return 0;
         return Math.max(0, age);
     }
 
@@ -996,7 +1016,11 @@
     function getAgeInMonths(birthDate) {
         var birth = new Date(birthDate);
         var today = new Date();
-        return (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+        if (isNaN(birth.getTime())) return 0;
+        if (birth > today) return 0;
+        var months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+        if (months > 130 * 12) return 0;
+        return Math.max(0, months);
     }
 
     function updateWeightUnit() {
