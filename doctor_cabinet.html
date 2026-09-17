@@ -356,6 +356,44 @@
     </div>
 </div>
 
+<!-- Модальное окно редактирования пациента -->
+<div id="editPatientModal" class="modal">
+    <div class="modal-content">
+        <h3 style="color: #9f7aea; margin-bottom: 20px;">✏️ Редактировать пациента</h3>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">ФИО *</label>
+                <input type="text" id="editPatientName" placeholder="Иванов Иван Иванович" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Дата рождения *</label>
+                <input type="date" id="editPatientBirthDate" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Пол</label>
+                <select id="editPatientGender" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                    <option value="male">👨 Мужской</option>
+                    <option value="female">👩 Женский</option>
+                </select>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Телефон</label>
+                <input type="tel" id="editPatientPhone" placeholder="+7 900 123-45-67" oninput="formatPhoneInput(this)" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Email</label>
+                <input type="email" id="editPatientEmail" placeholder="patient@example.com" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+        </div>
+
+        <div class="modal-buttons">
+            <button type="button" class="btn btn-danger" onclick="closeEditPatientModal()">❌ Отмена</button>
+            <button type="button" class="btn btn-success" onclick="saveEditedPatient()">✅ Сохранить</button>
+        </div>
+    </div>
+</div>
+
 <script>
     // ================================================================
     //  ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
@@ -666,6 +704,85 @@
         if (typeof showNotification === 'function') showNotification('✅ Пациент "' + name + '" добавлен');
     }
 
+    // ================================================================
+    //  РЕДАКТИРОВАНИЕ ПАЦИЕНТА
+    // ================================================================
+    var editingPatientId = null;
+
+    function openEditPatientModal(id) {
+        var p = patients.find(function(x) { return x.id === id; });
+        if (!p) { alert('Пациент не найден'); return; }
+        
+        editingPatientId = id;
+        
+        document.getElementById('editPatientName').value = p.name || '';
+        document.getElementById('editPatientBirthDate').value = p.birthDate || '';
+        document.getElementById('editPatientGender').value = p.gender || 'male';
+        document.getElementById('editPatientPhone').value = p.phone || '';
+        document.getElementById('editPatientEmail').value = p.email || '';
+        
+        var modal = document.getElementById('editPatientModal');
+        if (modal) {
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
+    }
+
+    function closeEditPatientModal() {
+        var modal = document.getElementById('editPatientModal');
+        if (modal) {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
+        editingPatientId = null;
+    }
+
+    function saveEditedPatient() {
+        if (!editingPatientId) return;
+        
+        var p = patients.find(function(x) { return x.id === editingPatientId; });
+        if (!p) { alert('Пациент не найден'); return; }
+        
+        var name = (document.getElementById('editPatientName').value || '').trim();
+        var birthDate = document.getElementById('editPatientBirthDate').value || '';
+        var gender = document.getElementById('editPatientGender').value || 'male';
+        var phone = (document.getElementById('editPatientPhone').value || '').trim();
+        var email = (document.getElementById('editPatientEmail').value || '').trim();
+        
+        // Валидация
+        if (!name) { alert('Введите ФИО'); return; }
+        if (!birthDate) { alert('Укажите дату рождения'); return; }
+        
+        var bdCheck = new Date(birthDate);
+        var todayCheck = new Date();
+        if (isNaN(bdCheck.getTime())) { alert('Неверная дата рождения'); return; }
+        if (bdCheck > todayCheck) { alert('Дата рождения не может быть в будущем'); return; }
+        var ageCheck = todayCheck.getFullYear() - bdCheck.getFullYear();
+        if (ageCheck > 130) { alert('Возраст пациента больше 130 лет — проверьте дату рождения'); return; }
+        
+        // Обновляем данные
+        p.name = name;
+        p.birthDate = birthDate;
+        p.gender = gender;
+        p.phone = phone;
+        p.email = email;
+        
+        // Пересчёт возраста
+        try {
+            if (typeof calculateAge === 'function') p.age = calculateAge(birthDate);
+            if (typeof getAgeInMonths === 'function') p.ageMonths = getAgeInMonths(birthDate);
+        } catch(e) { console.error('Ошибка пересчёта возраста:', e); }
+        p.ageDisplay = (p.age || 0) + ' лет';
+        
+        // Сохранение и перерисовка
+        if (typeof savePatientsToStorage === 'function') savePatientsToStorage();
+        if (typeof renderPatientList === 'function') renderPatientList();
+        if (typeof renderPatientsTable === 'function') renderPatientsTable();
+        if (typeof updateStats === 'function') updateStats();
+        if (typeof closeEditPatientModal === 'function') closeEditPatientModal();
+        if (typeof showNotification === 'function') showNotification('✅ Пациент обновлён');
+    }
+
     function calculateAge(birthDate) {
         var birth = new Date(birthDate);
         var today = new Date();
@@ -694,12 +811,28 @@
             var activeClass = (p.id === selectedPatientId) ? 'active' : '';
             var statusHtml = statusMap[p.status] || statusMap['new'];
             html += '<div class="patient-item ' + activeClass + '" onclick="selectPatient(\'' + p.id + '\')">';
-            var phoneLine = p.phone ? '<div class="patient-phone" style="font-size:0.75em;color:#68d391;margin-top:2px;">📞 ' + p.phone + '</div>' : '';
+            var birthDateLine = '';
+            if (p.birthDate) {
+                var bd = new Date(p.birthDate);
+                if (!isNaN(bd.getTime())) {
+                    birthDateLine = ' • ' + bd.toLocaleDateString('ru-RU');
+                }
+            }
+            var contactLine = '';
+            var hasPhone = p.phone && p.phone.trim();
+            var hasEmail = p.email && p.email.trim();
+            if (hasPhone || hasEmail) {
+                contactLine = '<div class="patient-contact" style="font-size:0.75em;color:#a0aec0;margin-top:2px;">';
+                if (hasPhone) contactLine += '<span style="color:#68d391;">📞 ' + p.phone + '</span>';
+                if (hasEmail) contactLine += (hasPhone ? ' ' : '') + '<span style="margin-left:8px;">✉️ ' + p.email + '</span>';
+                contactLine += '</div>';
+            }
             html += '<div><div class="patient-name">' + p.name + '</div>';
-            html += '<div class="patient-id">' + p.id + ' • ' + p.age + ' лет</div>' + phoneLine + '</div>';
+            html += '<div class="patient-id">' + p.id + birthDateLine + ' • ' + p.age + ' лет</div>' + contactLine + '</div>';
             html += '<div style="display:flex;align-items:center;gap:8px;">';
             html += statusHtml;
             html += '<button class="btn btn-sm btn-info" onclick="event.stopPropagation();openPatientCard(\'' + p.id + '\')" title="Открыть карту">📋</button>';
+            html += '<button class="btn btn-sm btn-warning" onclick="event.stopPropagation();openEditPatientModal(\'' + p.id + '\')" title="Редактировать">✏️</button>';
             html += '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
             html += '</div></div>';
         }
