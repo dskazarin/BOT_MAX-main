@@ -243,6 +243,15 @@
                 <h2>👤 Пациенты</h2>
                 <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
                     <input type="text" id="patientSearch" placeholder="🔍 Поиск по ФИО, телефону, email..." oninput="filterPatients(this.value)" style="padding:8px 12px; border-radius:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; width:280px; font-size:0.9em;">
+                    <select id="patientSort" onchange="sortPatients(this.value)" style="padding:8px 12px; border-radius:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; width:280px; font-size:0.9em; cursor:pointer;">
+                        <option value="created-desc">📅 По дате (новые сверху)</option>
+                        <option value="created-asc">📅 По дате (старые сверху)</option>
+                        <option value="name-asc">🔤 По имени (А→Я)</option>
+                        <option value="name-desc">🔤 По имени (Я→А)</option>
+                        <option value="age-desc">👴 По возрасту (старшие)</option>
+                        <option value="age-asc">👶 По возрасту (младшие)</option>
+                        <option value="status">⚠️ По статусу (критические сверху)</option>
+                    </select>
                     <div>
                     <button class="btn btn-sm btn-success" onclick="openAddPatientModal()">➕ Добавить</button>
                     <button class="btn btn-sm btn-info" onclick="loadDemoPatients()">📊 Демо</button>
@@ -406,6 +415,7 @@
     var patients = [];
     var selectedPatientId = null;
     var patientSearchQuery = '';
+    var patientSortMode = 'created-desc';
 
     var LOR_SYMPTOMS = [
         { id: 'zalozhennost', label: 'Заложенность носа' },
@@ -927,11 +937,53 @@
     //  ОТРИСОВКА
     // ================================================================
     // ================================================================
-    //  ПОИСК ПАЦИЕНТОВ
+    //  ПОИСК И СОРТИРОВКА ПАЦИЕНТОВ
     // ================================================================
     function filterPatients(query) {
         patientSearchQuery = (query || '').toLowerCase().trim();
         renderPatientList();
+    }
+
+    function sortPatients(mode) {
+        patientSortMode = mode || 'created-desc';
+        renderPatientList();
+    }
+
+    function getSortedPatients(arr) {
+        var sorted = arr.slice();
+        var mode = patientSortMode;
+        var statusOrder = { critical: 0, new: 1, checked: 2 };
+        
+        switch (mode) {
+            case 'created-desc':
+                sorted.sort(function(a, b) { return String(b.created || '').localeCompare(String(a.created || '')); });
+                break;
+            case 'created-asc':
+                sorted.sort(function(a, b) { return String(a.created || '').localeCompare(String(b.created || '')); });
+                break;
+            case 'name-asc':
+                sorted.sort(function(a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'ru'); });
+                break;
+            case 'name-desc':
+                sorted.sort(function(a, b) { return String(b.name || '').localeCompare(String(a.name || ''), 'ru'); });
+                break;
+            case 'age-desc':
+                sorted.sort(function(a, b) { return (b.age || 0) - (a.age || 0); });
+                break;
+            case 'age-asc':
+                sorted.sort(function(a, b) { return (a.age || 0) - (b.age || 0); });
+                break;
+            case 'status':
+                sorted.sort(function(a, b) {
+                    var oa = statusOrder[a.status];
+                    var ob = statusOrder[b.status];
+                    if (oa === undefined) oa = 99;
+                    if (ob === undefined) ob = 99;
+                    return oa - ob;
+                });
+                break;
+        }
+        return sorted;
     }
 
     function getFilteredPatients() {
@@ -955,6 +1007,7 @@
         }
         
         var filtered = getFilteredPatients();
+        filtered = getSortedPatients(filtered);
         if (filtered.length === 0) {
             container.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0;">🔍 Ничего не найдено по запросу: "' + patientSearchQuery + '"</div>';
             return;
