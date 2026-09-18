@@ -235,6 +235,10 @@
         <div class="card"><div class="card-title">Требуют внимания</div><div class="card-value yellow" id="pendingPatients">0</div></div>
         <div class="card"><div class="card-title">Критические случаи</div><div class="card-value red" id="criticalPatients">0</div></div>
         <div class="card"><div class="card-title">Проверено ИИ</div><div class="card-value green" id="checkedPatients">0</div></div>
+        <div class="card"><div class="card-title">📞 С телефоном</div><div class="card-value blue" id="phonePatients">0</div></div>
+        <div class="card"><div class="card-title">✉️ С email</div><div class="card-value blue" id="emailPatients">0</div></div>
+        <div class="card"><div class="card-title">Средний возраст</div><div class="card-value yellow" id="avgAge">—</div></div>
+        <div class="card"><div class="card-title">🩺 Топ диагноз</div><div class="card-value green" id="topDiagnosis" style="font-size:0.85em; line-height:1.3;">—</div></div>
     </div>
 
     <div class="grid-2">
@@ -1125,6 +1129,39 @@
         document.getElementById('pendingPatients').textContent = patients.filter(function(p) { return p.status === 'new'; }).length;
         document.getElementById('criticalPatients').textContent = patients.filter(function(p) { return p.status === 'critical'; }).length;
         document.getElementById('checkedPatients').textContent = patients.filter(function(p) { return p.status === 'checked'; }).length;
+        
+        // Новые метрики
+        var withPhone = patients.filter(function(p) { return p.phone && p.phone.trim(); }).length;
+        var withEmail = patients.filter(function(p) { return p.email && p.email.trim(); }).length;
+        var phoneEl = document.getElementById('phonePatients');
+        if (phoneEl) phoneEl.textContent = withPhone;
+        var emailEl = document.getElementById('emailPatients');
+        if (emailEl) emailEl.textContent = withEmail;
+        
+        // Средний возраст
+        var ages = patients.filter(function(p) { return typeof p.age === 'number' && p.age > 0; }).map(function(p) { return p.age; });
+        var avgAge = ages.length > 0 ? Math.round(ages.reduce(function(a, b) { return a + b; }, 0) / ages.length) : 0;
+        var avgEl = document.getElementById('avgAge');
+        if (avgEl) avgEl.textContent = avgAge > 0 ? avgAge + ' лет' : '—';
+        
+        // Топ диагноз
+        var diagCount = {};
+        patients.forEach(function(p) {
+            var d = (p.diagnosis || '').trim();
+            if (d && d !== 'Не установлен') {
+                diagCount[d] = (diagCount[d] || 0) + 1;
+            }
+        });
+        var topDiag = '—';
+        var maxCount = 0;
+        Object.keys(diagCount).forEach(function(d) {
+            if (diagCount[d] > maxCount) { maxCount = diagCount[d]; topDiag = d; }
+        });
+        var diagEl = document.getElementById('topDiagnosis');
+        if (diagEl) {
+            diagEl.textContent = topDiag;
+            diagEl.title = maxCount > 1 ? 'Встречается у ' + maxCount + ' пациентов' : '';
+        }
     }
 
     // ================================================================
