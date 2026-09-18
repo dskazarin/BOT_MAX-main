@@ -241,11 +241,14 @@
         <div class="card">
             <div class="card-header">
                 <h2>👤 Пациенты</h2>
-                <div>
+                <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+                    <input type="text" id="patientSearch" placeholder="🔍 Поиск по ФИО, телефону, email..." oninput="filterPatients(this.value)" style="padding:8px 12px; border-radius:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; width:280px; font-size:0.9em;">
+                    <div>
                     <button class="btn btn-sm btn-success" onclick="openAddPatientModal()">➕ Добавить</button>
                     <button class="btn btn-sm btn-info" onclick="loadDemoPatients()">📊 Демо</button>
                     <button class="btn btn-sm btn-warning" onclick="exportPatients()" title="Скачать JSON со всеми пациентами">📥 Экспорт</button>
                     <button class="btn btn-sm btn-warning" onclick="importPatients()" title="Загрузить JSON с пациентами">📤 Импорт</button>
+                    </div>
                 </div>
             </div>
             <div class="patient-list" id="patientList"></div>
@@ -402,6 +405,7 @@
     // ================================================================
     var patients = [];
     var selectedPatientId = null;
+    var patientSearchQuery = '';
 
     var LOR_SYMPTOMS = [
         { id: 'zalozhennost', label: 'Заложенность носа' },
@@ -922,16 +926,43 @@
     // ================================================================
     //  ОТРИСОВКА
     // ================================================================
+    // ================================================================
+    //  ПОИСК ПАЦИЕНТОВ
+    // ================================================================
+    function filterPatients(query) {
+        patientSearchQuery = (query || '').toLowerCase().trim();
+        renderPatientList();
+    }
+
+    function getFilteredPatients() {
+        if (!patientSearchQuery) return patients.slice();
+        var q = patientSearchQuery;
+        var qDigits = q.replace(/\D/g, '');
+        var phoneSearchable = qDigits.length >= 4;
+        return patients.filter(function(p) {
+            var nameMatch = (p.name || '').toLowerCase().indexOf(q) !== -1;
+            var phoneMatch = phoneSearchable && (p.phone || '').replace(/\D/g, '').indexOf(qDigits) !== -1;
+            var emailMatch = (p.email || '').toLowerCase().indexOf(q) !== -1;
+            return nameMatch || phoneMatch || emailMatch;
+        });
+    }
+
     function renderPatientList() {
         var container = document.getElementById('patientList');
         if (patients.length === 0) {
             container.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0;">Нет пациентов. Нажмите "Демо" или "Добавить".</div>';
             return;
         }
+        
+        var filtered = getFilteredPatients();
+        if (filtered.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#a0aec0;">🔍 Ничего не найдено по запросу: "' + patientSearchQuery + '"</div>';
+            return;
+        }
 
         var html = '';
-        for (var i = 0; i < patients.length; i++) {
-            var p = patients[i];
+        for (var i = 0; i < filtered.length; i++) {
+            var p = filtered[i];
             var activeClass = (p.id === selectedPatientId) ? 'active' : '';
             var statusHtml = statusMap[p.status] || statusMap['new'];
             html += '<div class="patient-item ' + activeClass + '" onclick="selectPatient(\'' + p.id + '\')">';
