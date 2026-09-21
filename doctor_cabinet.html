@@ -238,7 +238,10 @@
         <div class="card"><div class="card-title">📞 С телефоном</div><div class="card-value blue" id="phonePatients">0</div></div>
         <div class="card"><div class="card-title">✉️ С email</div><div class="card-value blue" id="emailPatients">0</div></div>
         <div class="card"><div class="card-title">Средний возраст</div><div class="card-value yellow" id="avgAge">—</div></div>
-        <div class="card"><div class="card-title">🩺 Топ диагноз</div><div class="card-value green" id="topDiagnosis" style="font-size:0.85em; line-height:1.3;">—</div></div>
+        <div class="card"><div class="card-title">🩺 Топ диагноз</div><div class="card-value green" id="topDiagnosis" style="font-size:0.75em; line-height:1.4; text-align:left;">—</div></div>
+        <div class="card"><div class="card-title">📅 Новые за неделю</div><div class="card-value blue" id="newWeek">0</div></div>
+        <div class="card"><div class="card-title">⏰ Последняя активность</div><div class="card-value yellow" id="lastActivity" style="font-size:0.9em;">—</div></div>
+        <div class="card"><div class="card-title">👥 Муж / Жен</div><div class="card-value blue" id="genderStats" style="font-size:0.9em;">— / —</div></div>
     </div>
 
     <div class="grid-2">
@@ -1157,11 +1160,52 @@
         Object.keys(diagCount).forEach(function(d) {
             if (diagCount[d] > maxCount) { maxCount = diagCount[d]; topDiag = d; }
         });
+        // Топ-3 диагноза (список)
+        var diagArr = Object.keys(diagCount).map(function(d) { return { name: d, count: diagCount[d] }; });
+        diagArr.sort(function(a, b) { return b.count - a.count; });
+        var top3 = diagArr.slice(0, 3);
         var diagEl = document.getElementById('topDiagnosis');
         if (diagEl) {
-            diagEl.textContent = topDiag;
-            diagEl.title = maxCount > 1 ? 'Встречается у ' + maxCount + ' пациентов' : '';
+            if (top3.length === 0) {
+                diagEl.innerHTML = '—';
+            } else {
+                diagEl.innerHTML = top3.map(function(d) {
+                    return '<div style="margin-bottom:2px;">' + d.name + ' <span style="color:#a0aec0;">— ' + d.count + '</span></div>';
+                }).join('');
+            }
         }
+        
+        // Новые за неделю
+        var weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        var newWeek = patients.filter(function(p) {
+            if (!p.created) return false;
+            return new Date(p.created) >= weekAgo;
+        }).length;
+        var nwEl = document.getElementById('newWeek');
+        if (nwEl) nwEl.textContent = newWeek;
+        
+        // Последняя активность
+        var lastTime = null;
+        patients.forEach(function(p) {
+            var t = p.lastSync || p.created;
+            if (t && (!lastTime || t > lastTime)) lastTime = t;
+        });
+        var laEl = document.getElementById('lastActivity');
+        if (laEl) {
+            if (!lastTime) {
+                laEl.textContent = '—';
+            } else {
+                var d = new Date(lastTime);
+                laEl.textContent = d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            }
+        }
+        
+        // Муж / Жен
+        var maleCount = patients.filter(function(p) { return p.gender === 'male'; }).length;
+        var femaleCount = patients.filter(function(p) { return p.gender === 'female'; }).length;
+        var gsEl = document.getElementById('genderStats');
+        if (gsEl) gsEl.textContent = maleCount + ' / ' + femaleCount;
     }
 
     // ================================================================
@@ -1384,8 +1428,9 @@
             openAddPatientModal();
         }
         if (e.key === 'Escape') {
-            closeAddPatientModal();
-            clearAIResult();
+            if (typeof closeAddPatientModal === 'function') closeAddPatientModal();
+            if (typeof closeEditPatientModal === 'function') closeEditPatientModal();
+            if (typeof clearAIResult === 'function') clearAIResult();
         }
     });
 
