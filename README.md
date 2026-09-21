@@ -11,7 +11,7 @@
 ```bash
 git clone https://github.com/denisnib/BOT_MAX.git
 cd BOT_MAX
-go run main_fixed.go &
+go run backend/main.go &
 open http://localhost:8082
 ```
 
@@ -26,10 +26,10 @@ open http://localhost:8082
 ## 🛠️ Management Scripts
 | Script | Description |
 |--------|-------------|
-| `./start.sh` | Start server |
-| `./stop.sh` | Stop server |
-| `./status.sh` | Check server status |
-| `./audit.sh` | Run security audit |
+| `make run` | Start server |
+| `make stop` | Stop server |
+| `make status` | Check server status |
+| `make test` | Test API |
 
 ## 🏆 Security Rating: **A+ (100%)**
 ## 📅 Release Date: 15.04.2026
@@ -39,7 +39,7 @@ open http://localhost:8082
 ```bash
 git clone --branch v7.1.0-final https://github.com/denisnib/BOT_MAX.git
 cd BOT_MAX
-./start.sh
+make run
 ```
 
 ## 📊 API Endpoints
@@ -53,10 +53,10 @@ cd BOT_MAX
 ## 🛠️ Management Scripts
 | Script | Description |
 |--------|-------------|
-| `./start.sh` | Start server |
-| `./stop.sh` | Stop server |
-| `./status.sh` | Check status |
-| `./audit.sh` | Security audit |
+| `make run` | Start server |
+| `make stop` | Stop server |
+| `make status` | Check status |
+| `make test` | Test API |
 | `./auto_heal.sh &` | Auto-recovery |
 
 ## 🏆 Security Rating: **A+ (100%)**

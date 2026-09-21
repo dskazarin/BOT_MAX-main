@@ -226,6 +226,7 @@
         </div>
         <div class="header-right">
             <span class="status-badge">🟢 ИИ активен</span>
+            <button onclick="clearAllData()" title="Удалить всех пациентов и данные" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f56565;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:0.9em;font-weight:600;">🗑️ Очистить всё</button>
             <a href="index.html" class="btn btn-danger">🚪 Выйти</a>
         </div>
     </div>
@@ -1408,6 +1409,29 @@
     // ================================================================
     //  УТИЛИТЫ
     // ================================================================
+    // ================================================================
+    //  ОЧИСТКА ВСЕХ ДАННЫХ
+    // ================================================================
+    function clearAllData() {
+        if (!confirm('Удалить ВСЕХ пациентов и все связанные данные?\n\nЭто действие НЕЛЬЗЯ отменить.')) return;
+        if (!confirm('Точно уверены?\n\nБудут удалены:\n• Все пациенты\n• Витальные показатели\n• Карточки пациентов\n• История синхронизаций')) return;
+        
+        var keysToRemove = [];
+        Object.keys(localStorage).forEach(function(k) {
+            if (k === 'doctorPatients' || 
+                k === 'syncSignal' || 
+                k.indexOf('patient_vitals_') === 0 || 
+                k.indexOf('patient_card_') === 0) {
+                keysToRemove.push(k);
+            }
+        });
+        
+        keysToRemove.forEach(function(k) { localStorage.removeItem(k); });
+        
+        alert('✅ Удалено ' + keysToRemove.length + ' ключей.\n\nСтраница будет перезагружена.');
+        location.reload();
+    }
+
     function showNotification(message) {
         var notification = document.createElement('div');
         notification.className = 'notification';
