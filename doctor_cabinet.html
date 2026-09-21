@@ -1400,7 +1400,8 @@
             }
             container.innerHTML = html || '<span style="color:#f56565;">⚠️ Нет активных рекомендаций</span>';
         } catch (error) {
-            container.innerHTML = '<span style="color:#f56565;">❌ ' + error.message + '</span>';
+            console.error('loadGuidelines error:', error);
+            container.innerHTML = '<span style="color:#a0aec0;">⚠️ Модуль рекомендаций не подключён (API недоступен)</span>';
         }
     }
 

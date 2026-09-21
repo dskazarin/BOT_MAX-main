@@ -5,17 +5,17 @@
 # Запуск сервера
 run:
 	@echo "🚀 Запуск сервера..."
-	@cd src && go run start_cabinet.go &
+	@go run backend/main.go &
 
 # Сборка бинарника
 build:
 	@echo "🔧 Компиляция..."
-	@cd src && go build -o botmax start_cabinet.go
+	@go build -o botmax backend/main.go
 
 # Очистка
 clean:
 	@echo "🧹 Очистка..."
-	@rm -f src/botmax
+	@rm -f botmax
 	@rm -f *.log
 	@echo "✅ Готово"
 
@@ -31,8 +31,7 @@ status:
 # Остановка сервера
 stop:
 	@echo "🛑 Остановка сервера..."
-	@pkill -f "start_cabinet\|go run" 2>/dev/null || true
-	@sudo fuser -k 8082/tcp 2>/dev/null || true
+	@fuser -k 8082/tcp 2>/dev/null || true
 	@echo "✅ Сервер остановлен"
 
 # Проверка работы
