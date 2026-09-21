@@ -7,18 +7,107 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* ============================================================
+           ТЕМЫ (ПЕРЕМЕННЫЕ)
+           ============================================================ */
+        :root {
+            --bg-body-1: #1a202c;
+            --bg-body-2: #2d3748;
+            --bg-header: rgba(255, 255, 255, 0.05);
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --bg-card-border: rgba(255, 255, 255, 0.08);
+            --bg-modal: #2d3748;
+            --bg-modal-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #e2e8f0;
+            --text-secondary: #a0aec0;
+            --text-title: #ffffff;
+        }
+
+        [data-theme="light"] {
+            --bg-body-1: #f7fafc;
+            --bg-body-2: #edf2f7;
+            --bg-header: rgba(255, 255, 255, 0.95);
+            --bg-card: #ffffff;
+            --bg-card-border: rgba(0, 0, 0, 0.1);
+            --bg-modal: #ffffff;
+            --bg-modal-border: rgba(0, 0, 0, 0.15);
+            --text-primary: #1a202c;
+            --text-secondary: #2d3748;
+            --text-title: #1a202c;
+        }
+
+        /* Светлая тема: чёткий тёмный текст везде */
+        [data-theme="light"] h1,
+        [data-theme="light"] h2,
+        [data-theme="light"] h3,
+        [data-theme="light"] .patient-name,
+        [data-theme="light"] .header-title h1,
+        [data-theme="light"] .card-value {
+            color: #1a202c !important;
+        }
+
+        [data-theme="light"] .header-title small,
+        [data-theme="light"] .card-title,
+        [data-theme="light"] .patient-id,
+        [data-theme="light"] .section-title,
+        [data-theme="light"] label,
+        [data-theme="light"] .patient-contact,
+        [data-theme="light"] .symptom-label,
+        [data-theme="light"] .back-link,
+        [data-theme="light"] .vital-item label {
+            color: #2d3748 !important;
+        }
+
+        [data-theme="light"] input,
+        [data-theme="light"] select,
+        [data-theme="light"] textarea {
+            background: #ffffff !important;
+            color: #1a202c !important;
+            border-color: rgba(0, 0, 0, 0.15) !important;
+        }
+
+        [data-theme="light"] input::placeholder,
+        [data-theme="light"] textarea::placeholder {
+            color: #a0aec0 !important;
+        }
+
+        [data-theme="light"] .patient-item {
+            background: #f7fafc;
+            border-color: rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="light"] .patient-item.active {
+            background: #ebf4ff;
+            border-color: #4299e1;
+        }
+
+        [data-theme="light"] table td {
+            color: #1a202c;
+            border-color: rgba(0, 0, 0, 0.08);
+        }
+
+        [data-theme="light"] table th {
+            color: #2d3748;
+            border-color: rgba(0, 0, 0, 0.15);
+        }
+
+        [data-theme="light"] .card-value.green { color: #38a169 !important; }
+        [data-theme="light"] .card-value.red { color: #e53e3e !important; }
+        [data-theme="light"] .card-value.yellow { color: #d69e2e !important; }
+        [data-theme="light"] .card-value.blue { color: #3182ce !important; }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            background: linear-gradient(135deg, var(--bg-body-1) 0%, var(--bg-body-2) 100%);
             min-height: 100vh;
             padding: 20px;
-            color: #e2e8f0;
+            color: var(--text-primary);
         }
 
         .container { max-width: 1600px; margin: 0 auto; }
 
         .header {
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--bg-header);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 20px 30px;
@@ -69,12 +158,12 @@
         .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; }
 
         .card {
-            background: rgba(255,255,255,0.05);
+            background: var(--bg-card);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 25px;
             margin-bottom: 20px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border: 1px solid var(--bg-card-border);
         }
 
         .card-header {
@@ -85,8 +174,8 @@
         }
         .card-header h2 { font-size: 1.1em; color: #e2e8f0; display: flex; align-items: center; gap: 10px; }
 
-        .card-title { color: #a0aec0; font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
-        .card-value { font-size: 1.8em; font-weight: bold; color: #fff; }
+        .card-title { color: var(--text-secondary); font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .card-value { font-size: 1.8em; font-weight: bold; color: var(--text-title); }
         .card-value.green { color: #48bb78; }
         .card-value.red { color: #f56565; }
         .card-value.yellow { color: #ed8936; }
@@ -173,7 +262,7 @@
         }
         .modal.active { display: flex; }
         .modal-content {
-            background: #2d3748;
+            background: var(--bg-modal);
             border-radius: 20px;
             padding: 30px;
             max-width: 700px;
@@ -226,6 +315,7 @@
         </div>
         <div class="header-right">
             <span class="status-badge">🟢 ИИ активен</span>
+            <button onclick="toggleTheme()" id="themeToggle" title="Переключить тему" style="background:rgba(159,122,234,0.15);border:1px solid rgba(159,122,234,0.4);color:#9f7aea;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:1em;font-weight:600;">🌙</button>
             <button onclick="clearAllData()" title="Удалить всех пациентов и данные" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f56565;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:0.9em;font-weight:600;">🗑️ Очистить всё</button>
             <a href="index.html" class="btn btn-danger">🚪 Выйти</a>
         </div>
@@ -1506,6 +1596,31 @@
             });
         }
     }
+
+    // ================================================================
+    //  ТЕМА (ТЁМНАЯ / СВЕТЛАЯ)
+    // ================================================================
+    function toggleTheme() {
+        var current = document.documentElement.getAttribute('data-theme') || 'dark';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        var btn = document.getElementById('themeToggle');
+        if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
+    }
+
+    // Применение темы при загрузке
+    (function() {
+        var saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+    })();
+
+    // Обновление иконки после загрузки DOM
+    document.addEventListener('DOMContentLoaded', function() {
+        var saved = localStorage.getItem('theme') || 'dark';
+        var btn = document.getElementById('themeToggle');
+        if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀️';
+    });
 
     function showNotification(message) {
         var notification = document.createElement('div');
