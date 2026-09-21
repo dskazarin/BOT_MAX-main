@@ -49,3 +49,6 @@ backups/
 *.broken-*
 _backup_*/
 *-backup
+
+# Go-бинарник (создаётся make build)
+botmax
