@@ -243,6 +243,19 @@
         <div class="card"><div class="card-title">📅 Новые за неделю</div><div class="card-value blue" id="newWeek">0</div></div>
         <div class="card"><div class="card-title">⏰ Последняя активность</div><div class="card-value yellow" id="lastActivity" style="font-size:0.9em;">—</div></div>
         <div class="card"><div class="card-title">👥 Муж / Жен</div><div class="card-value blue" id="genderStats" style="font-size:0.9em;">— / —</div></div>
+        <div class="card" style="display:flex;flex-direction:column;">
+            <div class="card-title" style="margin-bottom:10px;">📊 Статусы</div>
+            <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                <div style="position:relative;width:75px;height:75px;flex-shrink:0;">
+                    <canvas id="statusChart"></canvas>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:5px;font-size:0.72em;line-height:1.2;">
+                    <div><span style="display:inline-block;width:9px;height:9px;background:#4299e1;border-radius:2px;margin-right:5px;vertical-align:middle;"></span>Новые: <b id="chartNewCount">0</b></div>
+                    <div><span style="display:inline-block;width:9px;height:9px;background:#48bb78;border-radius:2px;margin-right:5px;vertical-align:middle;"></span>Проверены: <b id="chartCheckedCount">0</b></div>
+                    <div><span style="display:inline-block;width:9px;height:9px;background:#f56565;border-radius:2px;margin-right:5px;vertical-align:middle;"></span>Критические: <b id="chartCriticalCount">0</b></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="grid-2">
@@ -1207,6 +1220,9 @@
         var femaleCount = patients.filter(function(p) { return p.gender === 'female'; }).length;
         var gsEl = document.getElementById('genderStats');
         if (gsEl) gsEl.textContent = maleCount + ' / ' + femaleCount;
+        
+        // Диаграмма статусов
+        if (typeof renderStatusChart === 'function') renderStatusChart();
     }
 
     // ================================================================
@@ -1432,6 +1448,65 @@
         location.reload();
     }
 
+    // ================================================================
+    //  ДИАГРАММА СТАТУСОВ
+    // ================================================================
+    var statusChart = null;
+
+    function renderStatusChart() {
+        var canvas = document.getElementById('statusChart');
+        if (!canvas) return;
+        
+        var counts = {
+            new: patients.filter(function(p) { return p.status === 'new'; }).length,
+            checked: patients.filter(function(p) { return p.status === 'checked'; }).length,
+            critical: patients.filter(function(p) { return p.status === 'critical'; }).length
+        };
+        
+        var nc = document.getElementById('chartNewCount');
+        var cc = document.getElementById('chartCheckedCount');
+        var kc = document.getElementById('chartCriticalCount');
+        if (nc) nc.textContent = counts.new;
+        if (cc) cc.textContent = counts.checked;
+        if (kc) kc.textContent = counts.critical;
+        
+        var total = counts.new + counts.checked + counts.critical;
+        if (total === 0) return;
+        
+        var data = {
+            labels: ['Новые', 'Проверены', 'Критические'],
+            datasets: [{
+                data: [counts.new, counts.checked, counts.critical],
+                backgroundColor: ['#4299e1', '#48bb78', '#f56565'],
+                borderColor: '#1a202c',
+                borderWidth: 3
+            }]
+        };
+        
+        if (statusChart) {
+            statusChart.data = data;
+            statusChart.update();
+        } else {
+            statusChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#2d3748',
+                            titleColor: '#e2e8f0',
+                            bodyColor: '#e2e8f0'
+                        }
+                    }
+                }
+            });
+        }
+    }
+
     function showNotification(message) {
         var notification = document.createElement('div');
         notification.className = 'notification';
@@ -1565,6 +1640,9 @@
     });
 
 </script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </body>
 </html>

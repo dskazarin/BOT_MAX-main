@@ -13,7 +13,8 @@
         "8082": {
             "label": "Patient Cabinet",
             "onAutoForward": "openPreview",
-            "elevateIfNeeded": true
+            "elevateIfNeeded": true,
+            "visibility": "public"
         }
     },
     "customizations": {
