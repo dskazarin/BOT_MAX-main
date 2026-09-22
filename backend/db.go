@@ -172,3 +172,90 @@ func seedDefaultDoctor(db *sql.DB) error {
 	fmt.Println("🌱 Создан тестовый врач DOC-001 (doctor@local)")
 	return nil
 }
+
+// getPatientsByDoctor возвращает всех пациентов врача, отсортированных по created DESC.
+func getPatientsByDoctor(db *sql.DB, doctorID string) ([]Patient, error) {
+	rows, err := db.Query(`
+		SELECT id, doctor_id, COALESCE(clinic_id, ''), name, COALESCE(age, 0),
+		       COALESCE(age_months, 0), COALESCE(age_display, ''), COALESCE(birth_date, ''),
+		       COALESCE(gender, ''), COALESCE(height, 0), COALESCE(weight, 0),
+		       COALESCE(phone, ''), COALESCE(email, ''), COALESCE(status, ''),
+		       COALESCE(diagnosis, ''), COALESCE(ai_checked, 0),
+		       COALESCE(created, ''), COALESCE(last_sync, '')
+		FROM patients
+		WHERE doctor_id = ?
+		ORDER BY created DESC`, doctorID)
+	if err != nil {
+		return nil, fmt.Errorf("query patients: %w", err)
+	}
+	defer rows.Close()
+
+	patients := []Patient{}
+	for rows.Next() {
+		var p Patient
+		var aiChecked int
+		if err := rows.Scan(
+			&p.ID, &p.DoctorID, &p.ClinicID, &p.Name, &p.Age,
+			&p.AgeMonths, &p.AgeDisplay, &p.BirthDate,
+			&p.Gender, &p.Height, &p.Weight,
+			&p.Phone, &p.Email, &p.Status,
+			&p.Diagnosis, &aiChecked,
+			&p.Created, &p.LastSync,
+		); err != nil {
+			return nil, fmt.Errorf("scan patient: %w", err)
+		}
+		p.AIChecked = aiChecked == 1
+		patients = append(patients, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows: %w", err)
+	}
+	return patients, nil
+}
+
+// createPatient вставляет нового пациента в БД.
+func createPatient(db *sql.DB, p *Patient) error {
+	aiChecked := 0
+	if p.AIChecked {
+		aiChecked = 1
+	}
+	_, err := db.Exec(`
+		INSERT INTO patients (
+			id, doctor_id, clinic_id, name, age, age_months, age_display,
+			birth_date, gender, height, weight, phone, email, status,
+			diagnosis, symptoms, ai_checked, ai_result, created, last_sync
+		) VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+		p.ID, p.DoctorID, p.ClinicID, p.Name, p.Age, p.AgeMonths, p.AgeDisplay,
+		p.BirthDate, p.Gender, p.Height, p.Weight, p.Phone, p.Email, p.Status,
+		p.Diagnosis, aiChecked, p.Created, p.LastSync)
+	if err != nil {
+		return fmt.Errorf("insert patient: %w", err)
+	}
+	return nil
+}
+
+// getPatientByID возвращает одного пациента по ID.
+func getPatientByID(db *sql.DB, id string) (*Patient, error) {
+	var p Patient
+	var aiChecked int
+	err := db.QueryRow(`
+		SELECT id, doctor_id, COALESCE(clinic_id, ''), name, COALESCE(age, 0),
+		       COALESCE(age_months, 0), COALESCE(age_display, ''), COALESCE(birth_date, ''),
+		       COALESCE(gender, ''), COALESCE(height, 0), COALESCE(weight, 0),
+		       COALESCE(phone, ''), COALESCE(email, ''), COALESCE(status, ''),
+		       COALESCE(diagnosis, ''), COALESCE(ai_checked, 0),
+		       COALESCE(created, ''), COALESCE(last_sync, '')
+		FROM patients WHERE id = ?`, id).Scan(
+		&p.ID, &p.DoctorID, &p.ClinicID, &p.Name, &p.Age,
+		&p.AgeMonths, &p.AgeDisplay, &p.BirthDate,
+		&p.Gender, &p.Height, &p.Weight,
+		&p.Phone, &p.Email, &p.Status,
+		&p.Diagnosis, &aiChecked,
+		&p.Created, &p.LastSync,
+	)
+	if err != nil {
+		return nil, err
+	}
+	p.AIChecked = aiChecked == 1
+	return &p, nil
+}

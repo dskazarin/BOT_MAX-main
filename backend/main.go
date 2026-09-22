@@ -442,6 +442,9 @@ func main() {
 		json.NewEncoder(w).Encode(report)
 	})
 
+	// Роуты для /api/patients — см. backend/patients.go
+	registerPatientRoutes()
+
 	http.Handle("/", http.FileServer(http.Dir(rootDir)))
 
 	log.Println("🚀 Сервер запущен на http://localhost:8082")
