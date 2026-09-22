@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,21 +12,21 @@ import (
 )
 
 type Guideline struct {
-	ID          string   `json:"id"`
-	Version     string   `json:"version"`
-	Specialty   string   `json:"specialty"`
-	Title       string   `json:"title"`
-	DiagnosticCriteria  DiagnosticCriteria  `json:"diagnostic_criteria"`
-	BacterialCriteria   BacterialCriteria   `json:"bacterial_criteria"`
-	AntibioticIndications AntibioticIndications `json:"antibiotic_indications"`
-	Antibiotics         Antibiotics         `json:"antibiotics"`
-	Duration            Duration            `json:"duration"`
-	LocalTherapy        LocalTherapy        `json:"local_therapy"`
-	Symptomatic         Symptomatic         `json:"symptomatic"`
-	SurgeryIndications  []SurgeryIndication `json:"surgery_indications"`
-	HospitalizationIndications []string     `json:"hospitalization_indications"`
-	DifferentialDiagnosis DifferentialDiagnosis `json:"differential_diagnosis"`
-	Diagnostics         Diagnostics         `json:"diagnostics"`
+	ID                         string                `json:"id"`
+	Version                    string                `json:"version"`
+	Specialty                  string                `json:"specialty"`
+	Title                      string                `json:"title"`
+	DiagnosticCriteria         DiagnosticCriteria    `json:"diagnostic_criteria"`
+	BacterialCriteria          BacterialCriteria     `json:"bacterial_criteria"`
+	AntibioticIndications      AntibioticIndications `json:"antibiotic_indications"`
+	Antibiotics                Antibiotics           `json:"antibiotics"`
+	Duration                   Duration              `json:"duration"`
+	LocalTherapy               LocalTherapy          `json:"local_therapy"`
+	Symptomatic                Symptomatic           `json:"symptomatic"`
+	SurgeryIndications         []SurgeryIndication   `json:"surgery_indications"`
+	HospitalizationIndications []string              `json:"hospitalization_indications"`
+	DifferentialDiagnosis      DifferentialDiagnosis `json:"differential_diagnosis"`
+	Diagnostics                Diagnostics           `json:"diagnostics"`
 }
 
 type DiagnosticCriteria struct {
@@ -356,9 +357,9 @@ func checkPatient(g *Guideline, p PatientData) *Report {
 
 	// Диагностика
 	r.Diagnostics = DiagnosticsResult{
-		Stage1: "Осмотр врача-оториноларинголога",
-		Stage2: "Не показан",
-		Stage3: "Не показан",
+		Stage1:       "Осмотр врача-оториноларинголога",
+		Stage2:       "Не показан",
+		Stage3:       "Не показан",
 		Differential: []string{"аллергический ринит", "обострение хронического риносинусита"},
 	}
 
@@ -372,6 +373,7 @@ func checkPatient(g *Guideline, p PatientData) *Report {
 
 var loader *Loader
 var guidelines map[string]*Guideline
+var db *sql.DB
 
 func main() {
 	wd, _ := os.Getwd()
@@ -390,6 +392,18 @@ func main() {
 	loader = NewLoader(filepath.Join(rootDir, "guidelines"))
 	guidelines, _ = loader.LoadAll()
 	log.Printf("✅ Загружено %d рекомендаций", len(guidelines))
+
+	// === SQLite (шаг 1) ===
+	var err error
+	db, err = InitDB(filepath.Join(rootDir, "bot_max.db"))
+	if err != nil {
+		log.Fatalf("❌ InitDB: %v", err)
+	}
+	defer db.Close()
+	if err := seedDefaultDoctor(db); err != nil {
+		log.Fatalf("❌ seedDefaultDoctor: %v", err)
+	}
+	log.Printf("✅ SQLite готова: %s", filepath.Join(rootDir, "bot_max.db"))
 
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

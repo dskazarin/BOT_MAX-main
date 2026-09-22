@@ -52,3 +52,8 @@ _backup_*/
 
 # Go-бинарник (создаётся make build)
 botmax
+
+# SQLite (создаётся backend/db.go)
+bot_max.db
+bot_max.db-shm
+bot_max.db-wal

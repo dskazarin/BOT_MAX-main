@@ -5,12 +5,12 @@
 # Запуск сервера
 run:
 	@echo "🚀 Запуск сервера..."
-	@go run backend/main.go &
+	@go run ./backend &
 
 # Сборка бинарника
 build:
 	@echo "🔧 Компиляция..."
-	@go build -o botmax backend/main.go
+	@go build -o botmax ./backend
 
 # Очистка
 clean:
