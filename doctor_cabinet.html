@@ -736,6 +736,8 @@
             status: jp.status || 'new',
             diagnosis: jp.diagnosis || '',
             aiChecked: !!jp.aiChecked,
+            symptoms: jp.symptoms || undefined,
+            aiResult: jp.aiResult || undefined,
             created: jp.created || new Date().toISOString(),
             lastSync: new Date().toISOString()
         };
@@ -882,9 +884,10 @@
 
         document.getElementById('selectedPatientName').textContent = patient.name;
 
+        var syms = patient.symptoms || {};
         LOR_SYMPTOMS.forEach(function(s) {
             var cb = document.getElementById('sym_' + s.id);
-            if (cb) cb.checked = patient.symptoms[s.id] || false;
+            if (cb) cb.checked = syms[s.id] || false;
         });
 
         if (patient.aiResult && patient.aiChecked) {
@@ -910,6 +913,18 @@
             document.getElementById('aiResult').classList.remove('show');
         }
         savePatientsToStorage();
+
+        // DELETE на сервер (только в server-режиме)
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function') {
+            apiRequest('DELETE', '/api/patients/' + encodeURIComponent(id))
+                .then(function() {
+                    console.log('🌐 DELETE ok:', id);
+                })
+                .catch(function(err) {
+                    console.warn('⚠️ DELETE failed:', id, err.message);
+                });
+        }
+
         renderPatientList();
         renderPatientsTable();
         updateStats();
@@ -1157,6 +1172,18 @@
         
         // Сохранение и перерисовка
         if (typeof savePatientsToStorage === 'function') savePatientsToStorage();
+
+        // PUT на сервер (только в server-режиме)
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && typeof jsToServer === 'function') {
+            apiRequest('PUT', '/api/patients/' + encodeURIComponent(p.id), jsToServer(p))
+                .then(function() {
+                    console.log('🌐 PUT ok:', p.id);
+                })
+                .catch(function(err) {
+                    console.warn('⚠️ PUT failed:', p.id, err.message);
+                });
+        }
+
         if (typeof renderPatientList === 'function') renderPatientList();
         if (typeof renderPatientsTable === 'function') renderPatientsTable();
         if (typeof updateStats === 'function') updateStats();
@@ -1448,21 +1475,34 @@
         if (!cb) return;
         var patient = patients.find(function(p) { return p.id === selectedPatientId; });
         if (patient) {
+            if (!patient.symptoms) patient.symptoms = {};
             patient.symptoms[id] = cb.checked;
             savePatientsToStorage();
+
+            // PUT на сервер (только в server-режиме)
+            if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && typeof jsToServer === 'function') {
+                apiRequest('PUT', '/api/patients/' + encodeURIComponent(patient.id), jsToServer(patient))
+                    .then(function() {
+                        console.log('🌐 PUT (sym) ok:', patient.id);
+                    })
+                    .catch(function(err) {
+                        console.warn('⚠️ PUT (sym) failed:', patient.id, err.message);
+                    });
+            }
         }
     }
 
     function syncSymptomsFromPatient() {
         var patient = patients.find(function(p) { return p.id === selectedPatientId; });
         if (!patient) { alert('Сначала выберите пациента'); return; }
+        var syms = patient.symptoms || {};
         LOR_SYMPTOMS.forEach(function(s) {
             var cb = document.getElementById('sym_' + s.id);
-            if (cb) cb.checked = patient.symptoms[s.id] || false;
+            if (cb) cb.checked = syms[s.id] || false;
         });
-        var hasGnoinye = patient.symptoms.gnoinye_vydeleniya || false;
-        var hasZalozhennost = patient.symptoms.zalozhennost || false;
-        var hasVydeleniya = patient.symptoms.vydeleniya || false;
+        var hasGnoinye = syms.gnoinye_vydeleniya || false;
+        var hasZalozhennost = syms.zalozhennost || false;
+        var hasVydeleniya = syms.vydeleniya || false;
         patient.diagnosis = (hasZalozhennost && hasVydeleniya && hasGnoinye) ? 'Острый бактериальный синусит' :
                            (hasZalozhennost && hasVydeleniya) ? 'Острый синусит' : 'Не установлен';
         savePatientsToStorage();
@@ -1570,6 +1610,7 @@
         var resultDiv = document.getElementById('aiResult');
         var contentDiv = document.getElementById('aiResultContent');
 
+        if (!patient.symptoms) patient.symptoms = {};
         LOR_SYMPTOMS.forEach(function(s) {
             var cb = document.getElementById('sym_' + s.id);
             if (cb) patient.symptoms[s.id] = cb.checked;
