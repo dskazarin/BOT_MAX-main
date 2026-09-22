@@ -968,6 +968,15 @@
         if (!name) { alert('Введите ФИО'); return; }
         if (!birthDate) { alert('Укажите дату рождения'); return; }
         
+        // Жёсткая проверка года: 4 цифры, 1900-2026
+        var yearStr = (birthDate || '').split('-')[0];
+        var yearNum = parseInt(yearStr, 10);
+        var currentYear = new Date().getFullYear();
+        if (!yearStr || yearStr.length !== 4 || yearNum < 1900 || yearNum > currentYear) {
+            alert('Некорректный год рождения. Введите 4 цифры (1900–' + currentYear + ').');
+            return;
+        }
+        
         var bdCheck = new Date(birthDate);
         var todayCheck = new Date();
         if (isNaN(bdCheck.getTime())) { alert('Неверная дата рождения'); return; }
@@ -2326,7 +2335,7 @@
             </div>
             <div>
                 <label style="display:block; font-size:0.8em; color:#a0aec0; margin-bottom:5px;">Дата рождения *</label>
-                <input type="date" id="cardEditBirthDate" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#e2e8f0;">
+                <input type="date" id="cardEditBirthDate" min="1900-01-01" max="2026-12-31" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#e2e8f0;">
             </div>
             <div>
                 <label style="display:block; font-size:0.8em; color:#a0aec0; margin-bottom:5px;">Пол</label>
