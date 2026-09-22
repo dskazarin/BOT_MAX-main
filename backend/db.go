@@ -20,6 +20,7 @@ func InitDB(path string) (*sql.DB, error) {
 		"PRAGMA foreign_keys = ON;",
 		"PRAGMA journal_mode = WAL;",
 		"PRAGMA synchronous = NORMAL;",
+		"PRAGMA busy_timeout = 5000;",
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {

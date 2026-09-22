@@ -321,6 +321,10 @@
         </div>
         <div class="header-right">
             <span class="status-badge">🟢 ИИ активен</span>
+            <select id="storageModeSelect" onchange="setStorageMode(this.value)" title="Режим хранения данных" style="background:rgba(159,122,234,0.15);border:1px solid rgba(159,122,234,0.4);color:#9f7aea;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:0.9em;font-weight:600;">
+                <option value="server">🌐 Сервер</option>
+                <option value="cache">💾 Кэш (offline)</option>
+            </select>
             <button onclick="toggleTheme()" id="themeToggle" title="Переключить тему" style="background:rgba(159,122,234,0.15);border:1px solid rgba(159,122,234,0.4);color:#9f7aea;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:1em;font-weight:600;">🌙</button>
             <button onclick="clearAllData()" title="Удалить всех пациентов и данные" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f56565;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:0.9em;font-weight:600;">🗑️ Очистить всё</button>
             <a href="index.html" class="btn btn-danger">🚪 Выйти</a>
@@ -534,6 +538,32 @@
     var patientSearchQuery = '';
     var patientSortMode = 'created-desc';
 
+    // === ШАГ 3: Server-First с локальным кэшем ===
+    // 'server' — источник истины SQLite, localStorage = read-only кэш
+    // 'cache'  — offline-режим, только localStorage (включается автоматически при ошибке fetch)
+    var STORAGE_MODE = localStorage.getItem('STORAGE_MODE') || 'server';
+    var API_BASE = '';  // тот же origin, поэтому пусто
+    var currentDoctorId = 'DOC-001';  // stub; Шаг 6 → sub из JWT
+    var MIGRATION_FLAG = 'migrated_v1';
+
+    // Шаг 6: сюда придёт Authorization: Bearer <token>
+    function getAuthHeaders() {
+        return {};
+    }
+
+    function setStorageMode(mode) {
+        if (['server', 'cache'].indexOf(mode) === -1) {
+            console.warn('❌ Неизвестный STORAGE_MODE:', mode);
+            return;
+        }
+        STORAGE_MODE = mode;
+        localStorage.setItem('STORAGE_MODE', mode);
+        console.log('✅ STORAGE_MODE =', mode);
+        var sel = document.getElementById('storageModeSelect');
+        if (sel) sel.value = mode;
+        loadPatientsFromStorage();
+    }
+
     var LOR_SYMPTOMS = [
         { id: 'zalozhennost', label: 'Заложенность носа' },
         { id: 'vydeleniya', label: 'Выделения из носа' },
@@ -561,6 +591,8 @@
     // ================================================================
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🚀 Инициализация кабинета врача...');
+        var sel = document.getElementById('storageModeSelect');
+        if (sel) sel.value = STORAGE_MODE;
         restorePatientFilterUI();
         loadPatientsFromStorage();
         renderSymptomGrid();
@@ -572,44 +604,213 @@
     // ================================================================
     //  ЗАГРУЗКА ПАЦИЕНТОВ
     // ================================================================
+    // === ШАГ 3: Server-First загрузка ===
+    // 'server' — fetch с сервера, localStorage = кэш (fallback при offline)
+    // 'cache'  — только localStorage (offline-режим)
     function loadPatientsFromStorage() {
+        if (STORAGE_MODE === 'cache') {
+            loadFromLocalStorage();
+            return;
+        }
+        fetchPatientsFromServer()
+            .then(function(serverPatients) {
+                patients = serverPatients;
+                localStorage.setItem('doctorPatients', JSON.stringify(patients));
+                console.log('🌐 Загружено с сервера:', patients.length);
+                if (patients.length === 0 && !localStorage.getItem(MIGRATION_FLAG)) {
+                    migrateLocalToServer();
+                } else if (patients.length === 0) {
+                    patients = getDemoPatients();
+                    renderAll();
+                } else {
+                    renderAll();
+                }
+            })
+            .catch(function(err) {
+                console.warn('⚠️ Сервер недоступен, режим cache:', err.message);
+                STORAGE_MODE = 'cache';
+                var sel = document.getElementById('storageModeSelect');
+                if (sel) sel.value = 'cache';
+                loadFromLocalStorage();
+            });
+    }
+
+    function loadFromLocalStorage() {
         var saved = localStorage.getItem('doctorPatients');
         if (saved) {
             try {
                 patients = JSON.parse(saved);
-                console.log('📂 Загружено пациентов:', patients.length);
-                
-                // Нормализация телефонов при загрузке
-                var phonesChanged = false;
-                patients.forEach(function(p) {
-                    if (p.phone) {
-                        var normalized = normalizePhone(p.phone);
-                        if (normalized !== p.phone) {
-                            p.phone = normalized;
-                            phonesChanged = true;
-                        }
-                    }
-                });
-                if (phonesChanged) {
-                    savePatientsToStorage();
-                    console.log('📞 Телефоны нормализованы');
-                }
+                console.log('💾 Загружено из localStorage:', patients.length);
+                normalizePhones();
             } catch (e) {
                 patients = [];
             }
         }
         if (!patients || patients.length === 0) {
             patients = getDemoPatients();
-            savePatientsToStorage();
+            localStorage.setItem('doctorPatients', JSON.stringify(patients));
             console.log('📊 Загружены демо-пациенты');
         }
+        renderAll();
+    }
+
+    function normalizePhones() {
+        var phonesChanged = false;
+        patients.forEach(function(p) {
+            if (p.phone) {
+                var normalized = normalizePhone(p.phone);
+                if (normalized !== p.phone) {
+                    p.phone = normalized;
+                    phonesChanged = true;
+                }
+            }
+        });
+        if (phonesChanged) {
+            localStorage.setItem('doctorPatients', JSON.stringify(patients));
+            console.log('📞 Телефоны нормализованы');
+        }
+    }
+
+    function renderAll() {
         renderPatientList();
         renderPatientsTable();
         updateStats();
     }
 
+    // === ШАГ 3: Server-First сохранение ===
+    // 'cache'  — только localStorage
+    // 'server' — localStorage (кэш) + POST на сервер
+    // Полный sync (PUT/DELETE) — Шаг 4; сейчас только POST новых.
     function savePatientsToStorage() {
         localStorage.setItem('doctorPatients', JSON.stringify(patients));
+        if (STORAGE_MODE === 'server') {
+            syncPatientsToServer().catch(function(err) {
+                console.warn('⚠️ Ошибка sync на сервер:', err.message);
+            });
+        }
+    }
+
+    // === ШАГ 3: API-обёртки ===
+
+    function apiRequest(method, path, body) {
+        var opts = {
+            method: method,
+            headers: Object.assign({
+                'Content-Type': 'application/json'
+            }, getAuthHeaders())
+        };
+        if (body !== undefined) {
+            opts.body = JSON.stringify(body);
+        }
+        return fetch(API_BASE + path, opts).then(function(res) {
+            if (!res.ok) {
+                return res.text().then(function(t) {
+                    throw new Error(method + ' ' + path + ' → ' + res.status + ': ' + t);
+                });
+            }
+            if (res.status === 204) return null;
+            return res.json();
+        });
+    }
+
+    function fetchPatientsFromServer() {
+        // Go-сервер уже отдаёт camelCase — маппер не нужен
+        return apiRequest('GET', '/api/patients');
+    }
+
+    function jsToServer(jp) {
+        // Отдаём то, что ждёт Patient struct.
+        // Symptoms / AIResult НЕ шлём — они появятся в Шаге 4.
+        return {
+            id: jp.id,
+            name: jp.name,
+            age: jp.age || 0,
+            ageMonths: jp.ageMonths || (jp.age ? jp.age * 12 : 0),
+            ageDisplay: jp.ageDisplay || (jp.age ? jp.age + ' лет' : ''),
+            birthDate: jp.birthDate || '',
+            gender: jp.gender || 'other',
+            height: jp.height || 0,
+            weight: jp.weight || 0,
+            phone: jp.phone || '',
+            email: jp.email || '',
+            status: jp.status || 'new',
+            diagnosis: jp.diagnosis || '',
+            aiChecked: !!jp.aiChecked,
+            created: jp.created || new Date().toISOString(),
+            lastSync: new Date().toISOString()
+        };
+    }
+
+    function syncPatientsToServer() {
+        // Полный sync — Шаг 4. Сейчас: POST тех, кого нет на сервере.
+        return fetchPatientsFromServer().then(function(serverPatients) {
+            var serverIds = {};
+            serverPatients.forEach(function(sp) { serverIds[sp.id] = true; });
+            var toCreate = patients.filter(function(p) { return !serverIds[p.id]; });
+            if (toCreate.length === 0) return;
+            console.log('🔄 Sync на сервер:', toCreate.length, 'новых');
+            var chain = Promise.resolve();
+            toCreate.forEach(function(p) {
+                chain = chain.then(function() {
+                    return apiRequest('POST', '/api/patients', jsToServer(p))
+                        .catch(function(err) {
+                            console.warn('⚠️ Не удалось создать', p.id, err.message);
+                        });
+                });
+            });
+            return chain;
+        });
+    }
+
+    function migrateLocalToServer() {
+        // Читаем локальные данные. Если пусто/битые — берём демо и всё равно шлём на сервер.
+        var localPatients = [];
+        var saved = localStorage.getItem('doctorPatients');
+        if (saved) {
+            try {
+                var parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    localPatients = parsed;
+                }
+            } catch (e) {
+                console.warn('⚠️ Битый JSON в localStorage, используем демо:', e.message);
+            }
+        }
+        if (localPatients.length === 0) {
+            localPatients = getDemoPatients();
+            localStorage.setItem('doctorPatients', JSON.stringify(localPatients));
+            console.log('📊 Нет локальных данных — берём демо:', localPatients.length);
+        }
+        console.log('🚚 Миграция localStorage → SQLite:', localPatients.length, 'пациентов');
+        var okCount = 0, failCount = 0;
+        var chain = Promise.resolve();
+        localPatients.forEach(function(p) {
+            chain = chain.then(function() {
+                return apiRequest('POST', '/api/patients', jsToServer(p))
+                    .then(function() { okCount++; })
+                    .catch(function(err) {
+                        failCount++;
+                        console.warn('⚠️ Не мигрирован', p.id, err.message);
+                    });
+            });
+        });
+        chain.then(function() {
+            // Флаг ставим ТОЛЬКО если всё успешно — иначе повторим при следующей загрузке
+            if (failCount === 0) {
+                localStorage.setItem(MIGRATION_FLAG, '1');
+            } else {
+                console.warn('⚠️ Часть пациентов не мигрировала, флаг не ставим — повторим при следующей загрузке');
+            }
+            console.log('✅ Миграция завершена: OK=' + okCount + ', FAIL=' + failCount);
+            return fetchPatientsFromServer();
+        }).then(function(serverPatients) {
+            patients = serverPatients;
+            localStorage.setItem('doctorPatients', JSON.stringify(patients));
+            renderAll();
+        }).catch(function(err) {
+            console.error('❌ Миграция упала:', err.message);
+            renderAll();
+        });
     }
 
     function getDemoPatients() {
