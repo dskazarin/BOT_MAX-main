@@ -22,11 +22,14 @@ clean:
 # Статус сервера
 status:
 	@echo "📊 Статус сервера:"
-	@if curl -s http://localhost:8082/ > /dev/null 2>&1; then \
-		echo "✅ Сервер работает на http://localhost:8082"; \
-	else \
-		echo "❌ Сервер не запущен"; \
-	fi
+	@for i in 1 2 3 4 5; do \
+		if curl -sf http://localhost:8082/api/health > /dev/null 2>&1; then \
+			echo "✅ Сервер работает на http://localhost:8082"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "❌ Сервер не запущен"
 
 # Остановка сервера
 stop:
