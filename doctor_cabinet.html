@@ -555,6 +555,7 @@
     // ================================================================
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🚀 Инициализация кабинета врача...');
+        restorePatientFilterUI();
         loadPatientsFromStorage();
         renderSymptomGrid();
         updateStats();
@@ -1070,12 +1071,29 @@
     // ================================================================
     function filterPatients(query) {
         patientSearchQuery = (query || '').toLowerCase().trim();
+        localStorage.setItem('patientSearch', query || '');
         renderPatientList();
     }
 
     function sortPatients(mode) {
         patientSortMode = mode || 'created-desc';
+        localStorage.setItem('patientSort', patientSortMode);
         renderPatientList();
+    }
+
+    function restorePatientFilterUI() {
+        var savedSearch = localStorage.getItem('patientSearch') || '';
+        var savedSort = localStorage.getItem('patientSort') || 'created-desc';
+
+        patientSearchQuery = savedSearch.toLowerCase().trim();
+        patientSortMode = savedSort;
+
+        var searchEl = document.getElementById('patientSearch');
+        var sortEl = document.getElementById('patientSort');
+        if (searchEl) searchEl.value = savedSearch;
+        if (sortEl) sortEl.value = savedSort;
+
+        console.log('🔍 Фильтр восстановлен:', { search: savedSearch, sort: savedSort });
     }
 
     function getSortedPatients(arr) {
