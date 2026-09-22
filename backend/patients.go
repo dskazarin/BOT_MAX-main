@@ -11,24 +11,26 @@ import (
 // Patient — структура пациента для API и SQLite.
 // Соответствует полям схемы БД (без Symptoms и AIResult — добавим в шаг 4).
 type Patient struct {
-	ID         string  `json:"id"`
-	DoctorID   string  `json:"doctorId"`
-	ClinicID   string  `json:"clinicId,omitempty"`
-	Name       string  `json:"name"`
-	Age        int     `json:"age"`
-	AgeMonths  int     `json:"ageMonths,omitempty"`
-	AgeDisplay string  `json:"ageDisplay,omitempty"`
-	BirthDate  string  `json:"birthDate,omitempty"`
-	Gender     string  `json:"gender,omitempty"`
-	Height     float64 `json:"height,omitempty"`
-	Weight     float64 `json:"weight,omitempty"`
-	Phone      string  `json:"phone,omitempty"`
-	Email      string  `json:"email,omitempty"`
-	Status     string  `json:"status,omitempty"`
-	Diagnosis  string  `json:"diagnosis,omitempty"`
-	AIChecked  bool    `json:"aiChecked,omitempty"`
-	Created    string  `json:"created,omitempty"`
-	LastSync   string  `json:"lastSync,omitempty"`
+	ID         string          `json:"id"`
+	DoctorID   string          `json:"doctorId"`
+	ClinicID   string          `json:"clinicId,omitempty"`
+	Name       string          `json:"name"`
+	Age        int             `json:"age"`
+	AgeMonths  int             `json:"ageMonths,omitempty"`
+	AgeDisplay string          `json:"ageDisplay,omitempty"`
+	BirthDate  string          `json:"birthDate,omitempty"`
+	Gender     string          `json:"gender,omitempty"`
+	Height     float64         `json:"height,omitempty"`
+	Weight     float64         `json:"weight,omitempty"`
+	Phone      string          `json:"phone,omitempty"`
+	Email      string          `json:"email,omitempty"`
+	Status     string          `json:"status,omitempty"`
+	Diagnosis  string          `json:"diagnosis,omitempty"`
+	AIChecked  bool            `json:"aiChecked,omitempty"`
+	Symptoms   json.RawMessage `json:"symptoms,omitempty"`
+	AIResult   json.RawMessage `json:"aiResult,omitempty"`
+	Created    string          `json:"created,omitempty"`
+	LastSync   string          `json:"lastSync,omitempty"`
 }
 
 // stubDoctorID — заглушка вместо авторизации (шаг 6 — JWT).
@@ -97,15 +99,26 @@ func handlePatientCreate(w http.ResponseWriter, r *http.Request) {
 
 // handlePatientByID возвращает одного пациента по ID из URL.
 func handlePatientByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "GET only", http.StatusMethodNotAllowed)
-		return
-	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/patients/")
 	if id == "" {
 		http.Error(w, "id is required", http.StatusBadRequest)
 		return
 	}
+
+	switch r.Method {
+	case http.MethodGet:
+		handlePatientGet(w, r, id)
+	case http.MethodPut:
+		handlePatientUpdate(w, r, id)
+	case http.MethodDelete:
+		handlePatientDelete(w, r, id)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handlePatientGet возвращает одного пациента по id.
+func handlePatientGet(w http.ResponseWriter, r *http.Request, id string) {
 	p, err := getPatientByID(db, id)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -117,4 +130,56 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(p)
+}
+
+// handlePatientUpdate — PUT /api/patients/{id}.
+// Принимает полный объект пациента, перезаписывает запись.
+func handlePatientUpdate(w http.ResponseWriter, r *http.Request, id string) {
+	var p Patient
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// id из URL имеет приоритет, но если клиент прислал другой — это ошибка.
+	if p.ID != "" && p.ID != id {
+		http.Error(w, "id mismatch", http.StatusBadRequest)
+		return
+	}
+	p.ID = id
+	p.DoctorID = stubDoctorID
+
+	if p.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if p.Gender != "" && p.Gender != "male" && p.Gender != "female" && p.Gender != "other" {
+		http.Error(w, "gender must be male, female or other", http.StatusBadRequest)
+		return
+	}
+
+	if err := updatePatient(db, &p); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(p)
+}
+
+// handlePatientDelete — DELETE /api/patients/{id}.
+func handlePatientDelete(w http.ResponseWriter, r *http.Request, id string) {
+	if err := deletePatient(db, id); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

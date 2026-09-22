@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	_ "modernc.org/sqlite"
@@ -181,8 +182,8 @@ func getPatientsByDoctor(db *sql.DB, doctorID string) ([]Patient, error) {
 		       COALESCE(age_months, 0), COALESCE(age_display, ''), COALESCE(birth_date, ''),
 		       COALESCE(gender, ''), COALESCE(height, 0), COALESCE(weight, 0),
 		       COALESCE(phone, ''), COALESCE(email, ''), COALESCE(status, ''),
-		       COALESCE(diagnosis, ''), COALESCE(ai_checked, 0),
-		       COALESCE(created, ''), COALESCE(last_sync, '')
+		       COALESCE(diagnosis, ''), COALESCE(symptoms, ''), COALESCE(ai_checked, 0),
+		       COALESCE(ai_result, ''), COALESCE(created, ''), COALESCE(last_sync, '')
 		FROM patients
 		WHERE doctor_id = ?
 		ORDER BY created DESC`, doctorID)
@@ -195,17 +196,24 @@ func getPatientsByDoctor(db *sql.DB, doctorID string) ([]Patient, error) {
 	for rows.Next() {
 		var p Patient
 		var aiChecked int
+		var symptoms, aiResult string
 		if err := rows.Scan(
 			&p.ID, &p.DoctorID, &p.ClinicID, &p.Name, &p.Age,
 			&p.AgeMonths, &p.AgeDisplay, &p.BirthDate,
 			&p.Gender, &p.Height, &p.Weight,
 			&p.Phone, &p.Email, &p.Status,
-			&p.Diagnosis, &aiChecked,
+			&p.Diagnosis, &symptoms, &aiChecked, &aiResult,
 			&p.Created, &p.LastSync,
 		); err != nil {
 			return nil, fmt.Errorf("scan patient: %w", err)
 		}
 		p.AIChecked = aiChecked == 1
+		if symptoms != "" {
+			p.Symptoms = json.RawMessage(symptoms)
+		}
+		if aiResult != "" {
+			p.AIResult = json.RawMessage(aiResult)
+		}
 		patients = append(patients, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -220,15 +228,22 @@ func createPatient(db *sql.DB, p *Patient) error {
 	if p.AIChecked {
 		aiChecked = 1
 	}
+	var symptoms, aiResult interface{}
+	if len(p.Symptoms) > 0 {
+		symptoms = string(p.Symptoms)
+	}
+	if len(p.AIResult) > 0 {
+		aiResult = string(p.AIResult)
+	}
 	_, err := db.Exec(`
 		INSERT INTO patients (
 			id, doctor_id, clinic_id, name, age, age_months, age_display,
 			birth_date, gender, height, weight, phone, email, status,
 			diagnosis, symptoms, ai_checked, ai_result, created, last_sync
-		) VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+		) VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.ID, p.DoctorID, p.ClinicID, p.Name, p.Age, p.AgeMonths, p.AgeDisplay,
 		p.BirthDate, p.Gender, p.Height, p.Weight, p.Phone, p.Email, p.Status,
-		p.Diagnosis, aiChecked, p.Created, p.LastSync)
+		p.Diagnosis, symptoms, aiChecked, aiResult, p.Created, p.LastSync)
 	if err != nil {
 		return fmt.Errorf("insert patient: %w", err)
 	}
@@ -239,24 +254,89 @@ func createPatient(db *sql.DB, p *Patient) error {
 func getPatientByID(db *sql.DB, id string) (*Patient, error) {
 	var p Patient
 	var aiChecked int
+	var symptoms, aiResult string
 	err := db.QueryRow(`
 		SELECT id, doctor_id, COALESCE(clinic_id, ''), name, COALESCE(age, 0),
 		       COALESCE(age_months, 0), COALESCE(age_display, ''), COALESCE(birth_date, ''),
 		       COALESCE(gender, ''), COALESCE(height, 0), COALESCE(weight, 0),
 		       COALESCE(phone, ''), COALESCE(email, ''), COALESCE(status, ''),
-		       COALESCE(diagnosis, ''), COALESCE(ai_checked, 0),
-		       COALESCE(created, ''), COALESCE(last_sync, '')
+		       COALESCE(diagnosis, ''), COALESCE(symptoms, ''), COALESCE(ai_checked, 0),
+		       COALESCE(ai_result, ''), COALESCE(created, ''), COALESCE(last_sync, '')
 		FROM patients WHERE id = ?`, id).Scan(
 		&p.ID, &p.DoctorID, &p.ClinicID, &p.Name, &p.Age,
 		&p.AgeMonths, &p.AgeDisplay, &p.BirthDate,
 		&p.Gender, &p.Height, &p.Weight,
 		&p.Phone, &p.Email, &p.Status,
-		&p.Diagnosis, &aiChecked,
+		&p.Diagnosis, &symptoms, &aiChecked, &aiResult,
 		&p.Created, &p.LastSync,
 	)
 	if err != nil {
 		return nil, err
 	}
 	p.AIChecked = aiChecked == 1
+	if symptoms != "" {
+		p.Symptoms = json.RawMessage(symptoms)
+	}
+	if aiResult != "" {
+		p.AIResult = json.RawMessage(aiResult)
+	}
 	return &p, nil
+}
+
+// updatePatient обновляет существующего пациента по id.
+// Возвращает sql.ErrNoRows, если пациент не найден.
+func updatePatient(db *sql.DB, p *Patient) error {
+	aiChecked := 0
+	if p.AIChecked {
+		aiChecked = 1
+	}
+	var symptoms, aiResult interface{}
+	if len(p.Symptoms) > 0 {
+		symptoms = string(p.Symptoms)
+	}
+	if len(p.AIResult) > 0 {
+		aiResult = string(p.AIResult)
+	}
+	res, err := db.Exec(`
+		UPDATE patients SET
+			clinic_id = NULLIF(?, ''),
+			name = ?, age = ?, age_months = ?, age_display = ?,
+			birth_date = ?, gender = ?, height = ?, weight = ?,
+			phone = ?, email = ?, status = ?,
+			diagnosis = ?, symptoms = ?, ai_checked = ?, ai_result = ?,
+			last_sync = ?
+		WHERE id = ?`,
+		p.ClinicID, p.Name, p.Age, p.AgeMonths, p.AgeDisplay,
+		p.BirthDate, p.Gender, p.Height, p.Weight,
+		p.Phone, p.Email, p.Status,
+		p.Diagnosis, symptoms, aiChecked, aiResult,
+		p.LastSync, p.ID)
+	if err != nil {
+		return fmt.Errorf("update patient: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// deletePatient удаляет пациента по id.
+// Возвращает sql.ErrNoRows, если пациент не найден.
+func deletePatient(db *sql.DB, id string) error {
+	res, err := db.Exec(`DELETE FROM patients WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete patient: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
