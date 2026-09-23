@@ -2,20 +2,22 @@
 
 .PHONY: run build clean status stop help
 
-# Запуск сервера
-run:
-	@echo "🚀 Запуск сервера..."
-	@go run ./backend &
-
-# Сборка бинарника
+# Сборка бинарника (в /tmp, чтобы не мусорить в репо)
 build:
 	@echo "🔧 Компиляция..."
-	@go build -o botmax ./backend
+	@go build -o /tmp/botmax_server ./backend
+
+# Запуск сервера (через собранный бинарник — один процесс, легко убить)
+run: build
+	@echo "🚀 Запуск сервера..."
+	@nohup /tmp/botmax_server > /tmp/botmax.log 2>&1 &
+	@sleep 3
+	@make --no-print-directory status
 
 # Очистка
 clean:
 	@echo "🧹 Очистка..."
-	@rm -f botmax
+	@rm -f botmax /tmp/botmax_server /tmp/botmax.log /tmp/botmax_build.log
 	@rm -f *.log
 	@echo "✅ Готово"
 
@@ -35,6 +37,7 @@ status:
 stop:
 	@echo "🛑 Остановка сервера..."
 	@fuser -k 8082/tcp 2>/dev/null || true
+	@pkill -f "/tmp/botmax_server" 2>/dev/null || true
 	@echo "✅ Сервер остановлен"
 
 # Проверка работы
