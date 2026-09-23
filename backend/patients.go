@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -99,9 +100,34 @@ func handlePatientCreate(w http.ResponseWriter, r *http.Request) {
 
 // handlePatientByID возвращает одного пациента по ID из URL.
 func handlePatientByID(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/patients/")
-	if id == "" {
+	path := strings.TrimPrefix(r.URL.Path, "/api/patients/")
+	if path == "" {
 		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Разбор подпутей: /{id}/vitals, /{id}/vitals/history, /{id}/cards
+	parts := strings.Split(path, "/")
+	id := parts[0]
+
+	if len(parts) >= 2 {
+		switch parts[1] {
+		case "vitals":
+			if len(parts) == 2 {
+				handleVitalsByID(w, r, id)
+				return
+			}
+			if len(parts) == 3 && parts[2] == "history" {
+				handleVitalsHistory(w, r, id)
+				return
+			}
+		case "cards":
+			if len(parts) == 2 {
+				handleCardByID(w, r, id)
+				return
+			}
+		}
+		http.NotFound(w, r)
 		return
 	}
 
@@ -182,4 +208,153 @@ func handlePatientDelete(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// === Vitals / Cards handlers (Шаг 5, B3) ===
+
+// vitalsBody — тело PUT /api/patients/{id}/vitals.
+type vitalsBody struct {
+	BP   string  `json:"bp"`
+	Temp float64 `json:"temp"`
+	Spo2 int     `json:"spo2"`
+}
+
+// cardBody — тело PUT /api/patients/{id}/cards.
+// Data — произвольный JSON, бэк его не парсит.
+type cardBody struct {
+	Data json.RawMessage `json:"data"`
+}
+
+// handleVitalsByID — GET / PUT /api/patients/{id}/vitals.
+func handleVitalsByID(w http.ResponseWriter, r *http.Request, id string) {
+	// Проверка существования пациента → 404 + FK-защита.
+	if _, err := getPatientByID(db, id); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "patient not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		bp, temp, spo2, updated, err := getVitals(db, id)
+		if err == sql.ErrNoRows {
+			http.Error(w, "vitals not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"bp":      bp,
+			"temp":    temp,
+			"spo2":    spo2,
+			"updated": updated,
+		})
+
+	case http.MethodPut:
+		var body vitalsBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := upsertVitals(db, id, body.BP, body.Temp, body.Spo2); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := appendVitalsHistory(db, id, body.BP, body.Temp, body.Spo2); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleVitalsHistory — GET /api/patients/{id}/vitals/history?limit=N.
+func handleVitalsHistory(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, err := getPatientByID(db, id); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "patient not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	limit := 50
+	if q := r.URL.Query().Get("limit"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	records, err := getVitalsHistory(db, id, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(records)
+}
+
+// handleCardByID — GET / PUT /api/patients/{id}/cards.
+func handleCardByID(w http.ResponseWriter, r *http.Request, id string) {
+	if _, err := getPatientByID(db, id); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "patient not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		data, updated, err := getCard(db, id)
+		if err == sql.ErrNoRows {
+			http.Error(w, "card not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"data":    json.RawMessage(data),
+			"updated": updated,
+		})
+
+	case http.MethodPut:
+		var body cardBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if len(body.Data) == 0 {
+			http.Error(w, "data is required", http.StatusBadRequest)
+			return
+		}
+		if err := upsertCard(db, id, string(body.Data)); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
