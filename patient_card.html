@@ -1163,19 +1163,49 @@
         if (emailEl) emailEl.textContent = '✉️ ' + (patientData.email || '—');
     }
 
+    // applyCardDataToDOM — заполняет поля карточки в DOM.
+    // cardData: {field_xxx: "value", ...} (ключи без префикса field_).
+    function applyCardDataToDOM(cardData) {
+        if (!cardData) return;
+        Object.keys(cardData).forEach(function(key) {
+            var field = document.getElementById('field_' + key);
+            if (field) field.value = cardData[key] || '';
+        });
+    }
+
+    // loadCardData — Server-First: GET /cards → applyCardDataToDOM.
+    // 404 / ошибка → localStorage (fallback).
+    // STORAGE_MODE === 'cache' → сразу localStorage, без запроса.
     function loadCardData() {
         var cardKey = 'patient_card_' + patientId;
-        var saved = localStorage.getItem(cardKey);
-        if (saved) {
+
+        // Читать localStorage — надо в любом случае (для fallback).
+        function applyFromLocalStorage() {
+            var saved = localStorage.getItem(cardKey);
+            if (!saved) return;
             try {
-                var cardData = JSON.parse(saved);
-                Object.keys(cardData).forEach(function(key) {
-                    var field = document.getElementById('field_' + key);
-                    if (field) field.value = cardData[key] || '';
-                });
+                applyCardDataToDOM(JSON.parse(saved));
             } catch (e) {}
         }
 
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+            apiRequest('GET', '/api/patients/' + encodeURIComponent(patientId) + '/cards')
+                .then(function(resp) {
+                    // resp: {data: {...}, updated: "..."}
+                    var data = (resp && resp.data) || {};
+                    applyCardDataToDOM(data);
+                    // Обновим локальный кэш (localStorage).
+                    try { localStorage.setItem(cardKey, JSON.stringify(data)); } catch (e) {}
+                })
+                .catch(function(err) {
+                    console.warn('loadCardData: сервер недоступен, fallback → localStorage:', err.message);
+                    applyFromLocalStorage();
+                });
+        } else {
+            applyFromLocalStorage();
+        }
+
+        // Listener'ы для autoResize/autoSave — один раз, независимо от источника.
         document.querySelectorAll('.field-textarea').forEach(function(ta) {
             autoResize(ta);
             ta.addEventListener('input', function() { autoResize(this); scheduleAutoSave(); });
