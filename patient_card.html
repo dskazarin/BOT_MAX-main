@@ -1227,6 +1227,20 @@
             cardData[id] = el.value;
         });
         localStorage.setItem(cardKey, JSON.stringify(cardData));
+
+        // Server-First: PUT /api/patients/{id}/cards (data — JSON карточки).
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+            apiRequest('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/cards', {
+                data: cardData
+            })
+                .then(function() {
+                    console.log('✅ cards синхронизированы с сервером');
+                })
+                .catch(function(err) {
+                    console.warn('⚠️ PUT /cards failed:', err.message);
+                });
+        }
+
         syncToDoctor();
         showNotification('✅ Все данные сохранены!');
     }
