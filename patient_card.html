@@ -913,6 +913,61 @@
     var patientData = null;
     var currentFieldId = null;
 
+    // === API (шаг 4.3, Server-First) ===
+    var API_BASE = '';                    // тот же origin
+    var STORAGE_MODE = 'server';          // 'server' | 'cache'
+    var currentDoctorId = 'DOC-001';      // stub, шаг 6 — JWT
+
+    function getAuthHeaders() {
+        // Заготовка для JWT (шаг 6).
+        return {};
+    }
+
+    function apiRequest(method, path, body) {
+        var opts = {
+            method: method,
+            headers: Object.assign({
+                'Content-Type': 'application/json'
+            }, getAuthHeaders())
+        };
+        if (body !== undefined) {
+            opts.body = JSON.stringify(body);
+        }
+        return fetch(API_BASE + path, opts).then(function(res) {
+            if (!res.ok) {
+                return res.text().then(function(t) {
+                    throw new Error(method + ' ' + path + ' → ' + res.status + ': ' + t);
+                });
+            }
+            if (res.status === 204) return null;
+            return res.json();
+        });
+    }
+
+    function jsToServer(jp) {
+        // Отдаём то, что ждёт Patient struct (Go).
+        return {
+            id: jp.id,
+            name: jp.name,
+            age: jp.age || 0,
+            ageMonths: jp.ageMonths || (jp.age ? jp.age * 12 : 0),
+            ageDisplay: jp.ageDisplay || (jp.age ? jp.age + ' лет' : ''),
+            birthDate: jp.birthDate || '',
+            gender: jp.gender || 'other',
+            height: jp.height || 0,
+            weight: jp.weight || 0,
+            phone: jp.phone || '',
+            email: jp.email || '',
+            status: jp.status || 'new',
+            diagnosis: jp.diagnosis || '',
+            aiChecked: !!jp.aiChecked,
+            symptoms: jp.symptoms || undefined,
+            aiResult: jp.aiResult || undefined,
+            created: jp.created || new Date().toISOString(),
+            lastSync: new Date().toISOString()
+        };
+    }
+
     var spellingRules = [
         { wrong: /\bпацыент\b/gi, right: 'пациент' },
         { wrong: /\bврачь\b/gi, right: 'врач' },
@@ -1035,6 +1090,17 @@
         if (typeof showNotification === 'function') {
             showNotification('✅ Пациент обновлён');
         }
+
+        // PUT на сервер (только в server-режиме)
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && typeof jsToServer === 'function') {
+            apiRequest('PUT', '/api/patients/' + encodeURIComponent(patientId), jsToServer(patientData))
+                .then(function() {
+                    console.log('🌐 PUT (edit) ok:', patientId);
+                })
+                .catch(function(err) {
+                    console.warn('⚠️ PUT (edit) failed:', patientId, err.message);
+                });
+        }
     }
 
     function loadPatient() {
@@ -1046,6 +1112,25 @@
             return;
         }
 
+        // Server-First: fetch /api/patients/{id}, fallback — localStorage
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function') {
+            apiRequest('GET', '/api/patients/' + encodeURIComponent(patientId))
+                .then(function(p) {
+                    patientData = p;
+                    console.log('🌐 Загружено с сервера:', patientId);
+                    renderPatientHeader();
+                    loadCardData();
+                })
+                .catch(function(err) {
+                    console.warn('⚠️ GET patient failed, fallback → localStorage:', err.message);
+                    loadPatientFromLocalStorage();
+                });
+        } else {
+            loadPatientFromLocalStorage();
+        }
+    }
+
+    function loadPatientFromLocalStorage() {
         var saved = localStorage.getItem('doctorPatients');
         if (saved) {
             try {
@@ -1053,25 +1138,27 @@
                 patientData = patients.find(function(p) { return p.id === patientId; });
             } catch (e) {}
         }
-
         if (patientData) {
-            document.getElementById('patientName').textContent = patientData.name;
-            document.getElementById('patientId').textContent = patientData.id;
-            document.getElementById('patientAge').textContent = patientData.age;
-            document.getElementById('patientAvatar').textContent = patientData.gender === 'female' ? '👩' : '👨';
-            if (patientData.birthDate) {
-                var bd = new Date(patientData.birthDate);
-                document.getElementById('patientBirthDate').textContent = bd.toLocaleDateString('ru-RU');
-            }
-            document.getElementById('patientAge').textContent = patientData.age;
-            
-            var phoneEl = document.getElementById('patientPhone');
-            if (phoneEl) phoneEl.textContent = '📞 ' + (patientData.phone || '—');
-            var emailEl = document.getElementById('patientEmail');
-            if (emailEl) emailEl.textContent = '✉️ ' + (patientData.email || '—');
+            console.log('📦 Загружено из localStorage:', patientId);
         }
-
+        renderPatientHeader();
         loadCardData();
+    }
+
+    function renderPatientHeader() {
+        if (!patientData) return;
+        document.getElementById('patientName').textContent = patientData.name;
+        document.getElementById('patientId').textContent = patientData.id;
+        document.getElementById('patientAge').textContent = patientData.age;
+        document.getElementById('patientAvatar').textContent = patientData.gender === 'female' ? '👩' : '👨';
+        if (patientData.birthDate) {
+            var bd = new Date(patientData.birthDate);
+            document.getElementById('patientBirthDate').textContent = bd.toLocaleDateString('ru-RU');
+        }
+        var phoneEl = document.getElementById('patientPhone');
+        if (phoneEl) phoneEl.textContent = '📞 ' + (patientData.phone || '—');
+        var emailEl = document.getElementById('patientEmail');
+        if (emailEl) emailEl.textContent = '✉️ ' + (patientData.email || '—');
     }
 
     function loadCardData() {
@@ -1201,6 +1288,17 @@
         localStorage.setItem('doctorPatients', JSON.stringify(doctorPatients));
         localStorage.setItem('syncSignal', Date.now().toString());
         console.log('✅ Синхронизировано с врачом');
+
+        // PUT на сервер (только в server-режиме)
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && typeof jsToServer === 'function') {
+            apiRequest('PUT', '/api/patients/' + encodeURIComponent(p.id), jsToServer(p))
+                .then(function() {
+                    console.log('🌐 PUT (syncToDoctor) ok:', p.id);
+                })
+                .catch(function(err) {
+                    console.warn('⚠️ PUT (syncToDoctor) failed:', p.id, err.message);
+                });
+        }
     }
 
     function detectSymptomsFromCard(patient, cardData) {
