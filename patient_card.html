@@ -1800,16 +1800,6 @@
         if (e.key === 'Escape') closeSpellPopup();
     });
 
-    // Запуск при загрузке
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(initSpellCheck, 1000);
-    });
-
-    // Если DOM уже загружен
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(initSpellCheck, 500);
-    }
-
     console.log('✅ Модуль ИИ-агента орфографии загружен');
 
 
@@ -1850,14 +1840,6 @@
     // ============================================================
     //  ИНИЦИАЛИЗАЦИЯ
     // ============================================================
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(initProSpellCheck, 500);
-    });
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(initProSpellCheck, 300);
-    }
-
     // Escape — закрыть
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') hideTooltip();
