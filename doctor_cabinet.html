@@ -873,7 +873,13 @@
     //  ФУНКЦИИ ПАЦИЕНТОВ
     // ================================================================
     function generatePatientId() {
-        return 'PAT-' + String(patients.length + 1).padStart(3, '0');
+        // PAT-YYYYMMDD-HHMMSS-XXX (устойчиво к удалению+созданию, коллизии исключены)
+        var d = new Date();
+        var p = function(n, w) { return String(n).padStart(w, '0'); };
+        var stamp = '' + d.getFullYear() + p(d.getMonth() + 1, 2) + p(d.getDate(), 2)
+                  + '-' + p(d.getHours(), 2) + p(d.getMinutes(), 2) + p(d.getSeconds(), 2);
+        var rnd = p(Math.floor(Math.random() * 1000), 3);
+        return 'PAT-' + stamp + '-' + rnd;
     }
 
     function selectPatient(id) {
@@ -1039,7 +1045,7 @@
         }
         
         var newPatient = {
-            id: 'PAT-' + String(patients.length + 1).padStart(3, '0'),
+            id: generatePatientId(),
             name: name,
             age: age,
             ageMonths: ageMonths,
