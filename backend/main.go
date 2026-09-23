@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -447,6 +448,10 @@ func main() {
 
 	http.Handle("/", http.FileServer(http.Dir(rootDir)))
 
+	listener, err := net.Listen("tcp", ":8082")
+	if err != nil {
+		log.Fatalf("❌ Порт 8082 занят (освободи: fuser -k 8082/tcp): %v", err)
+	}
 	log.Println("🚀 Сервер запущен на http://localhost:8082")
-	log.Fatal(http.ListenAndServe(":8082", nil))
+	log.Fatal(http.Serve(listener, nil))
 }
