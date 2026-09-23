@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -109,6 +110,7 @@ func InitDB(path string) (*sql.DB, error) {
 			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_vitals_history_patient ON vitals_history(patient_id, recorded);`,
+		`CREATE INDEX IF NOT EXISTS idx_vitals_history_recorded ON vitals_history(recorded);`,
 
 		// === Карточка (JSON) ===
 		`CREATE TABLE IF NOT EXISTS cards (
@@ -339,4 +341,93 @@ func deletePatient(db *sql.DB, id string) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// === Vitals CRUD (Шаг 5, B1) ===
+
+// VitalsRecord — запись истории витальных показателей.
+type VitalsRecord struct {
+	ID        int     `json:"id"`
+	PatientID string  `json:"patientId"`
+	BP        string  `json:"bp"`
+	Temp      float64 `json:"temp"`
+	Spo2      int     `json:"spo2"`
+	Recorded  string  `json:"recorded"`
+}
+
+// getVitals возвращает текущие витальные пациента.
+// Если записи нет — возвращает sql.ErrNoRows (фронт → fallback на localStorage).
+func getVitals(db *sql.DB, patientID string) (bp string, temp float64, spo2 int, updated string, err error) {
+	row := db.QueryRow(
+		`SELECT bp, temp, spo2, updated FROM vitals WHERE patient_id = ?`,
+		patientID,
+	)
+	err = row.Scan(&bp, &temp, &spo2, &updated)
+	if err != nil {
+		return "", 0, 0, "", err
+	}
+	return bp, temp, spo2, updated, nil
+}
+
+// upsertVitals вставляет или обновляет текущие витальные.
+// Обновляет поле updated текущим временем (RFC3339, UTC).
+func upsertVitals(db *sql.DB, patientID, bp string, temp float64, spo2 int) error {
+	_, err := db.Exec(`
+		INSERT INTO vitals (patient_id, bp, temp, spo2, updated)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(patient_id) DO UPDATE SET
+			bp = excluded.bp,
+			temp = excluded.temp,
+			spo2 = excluded.spo2,
+			updated = excluded.updated
+	`, patientID, bp, temp, spo2, time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("upsert vitals: %w", err)
+	}
+	return nil
+}
+
+// appendVitalsHistory добавляет запись в историю витальных.
+func appendVitalsHistory(db *sql.DB, patientID, bp string, temp float64, spo2 int) error {
+	_, err := db.Exec(`
+		INSERT INTO vitals_history (patient_id, bp, temp, spo2, recorded)
+		VALUES (?, ?, ?, ?, ?)
+	`, patientID, bp, temp, spo2, time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("append vitals history: %w", err)
+	}
+	return nil
+}
+
+// getVitalsHistory возвращает историю витальных пациента.
+// Свежие сверху (ORDER BY recorded DESC). limit<=0 → 50.
+// Возвращает []VitalsRecord{} (не nil) при отсутствии записей.
+func getVitalsHistory(db *sql.DB, patientID string, limit int) ([]VitalsRecord, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := db.Query(`
+		SELECT id, patient_id, bp, temp, spo2, recorded
+		FROM vitals_history
+		WHERE patient_id = ?
+		ORDER BY recorded DESC
+		LIMIT ?
+	`, patientID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query vitals history: %w", err)
+	}
+	defer rows.Close()
+
+	records := []VitalsRecord{}
+	for rows.Next() {
+		var r VitalsRecord
+		if err := rows.Scan(&r.ID, &r.PatientID, &r.BP, &r.Temp, &r.Spo2, &r.Recorded); err != nil {
+			return nil, fmt.Errorf("scan vitals history: %w", err)
+		}
+		records = append(records, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iter: %w", err)
+	}
+	return records, nil
 }
