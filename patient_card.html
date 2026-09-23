@@ -701,34 +701,9 @@
                 <div class="vital-item vital-bp-group">
                 <label>АД (мм рт.ст.)</label>
                 <div class="bp-inputs">
-                    <select id="vital_bp_sys_select" onchange="syncBPFromSelect()">
-                        <option value="">—</option>
-                        <option value="90">90</option>
-                        <option value="100">100</option>
-                        <option value="110">110</option>
-                        <option value="120" selected>120</option>
-                        <option value="130">130</option>
-                        <option value="140">140</option>
-                        <option value="150">150</option>
-                        <option value="160">160</option>
-                        <option value="170">170</option>
-                        <option value="180">180</option>
-                    </select>
-                    <input type="number" id="vital_bp_sys" placeholder="120" oninput="syncBPToSelect()">
+                    <input type="number" id="vital_bp_sys" placeholder="120">
                     <span class="bp-sep">/</span>
-                    <select id="vital_bp_dia_select" onchange="syncBPFromSelect()">
-                        <option value="">—</option>
-                        <option value="40">40</option>
-                        <option value="50">50</option>
-                        <option value="60">60</option>
-                        <option value="70">70</option>
-                        <option value="80" selected>80</option>
-                        <option value="90">90</option>
-                        <option value="100">100</option>
-                        <option value="110">110</option>
-                        <option value="120">120</option>
-                    </select>
-                    <input type="number" id="vital_bp_dia" placeholder="80" oninput="syncBPToSelect()">
+                    <input type="number" id="vital_bp_dia" placeholder="80">
                 </div>
             </div>
                 <div class="vital-item">
@@ -1411,8 +1386,6 @@
         var wEl = document.getElementById('vital_weight');
         var sysEl = document.getElementById('vital_bp_sys');
         var diaEl = document.getElementById('vital_bp_dia');
-        var sysSel = document.getElementById('vital_bp_sys_select');
-        var diaSel = document.getElementById('vital_bp_dia_select');
         var tempEl = document.getElementById('vital_temp');
         var spo2El = document.getElementById('vital_spo2');
 
@@ -1424,8 +1397,6 @@
 
         if (sysEl) sysEl.value = sysVal;
         if (diaEl) diaEl.value = diaVal;
-        if (sysSel) sysSel.value = sysVal;
-        if (diaSel) diaSel.value = diaVal;
         if (tempEl) tempEl.value = vitals.temp || '';
         if (spo2El) spo2El.value = vitals.spo2 || '';
 
@@ -1496,32 +1467,6 @@
             bmiEl.style.color = (bmi >= 18.5 && bmi < 25) ? '#48bb78' : '#ed8936';
         } else {
             bmiEl.textContent = '—';
-        }
-    }
-
-    function syncBPFromSelect() {
-        var sysSel = document.getElementById('vital_bp_sys_select');
-        var diaSel = document.getElementById('vital_bp_dia_select');
-        var sysEl = document.getElementById('vital_bp_sys');
-        var diaEl = document.getElementById('vital_bp_dia');
-        
-        if (sysSel && sysEl && sysSel.value) sysEl.value = sysSel.value;
-        if (diaSel && diaEl && diaSel.value) diaEl.value = diaSel.value;
-    }
-
-    function syncBPToSelect() {
-        var sysEl = document.getElementById('vital_bp_sys');
-        var diaEl = document.getElementById('vital_bp_dia');
-        var sysSel = document.getElementById('vital_bp_sys_select');
-        var diaSel = document.getElementById('vital_bp_dia_select');
-        
-        if (sysEl && sysSel && sysEl.value) {
-            var sysOpt = Array.from(sysSel.options).find(function(o) { return o.value === sysEl.value; });
-            if (sysOpt) sysSel.value = sysEl.value;
-        }
-        if (diaEl && diaSel && diaEl.value) {
-            var diaOpt = Array.from(diaSel.options).find(function(o) { return o.value === diaEl.value; });
-            if (diaOpt) diaSel.value = diaEl.value;
         }
     }
 
