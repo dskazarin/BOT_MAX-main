@@ -657,6 +657,49 @@
             justify-content: flex-end;
             margin-top: 20px;
         }
+
+        /* ============================================================
+           SAVE STATUS INDICATOR (шаг 4.5, коммит 1)
+           ============================================================ */
+        .save-status {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 0.95em;
+            font-weight: 600;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            transform: translateY(8px);
+            z-index: 9999;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            max-width: 340px;
+        }
+        .save-status.saving,
+        .save-status.saved,
+        .save-status.queued,
+        .save-status.error {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .save-status.saving {
+            background: rgba(237, 137, 54, 0.95);
+            color: #fff;
+        }
+        .save-status.saved {
+            background: rgba(72, 187, 120, 0.95);
+            color: #fff;
+        }
+        .save-status.queued {
+            background: rgba(66, 153, 225, 0.95);
+            color: #fff;
+        }
+        .save-status.error {
+            background: rgba(245, 101, 101, 0.95);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -890,8 +933,21 @@
 
     // === API (шаг 4.3, Server-First) ===
     var API_BASE = '';                    // тот же origin
-    var STORAGE_MODE = 'server';          // 'server' | 'cache'
+    var STORAGE_MODE = localStorage.getItem('STORAGE_MODE') || 'server';  // патч 1.4
     var currentDoctorId = 'DOC-001';      // stub, шаг 6 — JWT
+
+    // Патч 1.4: чтение актуального STORAGE_MODE из localStorage
+    function getStorageMode() {
+        return localStorage.getItem('STORAGE_MODE') || 'server';
+    }
+
+    // Патч 1.4: слушаем изменения из других вкладок (doctor_cabinet)
+    window.addEventListener('storage', function(e) {
+        if (e.key === 'STORAGE_MODE') {
+            STORAGE_MODE = e.newValue || 'server';
+            console.log('🔄 STORAGE_MODE обновлён из другой вкладки:', STORAGE_MODE);
+        }
+    });
 
     function getAuthHeaders() {
         // Заготовка для JWT (шаг 6).
@@ -1282,20 +1338,26 @@
         localStorage.setItem(cardKey, JSON.stringify(cardData));
 
         // Server-First: PUT /api/patients/{id}/cards (data — JSON карточки).
-        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+        if (getStorageMode() === 'cache') {
+            // Offline-режим: в коммите 2 здесь будет pendingEnqueue
+            showSaveStatus('queued', 'Сохранено локально (offline)');
+        } else if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+            showSaveStatus('saving', 'Сохранение...');
             apiRequest('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/cards', {
                 data: cardData
             })
                 .then(function() {
                     console.log('✅ cards синхронизированы с сервером');
+                    showSaveStatus('saved', 'Сохранено');
                 })
                 .catch(function(err) {
                     console.warn('⚠️ PUT /cards failed:', err.message);
+                    showSaveStatus('error', 'Ошибка сохранения', true);
                 });
         }
 
         syncToDoctor();
-        showNotification('✅ Все данные сохранены!');
+        // showNotification убран: заменён на showSaveStatus
     }
 
     function suggestMKB() {
@@ -1346,7 +1408,13 @@
     // ============================================================
 
     function syncToDoctor() {
-        if (!patientId) return;
+        if (!patientId) return null;
+        // Патч 1.4: синхронизация с localStorage (защита от расхождения)
+        STORAGE_MODE = getStorageMode();
+        if (getStorageMode() === 'cache') {
+            console.log('💤 syncToDoctor: cache — PUT пропущен');
+            return null;
+        }
 
         var cardKey = 'patient_card_' + patientId;
         var cardData = {};
@@ -1390,14 +1458,16 @@
 
         // PUT на сервер (только в server-режиме)
         if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && typeof jsToServer === 'function') {
-            apiRequest('PUT', '/api/patients/' + encodeURIComponent(p.id), jsToServer(p))
+            return apiRequest('PUT', '/api/patients/' + encodeURIComponent(p.id), jsToServer(p))
                 .then(function() {
                     console.log('🌐 PUT (syncToDoctor) ok:', p.id);
                 })
                 .catch(function(err) {
                     console.warn('⚠️ PUT (syncToDoctor) failed:', p.id, err.message);
+                    throw err;
                 });
         }
+        return null;
     }
 
     function detectSymptomsFromCard(patient, cardData) {
@@ -1438,13 +1508,39 @@
             cardData[id] = el.value;
         });
         localStorage.setItem(cardKey, JSON.stringify(cardData));
-        syncToDoctor();
+
+        if (getStorageMode() === 'cache') {
+            showSaveStatus('queued', 'Сохранено локально (offline)');
+            return;
+        }
+
+        var p = syncToDoctor();
+        if (p && typeof p.then === 'function') {
+            showSaveStatus('saving', 'Сохранение...');
+            p.then(function() {
+                showSaveStatus('saved', 'Сохранено');
+            }).catch(function() {
+                showSaveStatus('error', 'Ошибка сохранения', true);
+            });
+        }
     }
 
     var autoSaveTimer;
+    var lastAutoSaveTs = 0;
+    var AUTO_SAVE_THROTTLE_MS = 30000;
+
     function scheduleAutoSave() {
         clearTimeout(autoSaveTimer);
-        autoSaveTimer = setTimeout(autoSaveWithSync, 2000);
+        autoSaveTimer = setTimeout(function() {
+            var now = Date.now();
+            // Throttle: не чаще 1 раза в AUTO_SAVE_THROTTLE_MS
+            if (now - lastAutoSaveTs < AUTO_SAVE_THROTTLE_MS) {
+                console.log('⏱️ autoSave throttled (', AUTO_SAVE_THROTTLE_MS, 'ms )');
+                return;
+            }
+            lastAutoSaveTs = now;
+            autoSaveWithSync();
+        }, 2000);
     }
 
     // ============================================================
@@ -1596,7 +1692,10 @@
 
         // Server-First: PUT /api/patients/{id}/vitals (bp/temp/spo2).
         // height/weight не идут через /vitals — они уходят через syncToDoctor() → PUT /patients.
-        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+        if (getStorageMode() === 'cache') {
+            showSaveStatus('queued', 'Сохранено локально (offline)');
+        } else if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+            showSaveStatus('saving', 'Сохранение...');
             apiRequest('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/vitals', {
                 bp: bp_sys + '/' + bp_dia,
                 temp: temp,
@@ -1604,9 +1703,11 @@
             })
                 .then(function() {
                     console.log('✅ vitals синхронизированы с сервером');
+                    showSaveStatus('saved', 'Сохранено');
                 })
                 .catch(function(err) {
                     console.warn('⚠️ PUT /vitals failed:', err.message);
+                    showSaveStatus('error', 'Ошибка сохранения', true);
                 });
         }
 
@@ -1616,7 +1717,7 @@
         }
 
         // Уведомление
-        showNotification('✅ Показатели сохранены');
+        // showNotification убран: заменён на showSaveStatus
     }
 
     // ============================================================
@@ -1854,6 +1955,31 @@
 
     // Исправить все ошибки
     
+
+    // ============================================================
+    //  SAVE STATUS INDICATOR (шаг 4.5, коммит 1)
+    // ============================================================
+    var saveStatusTimer = null;
+    var lastSaveStatus = null;
+
+    function showSaveStatus(state, text, sticky) {
+        var el = document.getElementById('saveStatus');
+        if (!el) return;
+        // Не спамить одинаковым состоянием (кроме 'saving' - он всегда показывается)
+        if (state === lastSaveStatus && !sticky && state !== 'saving') return;
+        lastSaveStatus = state;
+        el.className = 'save-status ' + state;
+        el.textContent = text || '';
+        if (saveStatusTimer) { clearTimeout(saveStatusTimer); saveStatusTimer = null; }
+        // Автоскрытие только для 'saved' и 'queued'
+        if (state === 'saved' || state === 'queued') {
+            saveStatusTimer = setTimeout(function() {
+                el.className = 'save-status';
+                el.textContent = '';
+                lastSaveStatus = null;
+            }, 2500);
+        }
+    }
 
     // Показать уведомление
     function showNotification(message) {
@@ -2572,6 +2698,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Индикатор статуса сохранения (шаг 4.5, коммит 1) -->
+<div id="saveStatus" class="save-status" aria-live="polite"></div>
 
 </body>
 </html>
