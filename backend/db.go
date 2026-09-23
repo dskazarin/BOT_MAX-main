@@ -431,3 +431,35 @@ func getVitalsHistory(db *sql.DB, patientID string, limit int) ([]VitalsRecord, 
 	}
 	return records, nil
 }
+
+// === Cards CRUD (Шаг 5, B2) ===
+
+// getCard возвращает JSON-данные карточки пациента.
+// Если записи нет — sql.ErrNoRows (фронт → localStorage).
+func getCard(db *sql.DB, patientID string) (data string, updated string, err error) {
+	row := db.QueryRow(
+		`SELECT data, updated FROM cards WHERE patient_id = ?`,
+		patientID,
+	)
+	err = row.Scan(&data, &updated)
+	if err != nil {
+		return "", "", err
+	}
+	return data, updated, nil
+}
+
+// upsertCard вставляет или обновляет данные карточки.
+// data — сериализованный JSON (строка). updated — RFC3339 UTC.
+func upsertCard(db *sql.DB, patientID, data string) error {
+	_, err := db.Exec(`
+		INSERT INTO cards (patient_id, data, updated)
+		VALUES (?, ?, ?)
+		ON CONFLICT(patient_id) DO UPDATE SET
+			data = excluded.data,
+			updated = excluded.updated
+	`, patientID, data, time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("upsert card: %w", err)
+	}
+	return nil
+}
