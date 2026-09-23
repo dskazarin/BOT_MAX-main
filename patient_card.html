@@ -1120,6 +1120,7 @@
                     console.log('🌐 Загружено с сервера:', patientId);
                     renderPatientHeader();
                     loadCardData();
+                    loadVitals();
                 })
                 .catch(function(err) {
                     console.warn('⚠️ GET patient failed, fallback → localStorage:', err.message);
@@ -1143,6 +1144,7 @@
         }
         renderPatientHeader();
         loadCardData();
+        loadVitals();
     }
 
     function renderPatientHeader() {
