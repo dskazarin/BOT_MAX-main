@@ -1527,6 +1527,22 @@
             patientData.spo2 = spo2;
         }
 
+        // Server-First: PUT /api/patients/{id}/vitals (bp/temp/spo2).
+        // height/weight не идут через /vitals — они уходят через syncToDoctor() → PUT /patients.
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+            apiRequest('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/vitals', {
+                bp: bp_sys + '/' + bp_dia,
+                temp: temp,
+                spo2: spo2
+            })
+                .then(function() {
+                    console.log('✅ vitals синхронизированы с сервером');
+                })
+                .catch(function(err) {
+                    console.warn('⚠️ PUT /vitals failed:', err.message);
+                });
+        }
+
         // Синхронизация
         if (typeof syncToDoctor === 'function') {
             try { syncToDoctor(); } catch(e) { console.warn(e); }
