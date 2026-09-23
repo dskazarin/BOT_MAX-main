@@ -1078,6 +1078,83 @@
         }
     }
 
+    // maybeMigratePatientData — одноразовая миграция localStorage → сервер (B5).
+    // Срабатывает только если:
+    //   - STORAGE_MODE === 'server'
+    //   - флаг migrated_v2_<ID> не стоит
+    //   - в localStorage есть данные
+    //   - на сервере 404 (пусто)
+    // Если на сервере есть данные — не мигрируем (server = source of truth).
+    // Вызывать только из loadPatient после успешного GET (сервер доступен).
+    function maybeMigratePatientData() {
+        if (!patientId) return;
+        if (STORAGE_MODE !== 'server') return;
+        if (typeof apiRequest !== 'function') return;
+
+        var flagKey = 'migrated_v2_' + patientId;
+        if (localStorage.getItem(flagKey) === 'true') return;
+
+        var vitalsKey = 'patient_vitals_' + patientId;
+        var cardKey = 'patient_card_' + patientId;
+        var localVitals = localStorage.getItem(vitalsKey);
+        var localCards = localStorage.getItem(cardKey);
+
+        if (!localVitals && !localCards) {
+            localStorage.setItem(flagKey, 'true');
+            return;
+        }
+
+        var promises = [];
+
+        // Vitals
+        if (localVitals) {
+            promises.push(
+                apiRequest('GET', '/api/patients/' + encodeURIComponent(patientId) + '/vitals')
+                    .then(function() {
+                        // 200 — данные на сервере уже есть, не мигрируем
+                    })
+                    .catch(function() {
+                        // 404 или ошибка → мигрируем
+                        var v = {};
+                        try { v = JSON.parse(localVitals); } catch (e) {}
+                        var bp = v.bp || ((v.bp_sys || 120) + '/' + (v.bp_dia || 80));
+                        return apiRequest('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/vitals', {
+                            bp: bp,
+                            temp: v.temp || 36.6,
+                            spo2: v.spo2 || 98
+                        });
+                    })
+            );
+        }
+
+        // Cards
+        if (localCards) {
+            promises.push(
+                apiRequest('GET', '/api/patients/' + encodeURIComponent(patientId) + '/cards')
+                    .then(function() {
+                        // 200 — данные на сервере уже есть
+                    })
+                    .catch(function() {
+                        // 404 → мигрируем
+                        var c = {};
+                        try { c = JSON.parse(localCards); } catch (e) {}
+                        return apiRequest('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/cards', {
+                            data: c
+                        });
+                    })
+            );
+        }
+
+        Promise.all(promises)
+            .then(function() {
+                localStorage.setItem(flagKey, 'true');
+                console.log('✅ B5: данные пациента', patientId, 'мигрированы на сервер');
+            })
+            .catch(function(err) {
+                console.warn('⚠️ B5: ошибка миграции', patientId, ':', err.message);
+            });
+    }
+
     function loadPatient() {
         var urlParams = new URLSearchParams(window.location.search);
         patientId = urlParams.get('id');
@@ -1096,6 +1173,7 @@
                     renderPatientHeader();
                     loadCardData();
                     loadVitals();
+                    maybeMigratePatientData();   // B5: одноразовая миграция localStorage → сервер
                 })
                 .catch(function(err) {
                     console.warn('⚠️ GET patient failed, fallback → localStorage:', err.message);
