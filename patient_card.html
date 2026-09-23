@@ -1356,17 +1356,10 @@
     //  VITALS — РАБОТА С ПОКАЗАТЕЛЯМИ
     // ============================================================
 
-    function loadVitals() {
-        var vitalsKey = 'patient_vitals_' + patientId;
-        var saved = localStorage.getItem(vitalsKey);
-        var vitals = saved ? JSON.parse(saved) : {
-            height: (patientData && patientData.height) || 0,
-            weight: (patientData && patientData.weight) || 0,
-            bp_sys: 120,
-            bp_dia: 80,
-            temp: 36.6,
-            spo2: 98
-        };
+    // applyVitalsToDOM — заполняет поля витальных в DOM.
+    // vitals: {height, weight, bp_sys, bp_dia, bp, temp, spo2}
+    function applyVitalsToDOM(vitals) {
+        if (!vitals) vitals = {};
 
         var hEl = document.getElementById('vital_height');
         var wEl = document.getElementById('vital_weight');
@@ -1391,6 +1384,58 @@
         if (spo2El) spo2El.value = vitals.spo2 || '';
 
         updateBMI();
+    }
+
+    // loadVitals — Server-First: GET /vitals → мерж с локальными height/weight.
+    // 404 / ошибка → localStorage (fallback).
+    // STORAGE_MODE === 'cache' → сразу localStorage, без запроса.
+    function loadVitals() {
+        var vitalsKey = 'patient_vitals_' + patientId;
+
+        // 1. Локальный кэш (в нём height/weight в мм/г).
+        var local = {};
+        try {
+            var saved = localStorage.getItem(vitalsKey);
+            if (saved) local = JSON.parse(saved) || {};
+        } catch (e) {}
+
+        // 2. Fallback-объект если ничего нет.
+        var fallback = {
+            height: (patientData && patientData.height) || 0,
+            weight: (patientData && patientData.weight) || 0,
+            bp_sys: 120,
+            bp_dia: 80,
+            temp: 36.6,
+            spo2: 98
+        };
+
+        // 3. Server-First ветка.
+        if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
+            apiRequest('GET', '/api/patients/' + encodeURIComponent(patientId) + '/vitals')
+                .then(function(serverVitals) {
+                    // serverVitals: {bp, temp, spo2, updated}
+                    var bp = (serverVitals && serverVitals.bp) || '';
+                    var bpParts = bp.split('/');
+                    var merged = Object.assign({}, fallback, local, {
+                        bp: bp,
+                        bp_sys: parseInt(bpParts[0], 10) || (local.bp_sys || 120),
+                        bp_dia: parseInt(bpParts[1], 10) || (local.bp_dia || 80),
+                        temp: (serverVitals && serverVitals.temp) || local.temp || 36.6,
+                        spo2: (serverVitals && serverVitals.spo2) || local.spo2 || 98
+                    });
+                    applyVitalsToDOM(merged);
+                    // Обновим локальный кэш (height/weight из local остаются).
+                    try { localStorage.setItem(vitalsKey, JSON.stringify(merged)); } catch (e) {}
+                })
+                .catch(function(err) {
+                    // 404 или сеть — читаем localStorage.
+                    console.warn('loadVitals: сервер недоступен, fallback → localStorage:', err.message);
+                    applyVitalsToDOM(Object.assign({}, fallback, local));
+                });
+        } else {
+            // cache-режим — только localStorage.
+            applyVitalsToDOM(Object.assign({}, fallback, local));
+        }
     }
 
     function updateBMI() {
