@@ -131,6 +131,19 @@ func InitDB(path string) (*sql.DB, error) {
 			used      INTEGER DEFAULT 0,
 			FOREIGN KEY(clinic_id) REFERENCES clinics(id) ON DELETE CASCADE
 		);`,
+
+		// === Refresh-токены (B4.1) ===
+		`CREATE TABLE IF NOT EXISTS refresh_tokens (
+			jti         TEXT PRIMARY KEY,
+			doctor_id   TEXT NOT NULL,
+			issued_at   TEXT NOT NULL,
+			expires_at  TEXT NOT NULL,
+			revoked_at  TEXT,
+			replaced_by TEXT,
+			FOREIGN KEY(doctor_id) REFERENCES doctors(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_refresh_doctor ON refresh_tokens(doctor_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_refresh_expires ON refresh_tokens(expires_at);`,
 	}
 
 	for _, stmt := range schema {
