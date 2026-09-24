@@ -593,6 +593,19 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	revoked, rerr := IsRefreshRevoked(db, claims.ID)
+	if rerr != nil {
+		log.Printf("⚠️  refresh: IsRefreshRevoked(%q): %v", claims.ID, rerr)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if revoked {
+		n, _ := RevokeAllForDoctor(db, claims.DoctorID)
+		log.Printf("🚨 refresh: REPLAY jti=%s doctor=%s — каскад, отозвано %d", claims.ID, claims.DoctorID, n)
+		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
+		return
+	}
+
 	// Проверяем, что врач ещё существует и активен.
 	doc, err := getDoctorByID(db, claims.DoctorID)
 	if err != nil {
@@ -625,6 +638,11 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 
 	if err := SaveRefreshJTI(db, refreshJTI, doc.ID, refreshExp); err != nil {
 		log.Printf("⚠️  refresh: SaveRefreshJTI(%q): %v", doc.ID, err)
+	}
+
+	// Ротация: старый jti помечаем отозванным, указывая замену.
+	if err := RevokeRefreshJTI(db, claims.ID, refreshJTI); err != nil {
+		log.Printf("⚠️  refresh: RevokeRefreshJTI(%q): %v", claims.ID, err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
