@@ -490,3 +490,48 @@ func upsertCard(db *sql.DB, patientID, data string) error {
 	}
 	return nil
 }
+
+// ---------------------------------------------------------------
+// Doctor — Шаг 6.3: чтение doctors для аутентификации.
+// ---------------------------------------------------------------
+
+// Doctor — минимальное представление строки doctors, нужное логину.
+type Doctor struct {
+	ID           string
+	Email        string
+	PasswordHash string
+	Name         string
+	Role         string
+	Active       bool
+}
+
+// getDoctorByEmail ищет врача по email. Возвращает sql.ErrNoRows,
+// если не найден — handler логина трактует это как 401.
+func getDoctorByEmail(db *sql.DB, email string) (*Doctor, error) {
+	const q = `
+		SELECT id, email, password_hash, name, role, active
+		FROM doctors
+		WHERE email = ?
+	`
+	var d Doctor
+	err := db.QueryRow(q, email).Scan(
+		&d.ID, &d.Email, &d.PasswordHash, &d.Name, &d.Role, &d.Active,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+// touchLastLogin обновляет last_login. Ошибку логина не валит —
+// handler решит, писать её в лог или нет.
+func touchLastLogin(db *sql.DB, doctorID string) error {
+	_, err := db.Exec(
+		`UPDATE doctors SET last_login = ? WHERE id = ?`,
+		time.Now().UTC().Format(time.RFC3339), doctorID,
+	)
+	if err != nil {
+		return fmt.Errorf("touch last_login: %w", err)
+	}
+	return nil
+}

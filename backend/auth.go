@@ -7,7 +7,9 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -233,8 +235,109 @@ func doctorRoleFromCtx(r *http.Request) string {
 // registerAuthRoutes — заглушка (маршруты появятся в 6.3 и 6.6).
 // ---------------------------------------------------------------
 
+// registerAuthRoutes регистрирует маршруты аутентификации на
+// http.DefaultServeMux. Вызывается из main() рядом с
+// registerPatientRoutes() — до создания http.Server.
 func registerAuthRoutes() {
-	// Шаг 6.3: POST /api/auth/login
+	// Шаг 6.3
+	http.HandleFunc("/api/auth/login", handleAuthLogin)
+
 	// Шаг 6.6: POST /api/auth/refresh, POST /api/auth/logout
-	log.Println("ℹ️  registerAuthRoutes: заглушка (подпатчи 6.3 и 6.6 добавят маршруты)")
+	log.Println("🔐 registerAuthRoutes: /api/auth/login зарегистрирован")
+}
+
+// ---------------------------------------------------------------
+// Шаг 6.3 — POST /api/auth/login
+// ---------------------------------------------------------------
+
+// loginReq — тело запроса POST /api/auth/login.
+type loginReq struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// doctorBrief — публичная часть врача (без password_hash) в ответе.
+type doctorBrief struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+// loginResp — ответ 200 на успешный логин.
+type loginResp struct {
+	AccessToken  string      `json:"accessToken"`
+	RefreshToken string      `json:"refreshToken"`
+	Doctor       doctorBrief `json:"doctor"`
+}
+
+// handleAuthLogin обрабатывает POST /api/auth/login.
+// Тело: {"email":"...","password":"..."}.
+// 200: {"accessToken":"...","refreshToken":"...","doctor":{...}}.
+// 401: неверные креды (в т.ч. нет такого email).
+// 400: битый JSON. 500: внутренняя ошибка.
+//
+// Защита от user enumeration: bcrypt-проверка выполняется всегда —
+// даже если email не найден (hash = ""). Так по таймингу нельзя
+// отличить «нет юзера» от «неверный пароль».
+func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	var req loginReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	if req.Email == "" || req.Password == "" {
+		http.Error(w, `{"error":"email and password required"}`, http.StatusBadRequest)
+		return
+	}
+
+	doc, err := getDoctorByEmail(db, req.Email)
+	var storedHash string
+	switch {
+	case err == nil:
+		storedHash = doc.PasswordHash
+	case errors.Is(err, sql.ErrNoRows):
+		// Не нашли — оставляем пустой hash, bcrypt всё равно отработает.
+		doc = nil
+	default:
+		log.Printf("⚠️  login: getDoctorByEmail(%q): %v", req.Email, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Всегда вызываем bcrypt (защита от timing-атак).
+	if err := CheckPassword(storedHash, req.Password); err != nil || doc == nil || !doc.Active {
+		log.Printf("🔒 login: отклонено для %q", req.Email)
+		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
+		return
+	}
+
+	access, err := IssueAccessToken(doc.ID, doc.Role)
+	if err != nil {
+		log.Printf("⚠️  login: IssueAccessToken(%q): %v", doc.ID, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	refresh, err := IssueRefreshToken(doc.ID, doc.Role)
+	if err != nil {
+		log.Printf("⚠️  login: IssueRefreshToken(%q): %v", doc.ID, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := touchLastLogin(db, doc.ID); err != nil {
+		log.Printf("⚠️  login: touchLastLogin(%q): %v", doc.ID, err) // не критично
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(loginResp{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		Doctor: doctorBrief{
+			ID:   doc.ID,
+			Name: doc.Name,
+			Role: doc.Role,
+		},
+	})
+	log.Printf("✅ login: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
 }

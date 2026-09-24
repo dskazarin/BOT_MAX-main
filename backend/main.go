@@ -465,6 +465,9 @@ func main() {
 	// Роуты для /api/patients — см. backend/patients.go
 	registerPatientRoutes()
 
+	// Аутентификация (Шаг 6): POST /api/auth/login
+	registerAuthRoutes()
+
 	http.Handle("/", http.FileServer(http.Dir(rootDir)))
 
 	listener, err := net.Listen("tcp", ":8082")
