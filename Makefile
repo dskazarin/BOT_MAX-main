@@ -1,6 +1,6 @@
 # BOT_MAX - Patient Cabinet Makefile
 
-.PHONY: run build clean status stop help watchdog watchdog-stop watchdog-status watchdog-log
+.PHONY: run build clean status stop help watchdog watchdog-stop watchdog-status watchdog-log backup backup-list backup-clean
 
 # Сборка бинарника (в /tmp, чтобы не мусорить в репо)
 build:
@@ -87,6 +87,55 @@ watchdog-status:
 
 watchdog-log:
 	@tail -f /tmp/botmax_watchdog.log
+
+# Бэкапы SQLite
+BACKUP_DIR := backups
+BACKUP_KEEP := 10
+
+backup:
+	@mkdir -p $(BACKUP_DIR)
+	@if [ ! -f bot_max.db ]; then \
+		echo "❌ bot_max.db не найден"; \
+		exit 1; \
+	fi
+	@if pgrep -f /tmp/botmax_server > /dev/null 2>&1; then \
+		echo "⚠️  Сервер запущен. Для консистентного бэкапа лучше: make stop"; \
+	fi
+	@TS=$$(date +%Y%m%d_%H%M%S); \
+	DIR=$(BACKUP_DIR)/bot_max_$$TS; \
+	mkdir -p "$$DIR"; \
+	cp bot_max.db "$$DIR/bot_max.db"; \
+	if [ -f bot_max.db-wal ]; then cp bot_max.db-wal "$$DIR/bot_max.db-wal"; fi; \
+	if [ -f bot_max.db-shm ]; then cp bot_max.db-shm "$$DIR/bot_max.db-shm"; fi; \
+	SZ=$$(du -sh "$$DIR" | cut -f1); \
+	echo "✅ Бэкап: $$DIR ($$SZ)"; \
+	ls -1dt $(BACKUP_DIR)/bot_max_* 2>/dev/null | tail -n +$$(($(BACKUP_KEEP)+1)) | xargs -r rm -rf; \
+	echo "📦 Хранится: $$(ls -1d $(BACKUP_DIR)/bot_max_* 2>/dev/null | wc -l) / $(BACKUP_KEEP)"
+
+backup-list:
+	@if [ -d $(BACKUP_DIR) ]; then \
+		echo "📦 Бэкапы в $(BACKUP_DIR):"; \
+		ls -1dt $(BACKUP_DIR)/bot_max_* 2>/dev/null | head -20 | while read d; do \
+			SZ=$$(du -sh "$$d" | cut -f1); \
+			echo "  $$d ($$SZ)"; \
+		done; \
+		echo "Всего: $$(ls -1d $(BACKUP_DIR)/bot_max_* 2>/dev/null | wc -l)"; \
+	else \
+		echo "ℹ️  Директория $(BACKUP_DIR) не существует"; \
+	fi
+
+backup-clean:
+	@if [ -d $(BACKUP_DIR) ]; then \
+		read -p "Удалить все бэкапы в $(BACKUP_DIR)? [y/N] " ans; \
+		if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ]; then \
+			rm -rf $(BACKUP_DIR); \
+			echo "✅ Удалено"; \
+		else \
+			echo "ℹ️  Отменено"; \
+		fi; \
+	else \
+		echo "ℹ️  $(BACKUP_DIR) не существует"; \
+	fi
 
 # Справка
 help:
