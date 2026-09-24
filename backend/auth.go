@@ -69,9 +69,6 @@ const (
 
 type ctxKey string
 
-// devJWTSecret — fallback, если env BOTMAX_JWT_SECRET не задан.
-// НЕ использовать в проде. Логируется с громким warning.
-const devJWTSecret = "BOT_MAX_DEV_SECRET_DO_NOT_USE_IN_PROD_change_me"
 
 // ---------------------------------------------------------------
 // Пароли
