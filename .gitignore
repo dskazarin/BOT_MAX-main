@@ -12,7 +12,6 @@
 *~
 
 # Go
-go.sum
 bot_max_server
 bot_max_test
 /main
