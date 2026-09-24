@@ -361,7 +361,7 @@
             </select>
             <button onclick="toggleTheme()" id="themeToggle" title="Переключить тему" style="background:rgba(159,122,234,0.15);border:1px solid rgba(159,122,234,0.4);color:#9f7aea;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:1em;font-weight:600;">🌙</button>
             <button onclick="clearAllData()" title="Удалить всех пациентов и данные" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f56565;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:0.9em;font-weight:600;">🗑️ Очистить всё</button>
-            <a href="index.html" class="btn btn-danger">🚪 Выйти</a>
+            <a href="login.html" class="btn btn-danger" onclick="event.preventDefault(); BotMaxAuth.logout();">🚪 Выйти</a>
         </div>
     </div>
 
@@ -563,7 +563,11 @@
     </div>
 </div>
 
+<script src="auth.js"></script>
 <script>
+    // Шаг 6.7: guard — без токена → login.html
+    if (typeof BotMaxAuth !== 'undefined') BotMaxAuth.requireAuth();
+
     // ================================================================
     //  ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
     // ================================================================
@@ -577,11 +581,19 @@
     // 'cache'  — offline-режим, только localStorage (включается автоматически при ошибке fetch)
     var STORAGE_MODE = localStorage.getItem('STORAGE_MODE') || 'server';
     var API_BASE = '';  // тот же origin, поэтому пусто
-    var currentDoctorId = 'DOC-001';  // stub; Шаг 6 → sub из JWT
+    // Шаг 6.7: текущий врач — из JWT (botmax_doctor), fallback на stub
+    var currentDoctorId = 'DOC-001';
+    if (typeof BotMaxAuth !== 'undefined' && BotMaxAuth.getDoctor) {
+        var _doc = BotMaxAuth.getDoctor();
+        if (_doc && _doc.id) currentDoctorId = _doc.id;
+    }
     var MIGRATION_FLAG = 'migrated_v1';
 
-    // Шаг 6: сюда придёт Authorization: Bearer <token>
+    // Шаг 6.7: Authorization: Bearer <token> из auth.js
     function getAuthHeaders() {
+        if (typeof BotMaxAuth !== 'undefined' && BotMaxAuth.getAuthHeaders) {
+            return BotMaxAuth.getAuthHeaders();
+        }
         return {};
     }
 
@@ -938,20 +950,13 @@
         var _noEnqueue = callOpts && callOpts.noEnqueue;
         var _idemKey = callOpts && callOpts.idempotencyKey;
 
-        var fetchOpts = {
-            method: method,
-            headers: Object.assign({
-                'Content-Type': 'application/json'
-            }, getAuthHeaders())
-        };
+        // Шаг 6.7: authFetch из auth.js — ставит Bearer, ретраит 401 через refresh
+        var _extraHeaders = {};
         if (_idemKey) {
-            fetchOpts.headers['X-Idempotency-Key'] = _idemKey;
-        }
-        if (body !== undefined) {
-            fetchOpts.body = JSON.stringify(body);
+            _extraHeaders['X-Idempotency-Key'] = _idemKey;
         }
 
-        return fetch(API_BASE + path, fetchOpts).then(function(res) {
+        return BotMaxAuth.authFetch(method, API_BASE + path, body, _extraHeaders).then(function(res) {
             if (!res.ok) {
                 return res.text().then(function(t) {
                     var err = new Error(method + ' ' + path + ' HTTP ' + res.status + ': ' + t);

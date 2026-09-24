@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOT_MAX — Вход</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+        color: #e2e8f0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .login-card {
+        background: rgba(45, 55, 72, 0.95);
+        border: 1px solid rgba(159, 122, 234, 0.3);
+        border-radius: 16px;
+        padding: 40px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .login-card .logo {
+        font-size: 3em;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .login-card h1 {
+        font-size: 1.5em;
+        font-weight: 700;
+        text-align: center;
+        color: #9f7aea;
+        margin-bottom: 6px;
+    }
+
+    .login-card .subtitle {
+        text-align: center;
+        color: #a0aec0;
+        font-size: 0.9em;
+        margin-bottom: 28px;
+    }
+
+    .form-group {
+        margin-bottom: 18px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.85em;
+        color: #a0aec0;
+        margin-bottom: 6px;
+        font-weight: 600;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 12px 14px;
+        background: rgba(26, 32, 44, 0.7);
+        border: 1px solid rgba(159, 122, 234, 0.3);
+        border-radius: 10px;
+        color: #e2e8f0;
+        font-size: 1em;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.2s, background 0.2s;
+    }
+
+    .form-group input:focus {
+        border-color: #9f7aea;
+        background: rgba(26, 32, 44, 0.9);
+    }
+
+    .form-group input:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    button[type="submit"] {
+        width: 100%;
+        padding: 14px;
+        background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+        border: none;
+        border-radius: 10px;
+        color: #fff;
+        font-size: 1em;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+        font-family: inherit;
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(159, 122, 234, 0.4);
+    }
+
+    button[type="submit"]:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .error-msg {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #f56565;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 0.9em;
+        margin-bottom: 18px;
+        display: none;
+    }
+
+    .error-msg.visible {
+        display: block;
+    }
+
+    .hint {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 0.8em;
+        color: #718096;
+    }
+
+    .hint code {
+        background: rgba(159, 122, 234, 0.15);
+        color: #9f7aea;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'SF Mono', Monaco, Consolas, monospace;
+    }
+
+    .back-link {
+        display: block;
+        text-align: center;
+        margin-top: 16px;
+        color: #a0aec0;
+        text-decoration: none;
+        font-size: 0.85em;
+    }
+
+    .back-link:hover {
+        color: #9f7aea;
+    }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+    <div class="logo">🧠</div>
+    <h1>BOT_MAX</h1>
+    <div class="subtitle">Вход в кабинет врача</div>
+
+    <div id="errorMsg" class="error-msg"></div>
+
+    <form id="loginForm" autocomplete="on">
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email"
+                   autocomplete="username" required
+                   placeholder="doctor@local">
+        </div>
+
+        <div class="form-group">
+            <label for="password">Пароль</label>
+            <input type="password" id="password" name="password"
+                   autocomplete="current-password" required
+                   placeholder="••••••••">
+        </div>
+
+        <button type="submit" id="submitBtn">Войти</button>
+    </form>
+
+    <div class="hint">
+        Тестовый врач: <code>doctor@local</code> / <code>doctor@local</code>
+    </div>
+
+    <a href="index.html" class="back-link">← Вернуться на главную</a>
+</div>
+
+<script src="auth.js"></script>
+<script>
+(function () {
+    'use strict';
+
+    // Если уже авторизованы — сразу в кабинет.
+    if (BotMaxAuth.getToken()) {
+        location.replace('doctor_cabinet.html');
+        return;
+    }
+
+    var form      = document.getElementById('loginForm');
+    var emailEl   = document.getElementById('email');
+    var passEl    = document.getElementById('password');
+    var btn       = document.getElementById('submitBtn');
+    var errEl     = document.getElementById('errorMsg');
+
+    function showError(msg) {
+        errEl.textContent = msg;
+        errEl.classList.add('visible');
+    }
+
+    function hideError() {
+        errEl.classList.remove('visible');
+    }
+
+    function setBusy(busy) {
+        btn.disabled = busy;
+        emailEl.disabled = busy;
+        passEl.disabled = busy;
+        btn.textContent = busy ? 'Вход…' : 'Войти';
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        hideError();
+
+        var email    = (emailEl.value || '').trim().toLowerCase();
+        var password = passEl.value || '';
+
+        if (!email || !password) {
+            showError('Введите email и пароль');
+            return;
+        }
+
+        setBusy(true);
+
+        fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: password })
+        })
+        .then(function (res) {
+            if (res.status === 401) {
+                throw { kind: 'auth', msg: 'Неверный email или пароль' };
+            }
+            if (res.status === 400) {
+                return res.json().then(function (d) {
+                    throw { kind: 'auth', msg: (d && d.error) || 'Некорректные данные' };
+                }).catch(function () {
+                    throw { kind: 'auth', msg: 'Некорректные данные' };
+                });
+            }
+            if (!res.ok) {
+                throw { kind: 'server', msg: 'Сервер вернул ошибку ' + res.status };
+            }
+            return res.json();
+        })
+        .then(function (data) {
+            if (!data || !data.accessToken || !data.refreshToken || !data.doctor) {
+                throw { kind: 'server', msg: 'Некорректный ответ сервера' };
+            }
+            BotMaxAuth.setTokens(data.accessToken, data.refreshToken, data.doctor);
+            location.replace('doctor_cabinet.html');
+        })
+        .catch(function (err) {
+            setBusy(false);
+            if (err && err.kind === 'auth') {
+                showError(err.msg);
+                passEl.value = '';
+                passEl.focus();
+            } else if (err && err.kind === 'server') {
+                showError(err.msg);
+            } else {
+                showError('Сервер недоступен. Проверьте соединение.');
+            }
+        });
+    });
+
+    // Фокус на email при загрузке (если пусто) или на password.
+    if (emailEl.value) {
+        passEl.focus();
+    } else {
+        emailEl.focus();
+    }
+})();
+</script>
+
+</body>
+</html>
