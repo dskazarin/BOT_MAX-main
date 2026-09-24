@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -340,4 +341,101 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	log.Printf("✅ login: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
+}
+
+// ---------------------------------------------------------------
+// Шаг 6.4 — authMiddleware (soft-mode через BOTMAX_AUTH_ENFORCE)
+// ---------------------------------------------------------------
+
+// authMiddleware — Шаг 6.4.
+// Soft-mode (default): пропускает всех, но логирует запросы без токена.
+// Enforce-mode (BOTMAX_AUTH_ENFORCE=true|1|yes|on): без валидного
+// access-токена отдаёт 401, кроме whitelist-путей.
+// Валидный токен кладёт doctorID и role в context запроса.
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Whitelist — не требуют авторизации.
+		if isAuthWhitelist(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		token := extractBearerToken(r)
+		enforce := authEnforceEnabled()
+
+		if token == "" {
+			if enforce {
+				log.Printf("🔒 auth: нет токена %s %s → 401", r.Method, r.URL.Path)
+				http.Error(w, `{"error":"authorization required"}`, http.StatusUnauthorized)
+				return
+			}
+			log.Printf("⚠️  auth: soft-mode, нет токена %s %s (пропускаем)", r.Method, r.URL.Path)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		claims, err := ParseToken(token, "access")
+		if err != nil {
+			if enforce {
+				log.Printf("🔒 auth: невалидный токен %s %s: %v", r.Method, r.URL.Path, err)
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+			log.Printf("⚠️  auth: soft-mode, невалидный токен %s %s: %v (пропускаем)",
+				r.Method, r.URL.Path, err)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Токен валиден — кладём в context и пропускаем.
+		ctx := withDoctorID(r.Context(), claims.DoctorID, claims.Role)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// extractBearerToken достаёт токен из заголовка Authorization: Bearer <token>.
+// Схема "Bearer" регистронезависима (RFC 6750).
+func extractBearerToken(r *http.Request) string {
+	const prefix = "Bearer "
+	h := r.Header.Get("Authorization")
+	if len(h) > len(prefix) && strings.EqualFold(h[:len(prefix)], prefix) {
+		return strings.TrimSpace(h[len(prefix):])
+	}
+	return ""
+}
+
+// isAuthWhitelist — пути, не требующие авторизации.
+// Для /api/* используем строгое сравнение (не префикс), чтобы случайно
+// не открыть /api/auth/loginXXX. Статика (не /api/*) — открыта.
+func isAuthWhitelist(path string) bool {
+	switch path {
+	case "/api/health", "/api/auth/login", "/api/auth/refresh":
+		return true
+	}
+	if !strings.HasPrefix(path, "/api/") {
+		return true
+	}
+	return false
+}
+
+// authEnforceEnabled читает BOTMAX_AUTH_ENFORCE один раз.
+// "1","true","yes","on" → включено. Всё остальное → soft-mode.
+var (
+	authEnforceOnce sync.Once
+	authEnforceVal  bool
+)
+
+func authEnforceEnabled() bool {
+	authEnforceOnce.Do(func() {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv("BOTMAX_AUTH_ENFORCE")))
+		switch v {
+		case "1", "true", "yes", "on":
+			authEnforceVal = true
+			log.Println("🔐 auth: enforce ВКЛЮЧЁН (BOTMAX_AUTH_ENFORCE=true)")
+		default:
+			authEnforceVal = false
+			log.Println("⚠️  auth: soft-mode (BOTMAX_AUTH_ENFORCE не установлен)")
+		}
+	})
+	return authEnforceVal
 }

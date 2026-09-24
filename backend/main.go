@@ -476,7 +476,7 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Handler:      recoverMiddleware(http.DefaultServeMux),
+		Handler:      recoverMiddleware(authMiddleware(http.DefaultServeMux)),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
