@@ -31,14 +31,34 @@
 
 ---
 
+### 6.11 (B2) — seed dev-аккаунтов только в dev
+- **Дата:** 2026-09-24
+- **Коммиты:**
+  - `5b5035b` feat(seed): подпатч 6.11 (B2.1) — dev-аккаунты не сидятся в prod
+  - `f6b8eb8` test(seed): подпатч 6.11 (B2.2) — seed_test.go
+- **Файлы:**
+  - `backend/seed.go` (new) — ShouldSeedDevAccounts + runDevSeeds + envNameOrUnknown
+  - `backend/seed_test.go` (new) — TestShouldSeedDevAccounts, TestEnvNameOrUnknown
+  - `backend/main.go` — два вызова (seedDefaultDoctor + seedAdminRoles) заменены на один runDevSeeds(db, currentEnv)
+- **Что сделано:**
+  - В prod dev-seed'ы (DOC-001, ADMIN-001, SUPER-001) НЕ выполняются; в лог — явный «🌱 seed: пропущен (env=prod ...)».
+  - Гейт через ShouldSeedDevAccounts(env *Env) bool — смотрит только на env.IsProd (env == nil → false).
+  - Тесты: 5 подкейсов ShouldSeedDevAccounts + 4 envNameOrUnknown — все PASS.
+- **Smoke (end-to-end через /api/auth/login):**
+  - PROD (чистая БД): «🌱 seed: пропущен»; admin/superadmin/doctor → HTTP 401 invalid credentials.
+  - DEV  (чистая БД): три 🌱 Создан ...; admin/superadmin/doctor → HTTP 200 + accessToken + role.
+
+---
+
 ## Следующий
 
-### 6.11 (B2) — seed dev-аккаунтов только в dev
+### 6.12 (B3) — rate-limit на /api/auth/login
 - **Статус:** запланирован
-- **Цель:** `admin@botmax.local` / `superadmin@botmax.local` не должны сидиться при `BOTMAX_ENV=prod`.
-- **Опоры:** `currentEnv.IsProd` уже доступен (B1).
-- **Файлы (ожидаемо):** `backend/main.go` (или `db.go`) — блок seed; возможно `backend/env_test.go` / новый тест.
-- **Проверки (ожидаемо):** `go test`, smoke с `BOTMAX_ENV=prod` + длинный секрет → в БД нет dev-аккаунтов; dev → есть.
+- **Цель:** защита от brute-force / credential stuffing на самом чувствительном эндпоинте.
+- **Опоры:** currentEnv (B1), handleAuthLogin (auth.go).
+- **Идея (черновая):** per-IP + per-email счётчик попыток в скользящем окне; на превышение — HTTP 429 + Retry-After. In-memory (sync.Map + time), без внешних зависимостей.
+- **Файлы (ожидаемо):** `backend/ratelimit.go` (new), `backend/auth.go` (вызов в handleAuthLogin), `backend/ratelimit_test.go` (new).
+- **Проверки (ожидаемо):** go test + smoke: серия неверных логинов → на N+1 приходит 429; успешный логин сбрасывает счётчик.
 
 ---
 
