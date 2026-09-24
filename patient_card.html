@@ -945,7 +945,25 @@
     window.addEventListener('storage', function(e) {
         if (e.key === 'STORAGE_MODE') {
             STORAGE_MODE = e.newValue || 'server';
-            console.log('🔄 STORAGE_MODE обновлён из другой вкладки:', STORAGE_MODE);
+            console.log('STORAGE_MODE obnovlen iz drugoi vkladki:', STORAGE_MODE);
+            if (STORAGE_MODE === 'server' && typeof flushPendingSync === 'function') {
+                setTimeout(function() { flushPendingSync({ manual: true }); }, 0);
+            }
+        }
+        if (e.key === 'pending_sync_v1') {
+            pendingLoad();
+            if (typeof updateGlobalSyncStatus === 'function') updateGlobalSyncStatus();
+        }
+    });
+
+    // Шаг 4.5, коммит 2: триггеры flush — online + возврат вкладки из фона
+    window.addEventListener('online', function() {
+        console.log('online event - flush pending');
+        if (typeof flushPendingSync === 'function') flushPendingSync({ manual: true });
+    });
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden && typeof flushPendingSync === 'function') {
+            flushPendingSync();
         }
     });
 
@@ -954,24 +972,232 @@
         return {};
     }
 
-    function apiRequest(method, path, body) {
-        var opts = {
+    // ============================================================
+    // Шаг 4.5, коммит 2: pending sync queue + retry
+    // ============================================================
+    var PENDING_KEY = 'pending_sync_v1';
+    var PENDING_DEAD_KEY = 'pending_sync_dead_v1';
+    var PENDING_BACKOFF = [1000, 3000, 9000, 27000];
+    var PENDING_MAX_RETRIES = 4;
+    var PENDING_FLUSH_THROTTLE_MS = 5000;
+    var lastFlushTs = 0;
+    var isFlushing = false;
+    var pendingCache = null;
+
+    function pendingLoad() {
+        var raw = localStorage.getItem(PENDING_KEY);
+        if (!raw) { pendingCache = []; return pendingCache; }
+        try {
+            var arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) arr = [];
+            pendingCache = arr;
+            return arr;
+        } catch (e) {
+            console.warn('pendingLoad: parse error, reset', e);
+            pendingCache = [];
+            return pendingCache;
+        }
+    }
+
+    function pendingSave(arr) {
+        pendingCache = arr;
+        try {
+            localStorage.setItem(PENDING_KEY, JSON.stringify(arr));
+        } catch (e) {
+            console.error('pendingSave: quota exceeded?', e);
+        }
+    }
+
+    function pendingEnqueue(method, path, body) {
+        var arr = pendingLoad();
+        var existingIdx = -1;
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].method === method && arr[i].path === path) {
+                existingIdx = i;
+                break;
+            }
+        }
+        var uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : (Date.now() + '-' + Math.random().toString(36).slice(2));
+        var now = Date.now();
+        var item = {
+            id: uuid,
+            method: method,
+            path: path,
+            body: body,
+            idempotencyKey: uuid,
+            ts: now,
+            retries: 0,
+            nextRetryTs: now + PENDING_BACKOFF[0]
+        };
+        if (existingIdx >= 0) {
+            item.ts = arr[existingIdx].ts;
+            item.retries = arr[existingIdx].retries;
+            item.nextRetryTs = now;
+            arr[existingIdx] = item;
+            console.log('pendingEnqueue: obnovlen sushestvuyushiy', method, path);
+        } else {
+            arr.push(item);
+            console.log('pendingEnqueue: dobavlen', method, path, 'queue size =', arr.length);
+        }
+        pendingSave(arr);
+        updateGlobalSyncStatus();
+        return item;
+    }
+
+    function pendingDequeue(id) {
+        var arr = pendingLoad();
+        var next = arr.filter(function(it) { return it.id !== id; });
+        if (next.length !== arr.length) {
+            pendingSave(next);
+            console.log('pendingDequeue:', id, 'ostalos', next.length);
+            updateGlobalSyncStatus();
+        }
+    }
+
+    function pendingMarkRetry(id) {
+        var arr = pendingLoad();
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].id === id) {
+                arr[i].retries += 1;
+                if (arr[i].retries >= PENDING_MAX_RETRIES) {
+                    var dead = [];
+                    try {
+                        var rawDead = localStorage.getItem(PENDING_DEAD_KEY);
+                        if (rawDead) dead = JSON.parse(rawDead) || [];
+                    } catch (e) {}
+                    arr[i].deadReason = 'max_retries';
+                    arr[i].deadTs = Date.now();
+                    dead.push(arr[i]);
+                    var deadItem = arr[i];
+                    arr.splice(i, 1);
+                    try { localStorage.setItem(PENDING_DEAD_KEY, JSON.stringify(dead)); } catch (e) {}
+                    console.warn('pendingMarkRetry: dead-letter', deadItem.path);
+                } else {
+                    var jitter = 0.8 + Math.random() * 0.4;
+                    arr[i].nextRetryTs = Date.now() + PENDING_BACKOFF[Math.min(arr[i].retries, PENDING_BACKOFF.length - 1)] * jitter;
+                }
+                break;
+            }
+        }
+        pendingSave(arr);
+        updateGlobalSyncStatus();
+    }
+
+    function pendingGetCount() {
+        return pendingLoad().length;
+    }
+
+    function flushPendingSync(opts) {
+        var manual = opts && opts.manual;
+        if (isFlushing) return Promise.resolve(pendingGetCount());
+        if (STORAGE_MODE === 'cache') {
+            console.log('flushPendingSync: cache mode - propusk');
+            return Promise.resolve(pendingGetCount());
+        }
+        var now = Date.now();
+        if (!manual && (now - lastFlushTs) < PENDING_FLUSH_THROTTLE_MS) {
+            console.log('flushPendingSync: throttled');
+            return Promise.resolve(pendingGetCount());
+        }
+        var arr = pendingLoad();
+        if (arr.length === 0) return Promise.resolve(0);
+
+        var ready = arr.filter(function(it) { return !it.nextRetryTs || now >= it.nextRetryTs; });
+        if (ready.length === 0) {
+            console.log('flushPendingSync: nothing ready');
+            return Promise.resolve(pendingGetCount());
+        }
+
+        isFlushing = true;
+        lastFlushTs = now;
+        console.log('flushPendingSync: start, ready =', ready.length, 'iz', arr.length);
+
+        var chain = Promise.resolve();
+        ready.forEach(function(item) {
+            chain = chain.then(function() {
+                return apiRequest(item.method, item.path, item.body, { noEnqueue: true, idempotencyKey: item.idempotencyKey })
+                    .then(function() {
+                        pendingDequeue(item.id);
+                        console.log('flushPendingSync: OK', item.method, item.path);
+                    })
+                    .catch(function(err) {
+                        console.warn('flushPendingSync: FAIL', item.method, item.path, err.message);
+                        pendingMarkRetry(item.id);
+                    });
+            });
+        });
+        return chain.then(function() {
+            isFlushing = false;
+            updateGlobalSyncStatus();
+            return pendingGetCount();
+        }).catch(function() {
+            isFlushing = false;
+            updateGlobalSyncStatus();
+            return pendingGetCount();
+        });
+    }
+
+    function updateGlobalSyncStatus() {
+        if (typeof showSaveStatus === 'function') {
+            var n = pendingGetCount();
+            if (n > 0 && STORAGE_MODE === 'server') {
+                if (lastSaveStatus !== 'saving') {
+                    showSaveStatus('queued', 'Ochered: ' + n, true);
+                }
+            }
+        }
+    }
+
+    function apiRequest(method, path, body, callOpts) {
+        // Шаг 4.5, коммит 2: обёртка с enqueue при ошибке + flush при успехе
+        var _noEnqueue = callOpts && callOpts.noEnqueue;
+        var _idemKey = callOpts && callOpts.idempotencyKey;
+
+        var fetchOpts = {
             method: method,
             headers: Object.assign({
                 'Content-Type': 'application/json'
             }, getAuthHeaders())
         };
-        if (body !== undefined) {
-            opts.body = JSON.stringify(body);
+        if (_idemKey) {
+            fetchOpts.headers['X-Idempotency-Key'] = _idemKey;
         }
-        return fetch(API_BASE + path, opts).then(function(res) {
+        if (body !== undefined) {
+            fetchOpts.body = JSON.stringify(body);
+        }
+
+        return fetch(API_BASE + path, fetchOpts).then(function(res) {
             if (!res.ok) {
                 return res.text().then(function(t) {
-                    throw new Error(method + ' ' + path + ' → ' + res.status + ': ' + t);
+                    var err = new Error(method + ' ' + path + ' HTTP ' + res.status + ': ' + t);
+                    err.status = res.status;
+                    if (res.status >= 500 || res.status === 0) {
+                        if (!_noEnqueue && (method === 'PUT' || method === 'DELETE')) {
+                            pendingEnqueue(method, path, body);
+                        }
+                    }
+                    throw err;
                 });
             }
-            if (res.status === 204) return null;
-            return res.json();
+            if (res.status === 204) {
+                if (!_noEnqueue && typeof flushPendingSync === 'function') {
+                    setTimeout(flushPendingSync, 0);
+                }
+                return null;
+            }
+            return res.json().then(function(data) {
+                if (!_noEnqueue && typeof flushPendingSync === 'function') {
+                    setTimeout(flushPendingSync, 0);
+                }
+                return data;
+            });
+        }).catch(function(err) {
+            if (!err.status && !_noEnqueue && (method === 'PUT' || method === 'DELETE')) {
+                pendingEnqueue(method, path, body);
+            }
+            throw err;
         });
     }
 
@@ -1339,7 +1565,12 @@
 
         // Server-First: PUT /api/patients/{id}/cards (data — JSON карточки).
         if (getStorageMode() === 'cache') {
-            // Offline-режим: в коммите 2 здесь будет pendingEnqueue
+            // Шаг 4.5, коммит 2: enqueue PUT /cards
+            if (typeof pendingEnqueue === 'function' && patientId) {
+                pendingEnqueue('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/cards', {
+                    data: cardData
+                });
+            }
             showSaveStatus('queued', 'Сохранено локально (offline)');
         } else if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
             showSaveStatus('saving', 'Сохранение...');
@@ -1510,6 +1741,12 @@
         localStorage.setItem(cardKey, JSON.stringify(cardData));
 
         if (getStorageMode() === 'cache') {
+            // Шаг 4.5, коммит 2: enqueue PUT /cards
+            if (typeof pendingEnqueue === 'function' && patientId) {
+                pendingEnqueue('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/cards', {
+                    data: cardData
+                });
+            }
             showSaveStatus('queued', 'Сохранено локально (offline)');
             return;
         }
@@ -1693,6 +1930,14 @@
         // Server-First: PUT /api/patients/{id}/vitals (bp/temp/spo2).
         // height/weight не идут через /vitals — они уходят через syncToDoctor() → PUT /patients.
         if (getStorageMode() === 'cache') {
+            // Шаг 4.5, коммит 2: enqueue PUT /vitals
+            if (typeof pendingEnqueue === 'function' && patientId) {
+                pendingEnqueue('PUT', '/api/patients/' + encodeURIComponent(patientId) + '/vitals', {
+                    bp: bp_sys + '/' + bp_dia,
+                    temp: temp,
+                    spo2: spo2
+                });
+            }
             showSaveStatus('queued', 'Сохранено локально (offline)');
         } else if (STORAGE_MODE === 'server' && typeof apiRequest === 'function' && patientId) {
             showSaveStatus('saving', 'Сохранение...');
@@ -1970,6 +2215,13 @@
         lastSaveStatus = state;
         el.className = 'save-status ' + state;
         el.textContent = text || '';
+        // Шаг 4.5, коммит 2: авто-счётчик очереди в состоянии queued
+        if (state === 'queued' && typeof pendingGetCount === 'function') {
+            var _pc = pendingGetCount();
+            if (_pc > 0) {
+                el.textContent = (text || 'Сохранено локально') + ' (' + _pc + ')';
+            }
+        }
         if (saveStatusTimer) { clearTimeout(saveStatusTimer); saveStatusTimer = null; }
         // Автоскрытие только для 'saved' и 'queued'
         if (state === 'saved' || state === 'queued') {

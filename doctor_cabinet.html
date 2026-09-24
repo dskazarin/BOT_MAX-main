@@ -134,6 +134,37 @@
         .header-right { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
         .status-badge { padding: 8px 16px; border-radius: 30px; font-size: 0.8em; background: #48bb78; color: white; }
 
+        .global-sync-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 14px;
+            border-radius: 30px;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            transition: filter 0.2s;
+            margin-right: 4px;
+        }
+        .global-sync-status--ok {
+            background: rgba(72,187,120,0.15);
+            border: 1px solid rgba(72,187,120,0.4);
+            color: #48bb78;
+        }
+        .global-sync-status--pending {
+            background: rgba(237,137,54,0.15);
+            border: 1px solid rgba(237,137,54,0.4);
+            color: #ed8936;
+        }
+        .global-sync-status--error {
+            background: rgba(245,101,101,0.15);
+            border: 1px solid rgba(245,101,101,0.4);
+            color: #f56565;
+        }
+        .global-sync-status:hover {
+            filter: brightness(1.2);
+        }
+
         .btn {
             padding: 10px 20px;
             border: none;
@@ -321,6 +352,9 @@
         </div>
         <div class="header-right">
             <span class="status-badge">🟢 ИИ активен</span>
+            <span id="globalSyncStatus" class="global-sync-status global-sync-status--ok"
+                  title="Очередь синхронизации: пусто"
+                  onclick="manualSyncNow()">0</span>
             <select id="storageModeSelect" onchange="setStorageMode(this.value)" title="Режим хранения данных" style="background:rgba(159,122,234,0.15);border:1px solid rgba(159,122,234,0.4);color:#9f7aea;padding:10px 14px;border-radius:10px;cursor:pointer;font-size:0.9em;font-weight:600;">
                 <option value="server">🌐 Сервер</option>
                 <option value="cache">💾 Кэш (offline)</option>
@@ -692,24 +726,261 @@
 
     // === ШАГ 3: API-обёртки ===
 
-    function apiRequest(method, path, body) {
-        var opts = {
+    // ============================================================
+    // Шаг 4.5, коммит 2: pending sync queue + retry (doctor_cabinet)
+    // ============================================================
+    var PENDING_KEY = 'pending_sync_v1';
+    var PENDING_DEAD_KEY = 'pending_sync_dead_v1';
+    var PENDING_BACKOFF = [1000, 3000, 9000, 27000];
+    var PENDING_MAX_RETRIES = 4;
+    var PENDING_FLUSH_THROTTLE_MS = 5000;
+    var lastFlushTs = 0;
+    var isFlushing = false;
+
+    function pendingLoad() {
+        var raw = localStorage.getItem(PENDING_KEY);
+        if (!raw) return [];
+        try {
+            var arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) arr = [];
+            return arr;
+        } catch (e) {
+            console.warn('pendingLoad: parse error, reset', e);
+            return [];
+        }
+    }
+
+    function pendingSave(arr) {
+        try {
+            localStorage.setItem(PENDING_KEY, JSON.stringify(arr));
+        } catch (e) {
+            console.error('pendingSave: quota exceeded?', e);
+        }
+    }
+
+    function pendingEnqueue(method, path, body) {
+        var arr = pendingLoad();
+        var existingIdx = -1;
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].method === method && arr[i].path === path) {
+                existingIdx = i;
+                break;
+            }
+        }
+        var uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : (Date.now() + '-' + Math.random().toString(36).slice(2));
+        var now = Date.now();
+        var item = {
+            id: uuid,
+            method: method,
+            path: path,
+            body: body,
+            idempotencyKey: uuid,
+            ts: now,
+            retries: 0,
+            nextRetryTs: now + PENDING_BACKOFF[0]
+        };
+        if (existingIdx >= 0) {
+            item.ts = arr[existingIdx].ts;
+            item.retries = arr[existingIdx].retries;
+            item.nextRetryTs = now;
+            arr[existingIdx] = item;
+            console.log('pendingEnqueue: obnovlen sushestvuyushiy', method, path);
+        } else {
+            arr.push(item);
+            console.log('pendingEnqueue: dobavlen', method, path, 'queue size =', arr.length);
+        }
+        pendingSave(arr);
+        updateGlobalSyncStatus();
+        return item;
+    }
+
+    function pendingDequeue(id) {
+        var arr = pendingLoad();
+        var next = arr.filter(function(it) { return it.id !== id; });
+        if (next.length !== arr.length) {
+            pendingSave(next);
+            console.log('pendingDequeue:', id, 'ostalos', next.length);
+            updateGlobalSyncStatus();
+        }
+    }
+
+    function pendingMarkRetry(id) {
+        var arr = pendingLoad();
+        for (var i = 0; i < arr.length; i++) {
+            if (arr[i].id === id) {
+                arr[i].retries += 1;
+                if (arr[i].retries >= PENDING_MAX_RETRIES) {
+                    var dead = [];
+                    try {
+                        var rawDead = localStorage.getItem(PENDING_DEAD_KEY);
+                        if (rawDead) dead = JSON.parse(rawDead) || [];
+                    } catch (e) {}
+                    arr[i].deadReason = 'max_retries';
+                    arr[i].deadTs = Date.now();
+                    dead.push(arr[i]);
+                    var deadItem = arr[i];
+                    arr.splice(i, 1);
+                    try { localStorage.setItem(PENDING_DEAD_KEY, JSON.stringify(dead)); } catch (e) {}
+                    console.warn('pendingMarkRetry: dead-letter', deadItem.path);
+                } else {
+                    var jitter = 0.8 + Math.random() * 0.4;
+                    arr[i].nextRetryTs = Date.now() + PENDING_BACKOFF[Math.min(arr[i].retries, PENDING_BACKOFF.length - 1)] * jitter;
+                }
+                break;
+            }
+        }
+        pendingSave(arr);
+        updateGlobalSyncStatus();
+    }
+
+    function pendingGetCount() {
+        return pendingLoad().length;
+    }
+
+    function flushPendingSync(opts) {
+        var manual = opts && opts.manual;
+        if (isFlushing) return Promise.resolve(pendingGetCount());
+        if (STORAGE_MODE === 'cache') {
+            console.log('flushPendingSync: cache mode - propusk');
+            return Promise.resolve(pendingGetCount());
+        }
+        var now = Date.now();
+        if (!manual && (now - lastFlushTs) < PENDING_FLUSH_THROTTLE_MS) {
+            console.log('flushPendingSync: throttled');
+            return Promise.resolve(pendingGetCount());
+        }
+        var arr = pendingLoad();
+        if (arr.length === 0) return Promise.resolve(0);
+
+        var ready = arr.filter(function(it) { return !it.nextRetryTs || now >= it.nextRetryTs; });
+        if (ready.length === 0) {
+            console.log('flushPendingSync: nothing ready');
+            return Promise.resolve(pendingGetCount());
+        }
+
+        isFlushing = true;
+        lastFlushTs = now;
+        console.log('flushPendingSync: start, ready =', ready.length, 'iz', arr.length);
+
+        var chain = Promise.resolve();
+        ready.forEach(function(item) {
+            chain = chain.then(function() {
+                return apiRequest(item.method, item.path, item.body, { noEnqueue: true, idempotencyKey: item.idempotencyKey })
+                    .then(function() {
+                        pendingDequeue(item.id);
+                        console.log('flushPendingSync: OK', item.method, item.path);
+                    })
+                    .catch(function(err) {
+                        console.warn('flushPendingSync: FAIL', item.method, item.path, err.message);
+                        pendingMarkRetry(item.id);
+                    });
+            });
+        });
+        return chain.then(function() {
+            isFlushing = false;
+            updateGlobalSyncStatus();
+            return pendingGetCount();
+        }).catch(function() {
+            isFlushing = false;
+            updateGlobalSyncStatus();
+            return pendingGetCount();
+        });
+    }
+
+    function updateGlobalSyncStatus() {
+        var el = document.getElementById('globalSyncStatus');
+        if (!el) return;
+        var n = pendingGetCount();
+        var deadCount = 0;
+        try {
+            var deadRaw = localStorage.getItem(PENDING_DEAD_KEY);
+            if (deadRaw) {
+                var deadArr = JSON.parse(deadRaw);
+                if (Array.isArray(deadArr)) deadCount = deadArr.length;
+            }
+        } catch(e) {}
+
+        var cls = 'global-sync-status';
+        var txt = '';
+        if (n === 0 && deadCount === 0) {
+            cls += ' global-sync-status--ok';
+            txt = '0';
+        } else if (deadCount > 0) {
+            cls += ' global-sync-status--error';
+            txt = (n > 0 ? n : '') + (deadCount > 0 ? (n > 0 ? ' ' : '') + '!' + deadCount : '');
+        } else {
+            cls += ' global-sync-status--pending';
+            txt = String(n);
+        }
+        el.className = cls;
+        el.textContent = txt;
+        el.title = 'Очередь синхронизации: ' + n + ' активных' + (deadCount > 0 ? ', ' + deadCount + ' ошибок' : '');
+    }
+
+    function manualSyncNow() {
+        if (typeof flushPendingSync !== 'function') return;
+        console.log('manualSyncNow: forced flush');
+        var el = document.getElementById('globalSyncStatus');
+        if (el) { el.className = 'global-sync-status global-sync-status--pending'; el.textContent = '...'; }
+        flushPendingSync({ manual: true }).then(function(n) {
+            console.log('manualSyncNow: done, pending =', n);
+            updateGlobalSyncStatus();
+        }).catch(function(err) {
+            console.warn('manualSyncNow: error', err);
+            updateGlobalSyncStatus();
+        });
+    }
+
+    function apiRequest(method, path, body, callOpts) {
+        // Шаг 4.5, коммит 2: обёртка с enqueue при ошибке + flush при успехе
+        var _noEnqueue = callOpts && callOpts.noEnqueue;
+        var _idemKey = callOpts && callOpts.idempotencyKey;
+
+        var fetchOpts = {
             method: method,
             headers: Object.assign({
                 'Content-Type': 'application/json'
             }, getAuthHeaders())
         };
-        if (body !== undefined) {
-            opts.body = JSON.stringify(body);
+        if (_idemKey) {
+            fetchOpts.headers['X-Idempotency-Key'] = _idemKey;
         }
-        return fetch(API_BASE + path, opts).then(function(res) {
+        if (body !== undefined) {
+            fetchOpts.body = JSON.stringify(body);
+        }
+
+        return fetch(API_BASE + path, fetchOpts).then(function(res) {
             if (!res.ok) {
                 return res.text().then(function(t) {
-                    throw new Error(method + ' ' + path + ' → ' + res.status + ': ' + t);
+                    var err = new Error(method + ' ' + path + ' HTTP ' + res.status + ': ' + t);
+                    err.status = res.status;
+                    if (res.status >= 500 || res.status === 0) {
+                        if (!_noEnqueue && (method === 'PUT' || method === 'DELETE')) {
+                            pendingEnqueue(method, path, body);
+                        }
+                    }
+                    throw err;
                 });
             }
-            if (res.status === 204) return null;
-            return res.json();
+            if (res.status === 204) {
+                if (!_noEnqueue && typeof flushPendingSync === 'function') {
+                    setTimeout(flushPendingSync, 0);
+                }
+                return null;
+            }
+            return res.json().then(function(data) {
+                if (!_noEnqueue && typeof flushPendingSync === 'function') {
+                    setTimeout(flushPendingSync, 0);
+                }
+                return data;
+            });
+        }).catch(function(err) {
+            if (!err.status && !_noEnqueue && (method === 'PUT' || method === 'DELETE')) {
+                pendingEnqueue(method, path, body);
+            }
+            throw err;
         });
     }
 
@@ -2023,8 +2294,29 @@
         // Storage event — для других вкладок
         window.addEventListener('storage', function(e) {
             if (e.key === 'doctorPatients' || e.key === 'syncSignal') {
-                console.log('🔄 Обнаружено обновление');
+                console.log('Обнаружено обновление (doctorPatients/syncSignal)');
                 loadPatientsFromStorage();
+            }
+            if (e.key === 'STORAGE_MODE') {
+                STORAGE_MODE = e.newValue || 'server';
+                console.log('STORAGE_MODE obnovlen iz drugoi vkladki:', STORAGE_MODE);
+                if (STORAGE_MODE === 'server' && typeof flushPendingSync === 'function') {
+                    setTimeout(function() { flushPendingSync({ manual: true }); }, 0);
+                }
+            }
+            if (e.key === 'pending_sync_v1') {
+                if (typeof updateGlobalSyncStatus === 'function') updateGlobalSyncStatus();
+            }
+        });
+
+        // Шаг 4.5, коммит 2: триггеры flush — online + возврат вкладки из фона
+        window.addEventListener('online', function() {
+            console.log('online event - flush pending');
+            if (typeof flushPendingSync === 'function') flushPendingSync({ manual: true });
+        });
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && typeof flushPendingSync === 'function') {
+                flushPendingSync();
             }
         });
 
