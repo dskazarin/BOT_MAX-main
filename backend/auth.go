@@ -667,6 +667,22 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Best-effort: читаем опциональный refreshToken из тела.
+	// Ошибки parse/revoke не фатальны — logout всегда отвечает 200.
+	var req refreshReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.RefreshToken != "" {
+		if claims, err := ParseToken(req.RefreshToken, "refresh"); err == nil {
+			if err := RevokeRefreshJTI(db, claims.ID, ""); err != nil {
+				log.Printf("⚠️  logout: RevokeRefreshJTI(%q): %v", claims.ID, err)
+			} else {
+				log.Printf("👋 logout: refresh jti=%s doctor=%s отозван", claims.ID, claims.DoctorID)
+			}
+		} else {
+			log.Printf("👋 logout: refresh-токен невалиден: %v", err)
+		}
+	}
+
 	docID := doctorIDFromCtx(r)
 	if docID == "" {
 		log.Printf("👋 logout: анонимный (soft-mode?)")
