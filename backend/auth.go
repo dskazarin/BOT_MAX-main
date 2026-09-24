@@ -1,0 +1,240 @@
+package main
+
+// auth.go — Шаг 6, подпатч 6.1: bcrypt + JWT-хелперы.
+// Регистрация маршрутов /api/auth/* появится в подпатчах 6.3 и 6.6.
+// authMiddleware и doctorIDFromCtx — в подпатче 6.4.
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// ---------------------------------------------------------------
+// Константы
+// ---------------------------------------------------------------
+
+const (
+	// AccessTTL — время жизни access-токена.
+	AccessTTL = 15 * time.Minute
+	// RefreshTTL — время жизни refresh-токена.
+	RefreshTTL = 7 * 24 * time.Hour
+	// BcryptCost — стоимость bcrypt (дефолт 10).
+	BcryptCost = bcrypt.DefaultCost
+	// ctxKeyDoctorID — ключ для context.Context (unexported, чтобы никто
+	// из других пакетов случайно не перезаписал).
+	ctxKeyDoctorID ctxKey = "doctorID"
+	// ctxKeyDoctorRole — ключ роли.
+	ctxKeyDoctorRole ctxKey = "doctorRole"
+)
+
+type ctxKey string
+
+// devJWTSecret — fallback, если env BOTMAX_JWT_SECRET не задан.
+// НЕ использовать в проде. Логируется с громким warning.
+const devJWTSecret = "BOT_MAX_DEV_SECRET_DO_NOT_USE_IN_PROD_change_me"
+
+// ---------------------------------------------------------------
+// Пароли
+// ---------------------------------------------------------------
+
+// HashPassword возвращает bcrypt-хэш пароля.
+func HashPassword(password string) (string, error) {
+	if password == "" {
+		return "", errors.New("empty password")
+	}
+	b, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
+	if err != nil {
+		return "", fmt.Errorf("bcrypt hash: %w", err)
+	}
+	return string(b), nil
+}
+
+// CheckPassword сравнивает пароль с bcrypt-хэшем.
+// Возвращает nil, если пароль верный.
+func CheckPassword(hash, password string) error {
+	if hash == "" || password == "" {
+		return errors.New("empty hash or password")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+		return fmt.Errorf("bcrypt compare: %w", err)
+	}
+	return nil
+}
+
+// IsBcryptHash — эвристика: строка похожа на bcrypt-хэш ($2a$/$2b$/$2y$).
+// Нужна для идемпотентности seedDefaultDoctor.
+func IsBcryptHash(s string) bool {
+	return strings.HasPrefix(s, "$2a$") ||
+		strings.HasPrefix(s, "$2b$") ||
+		strings.HasPrefix(s, "$2y$")
+}
+
+// ---------------------------------------------------------------
+// JWT
+// ---------------------------------------------------------------
+
+// Claims — полезная нагрузка токена.
+type Claims struct {
+	DoctorID string `json:"sub"`
+	Role     string `json:"role"`
+	Type     string `json:"typ"` // "access" | "refresh"
+	jwt.RegisteredClaims
+}
+
+// jwtSecret возвращает секрет из env BOTMAX_JWT_SECRET.
+// Если не задан — dev-секрет + предупреждение (один раз).
+var jwtSecretWarned bool
+
+func jwtSecret() []byte {
+	s := os.Getenv("BOTMAX_JWT_SECRET")
+	if s != "" {
+		return []byte(s)
+	}
+	if !jwtSecretWarned {
+		log.Println("⚠️  BOTMAX_JWT_SECRET не задан — использую dev-секрет. НЕ для прода!")
+		jwtSecretWarned = true
+	}
+	return []byte(devJWTSecret)
+}
+
+// newJTI — случайный идентификатор токена (jti).
+func newJTI() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// IssueAccessToken выдаёт access-токен для doctor.
+func IssueAccessToken(doctorID, role string) (string, error) {
+	jti, err := newJTI()
+	if err != nil {
+		return "", fmt.Errorf("jti: %w", err)
+	}
+	now := time.Now()
+	claims := Claims{
+		DoctorID: doctorID,
+		Role:     role,
+		Type:     "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
+			Subject:   doctorID,
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTTL)),
+			Issuer:    "BOT_MAX",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString(jwtSecret())
+	if err != nil {
+		return "", fmt.Errorf("sign access: %w", err)
+	}
+	return signed, nil
+}
+
+// IssueRefreshToken выдаёт refresh-токен.
+func IssueRefreshToken(doctorID, role string) (string, error) {
+	jti, err := newJTI()
+	if err != nil {
+		return "", fmt.Errorf("jti: %w", err)
+	}
+	now := time.Now()
+	claims := Claims{
+		DoctorID: doctorID,
+		Role:     role,
+		Type:     "refresh",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
+			Subject:   doctorID,
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(RefreshTTL)),
+			Issuer:    "BOT_MAX",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString(jwtSecret())
+	if err != nil {
+		return "", fmt.Errorf("sign refresh: %w", err)
+	}
+	return signed, nil
+}
+
+// ParseToken валидирует токен и возвращает claims.
+// expectedType: "access" или "refresh"; если пусто — тип не проверяется.
+func ParseToken(tokenString, expectedType string) (*Claims, error) {
+	if tokenString == "" {
+		return nil, errors.New("empty token")
+	}
+	claims := &Claims{}
+	tok, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return jwtSecret(), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("parse token: %w", err)
+	}
+	if !tok.Valid {
+		return nil, errors.New("invalid token")
+	}
+	if expectedType != "" && claims.Type != expectedType {
+		return nil, fmt.Errorf("wrong token type: got %q, want %q", claims.Type, expectedType)
+	}
+	if claims.DoctorID == "" {
+		return nil, errors.New("empty sub in token")
+	}
+	return claims, nil
+}
+
+// ---------------------------------------------------------------
+// Context helpers
+// ---------------------------------------------------------------
+
+// withDoctorID кладёт doctorID и role в context.
+func withDoctorID(ctx context.Context, doctorID, role string) context.Context {
+	ctx = context.WithValue(ctx, ctxKeyDoctorID, doctorID)
+	ctx = context.WithValue(ctx, ctxKeyDoctorRole, role)
+	return ctx
+}
+
+// doctorIDFromCtx достаёт doctorID из context.
+// Возвращает "" если не установлен.
+func doctorIDFromCtx(r *http.Request) string {
+	if v, ok := r.Context().Value(ctxKeyDoctorID).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// doctorRoleFromCtx достаёт role из context.
+func doctorRoleFromCtx(r *http.Request) string {
+	if v, ok := r.Context().Value(ctxKeyDoctorRole).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// ---------------------------------------------------------------
+// registerAuthRoutes — заглушка (маршруты появятся в 6.3 и 6.6).
+// ---------------------------------------------------------------
+
+func registerAuthRoutes() {
+	// Шаг 6.3: POST /api/auth/login
+	// Шаг 6.6: POST /api/auth/refresh, POST /api/auth/logout
+	log.Println("ℹ️  registerAuthRoutes: заглушка (подпатчи 6.3 и 6.6 добавят маршруты)")
+}
