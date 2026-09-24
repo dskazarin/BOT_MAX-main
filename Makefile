@@ -1,6 +1,6 @@
 # BOT_MAX - Patient Cabinet Makefile
 
-.PHONY: run build clean status stop help
+.PHONY: run build clean status stop help watchdog watchdog-stop watchdog-status watchdog-log
 
 # Сборка бинарника (в /tmp, чтобы не мусорить в репо)
 build:
@@ -44,6 +44,49 @@ stop:
 test:
 	@echo "🔍 Проверка..."
 	@curl -s http://localhost:8082/ | head -10
+
+# Watchdog для Go-сервера
+watchdog:
+	@if [ -f /tmp/botmax_watchdog.pid ] && kill -0 $$(cat /tmp/botmax_watchdog.pid) 2>/dev/null; then \
+		echo "⚠️  Watchdog уже запущен (PID: $$(cat /tmp/botmax_watchdog.pid))"; \
+	else \
+		nohup bash /workspaces/BOT_MAX-main/.devcontainer/watchdog.sh > /dev/null 2>&1 & \
+		sleep 1; \
+		if [ -f /tmp/botmax_watchdog.pid ]; then \
+			echo "✅ Watchdog запущен (PID=$$(cat /tmp/botmax_watchdog.pid))"; \
+		else \
+			echo "✅ Watchdog запущен (PID файл ещё не готов, проверь: make watchdog-status)"; \
+		fi; \
+		echo "📋 Лог: tail -f /tmp/botmax_watchdog.log"; \
+	fi
+
+watchdog-stop:
+	@if [ -f /tmp/botmax_watchdog.pid ]; then \
+		PID=$$(cat /tmp/botmax_watchdog.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			kill $$PID 2>/dev/null; \
+			sleep 1; \
+			kill -9 $$PID 2>/dev/null || true; \
+			rm -f /tmp/botmax_watchdog.pid; \
+			echo "✅ Watchdog остановлен (PID=$$PID)"; \
+		else \
+			rm -f /tmp/botmax_watchdog.pid; \
+			echo "ℹ️  Watchdog не запущен (stale pid file удалён)"; \
+		fi \
+	else \
+		echo "ℹ️  Watchdog не запущен"; \
+	fi
+
+watchdog-status:
+	@if [ -f /tmp/botmax_watchdog.pid ] && kill -0 $$(cat /tmp/botmax_watchdog.pid) 2>/dev/null; then \
+		echo "✅ Watchdog работает (PID=$$(cat /tmp/botmax_watchdog.pid))"; \
+		tail -5 /tmp/botmax_watchdog.log 2>/dev/null || echo "(лог пуст)"; \
+	else \
+		echo "❌ Watchdog не запущен"; \
+	fi
+
+watchdog-log:
+	@tail -f /tmp/botmax_watchdog.log
 
 # Справка
 help:

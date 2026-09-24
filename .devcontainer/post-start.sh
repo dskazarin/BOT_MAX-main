@@ -53,3 +53,16 @@ else
     cat /tmp/botmax.log
     exit 1
 fi
+
+# 6. Запустить watchdog (перезапуск сервера при падении)
+if ! pgrep -f "watchdog.sh" > /dev/null 2>&1; then
+    nohup bash /workspaces/BOT_MAX-main/.devcontainer/watchdog.sh > /dev/null 2>&1 &
+    WATCHDOG_PID=$!
+    echo ""
+    echo "🐕 Watchdog запущен (PID=$WATCHDOG_PID)"
+    echo "📋 Лог watchdog: tail -f /tmp/botmax_watchdog.log"
+    echo "📋 Остановить: make watchdog-stop"
+else
+    echo ""
+    echo "🐕 Watchdog уже работает (PID=$(pgrep -f watchdog.sh | head -1))"
+fi
