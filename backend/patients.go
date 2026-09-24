@@ -56,9 +56,14 @@ func handlePatients(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePatientsList возвращает список пациентов для stubDoctorID.
+// handlePatientsList возвращает список пациентов текущего врача.
 func handlePatientsList(w http.ResponseWriter, r *http.Request) {
-	patients, err := getPatientsByDoctor(db, stubDoctorID)
+	docID, ok := resolveDoctorID(r)
+	if !ok {
+		writeUnauthorized(w)
+		return
+	}
+	patients, err := getPatientsByDoctor(db, docID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -82,7 +87,12 @@ func handlePatientCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "gender must be male, female or other", http.StatusBadRequest)
 		return
 	}
-	p.DoctorID = stubDoctorID
+	docID, ok := resolveDoctorID(r)
+	if !ok {
+		writeUnauthorized(w)
+		return
+	}
+	p.DoctorID = docID
 	if p.ID == "" {
 		p.ID = "PAT-" + time.Now().Format("20060102-150405")
 	}
@@ -173,7 +183,12 @@ func handlePatientUpdate(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	p.ID = id
-	p.DoctorID = stubDoctorID
+	docID, ok := resolveDoctorID(r)
+	if !ok {
+		writeUnauthorized(w)
+		return
+	}
+	p.DoctorID = docID
 
 	if p.Name == "" {
 		http.Error(w, "name is required", http.StatusBadRequest)
@@ -198,8 +213,14 @@ func handlePatientUpdate(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 // handlePatientDelete — DELETE /api/patients/{id}.
+// Удаление ограничено врачом-владельцем (Шаг 6.5).
 func handlePatientDelete(w http.ResponseWriter, r *http.Request, id string) {
-	if err := deletePatient(db, id); err != nil {
+	docID, ok := resolveDoctorID(r)
+	if !ok {
+		writeUnauthorized(w)
+		return
+	}
+	if err := deletePatientByDoctor(db, id, docID); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "not found", http.StatusNotFound)
 			return

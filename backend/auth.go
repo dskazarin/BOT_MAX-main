@@ -439,3 +439,29 @@ func authEnforceEnabled() bool {
 	})
 	return authEnforceVal
 }
+
+// ---------------------------------------------------------------
+// Шаг 6.5 — resolveDoctorID (context sub → doctorID)
+// ---------------------------------------------------------------
+
+// resolveDoctorID — Шаг 6.5.
+// Возвращает doctorID из context (JWT sub).
+//   - Если токен валиден → реальный sub.
+//   - Если токена нет и enforce выключен → fallback на stubDoctorID.
+//   - Если enforce включён и токена нет → ("", false).
+//
+// Второй результат ok == false → handler должен отдать 401.
+func resolveDoctorID(r *http.Request) (string, bool) {
+	if id := doctorIDFromCtx(r); id != "" {
+		return id, true
+	}
+	if authEnforceEnabled() {
+		return "", false
+	}
+	return stubDoctorID, true
+}
+
+// writeUnauthorized — единый ответ 401 для handlers.
+func writeUnauthorized(w http.ResponseWriter) {
+	http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+}

@@ -353,10 +353,11 @@ func updatePatient(db *sql.DB, p *Patient) error {
 	return nil
 }
 
-// deletePatient удаляет пациента по id.
-// Возвращает sql.ErrNoRows, если пациент не найден.
-func deletePatient(db *sql.DB, id string) error {
-	res, err := db.Exec(`DELETE FROM patients WHERE id = ?`, id)
+// deletePatientByDoctor удаляет пациента по id с проверкой владельца.
+// Возвращает sql.ErrNoRows, если пациента нет или он принадлежит
+// другому врачу. Шаг 6.5.
+func deletePatientByDoctor(db *sql.DB, id, doctorID string) error {
+	res, err := db.Exec(`DELETE FROM patients WHERE id = ? AND doctor_id = ?`, id, doctorID)
 	if err != nil {
 		return fmt.Errorf("delete patient: %w", err)
 	}
