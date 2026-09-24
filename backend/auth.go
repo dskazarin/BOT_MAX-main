@@ -24,6 +24,32 @@ import (
 )
 
 // ---------------------------------------------------------------
+// Роли (Шаг 6.8)
+// ---------------------------------------------------------------
+//
+// Роли — строковый enum. Значения совпадают с doctors.role в БД
+// и с полем role в JWT-claims.
+//
+// Иерархия НЕ зашита в requireRole — вызывающий явно перечисляет
+// допустимые роли.
+type Role string
+
+const (
+	RoleSuperadmin Role = "superadmin"
+	RoleAdmin      Role = "admin"
+	RoleDoctor     Role = "doctor"
+)
+
+// Valid — true, если роль известна.
+func (r Role) Valid() bool {
+	switch r {
+	case RoleSuperadmin, RoleAdmin, RoleDoctor:
+		return true
+	}
+	return false
+}
+
+// ---------------------------------------------------------------
 // Константы
 // ---------------------------------------------------------------
 
@@ -90,7 +116,7 @@ func IsBcryptHash(s string) bool {
 // Claims — полезная нагрузка токена.
 type Claims struct {
 	DoctorID string `json:"sub"`
-	Role     string `json:"role"`
+	Role     Role   `json:"role"`
 	Type     string `json:"typ"` // "access" | "refresh"
 	jwt.RegisteredClaims
 }
@@ -121,7 +147,7 @@ func newJTI() (string, error) {
 }
 
 // IssueAccessToken выдаёт access-токен для doctor.
-func IssueAccessToken(doctorID, role string) (string, error) {
+func IssueAccessToken(doctorID string, role Role) (string, error) {
 	jti, err := newJTI()
 	if err != nil {
 		return "", fmt.Errorf("jti: %w", err)
@@ -149,7 +175,7 @@ func IssueAccessToken(doctorID, role string) (string, error) {
 }
 
 // IssueRefreshToken выдаёт refresh-токен.
-func IssueRefreshToken(doctorID, role string) (string, error) {
+func IssueRefreshToken(doctorID string, role Role) (string, error) {
 	jti, err := newJTI()
 	if err != nil {
 		return "", fmt.Errorf("jti: %w", err)
@@ -209,7 +235,7 @@ func ParseToken(tokenString, expectedType string) (*Claims, error) {
 // ---------------------------------------------------------------
 
 // withDoctorID кладёт doctorID и role в context.
-func withDoctorID(ctx context.Context, doctorID, role string) context.Context {
+func withDoctorID(ctx context.Context, doctorID string, role Role) context.Context {
 	ctx = context.WithValue(ctx, ctxKeyDoctorID, doctorID)
 	ctx = context.WithValue(ctx, ctxKeyDoctorRole, role)
 	return ctx
@@ -225,11 +251,10 @@ func doctorIDFromCtx(r *http.Request) string {
 }
 
 // doctorRoleFromCtx достаёт role из context.
-func doctorRoleFromCtx(r *http.Request) string {
-	if v, ok := r.Context().Value(ctxKeyDoctorRole).(string); ok {
-		return v
-	}
-	return ""
+// Возвращает ("", false), если роль не установлена.
+func doctorRoleFromCtx(r *http.Request) (Role, bool) {
+	v, ok := r.Context().Value(ctxKeyDoctorRole).(Role)
+	return v, ok
 }
 
 // ---------------------------------------------------------------
@@ -313,13 +338,13 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, err := IssueAccessToken(doc.ID, doc.Role)
+	access, err := IssueAccessToken(doc.ID, Role(doc.Role))
 	if err != nil {
 		log.Printf("⚠️  login: IssueAccessToken(%q): %v", doc.ID, err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	refresh, err := IssueRefreshToken(doc.ID, doc.Role)
+	refresh, err := IssueRefreshToken(doc.ID, Role(doc.Role))
 	if err != nil {
 		log.Printf("⚠️  login: IssueRefreshToken(%q): %v", doc.ID, err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -391,6 +416,51 @@ func authMiddleware(next http.Handler) http.Handler {
 		ctx := withDoctorID(r.Context(), claims.DoctorID, claims.Role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// ---------------------------------------------------------------
+// requireRole — Шаг 6.8
+// ---------------------------------------------------------------
+//
+// requireRole возвращает middleware, пропускающий запрос дальше
+// только если роль в context входит в список allowed.
+//
+// Паникует при регистрации роутов, если передана неизвестная
+// роль или пустой список.
+//
+// Коды:
+//   - 401 Unauthorized — роли нет в context (authMiddleware
+//     не отработал или soft-mode без токена).
+//   - 403 Forbidden — роль есть, но не входит в allowed.
+//
+// Пример:
+//   requireRole(RoleAdmin, RoleSuperadmin)
+func requireRole(allowed ...Role) func(http.Handler) http.Handler {
+	if len(allowed) == 0 {
+		panic("requireRole: empty allowed roles")
+	}
+	for _, r := range allowed {
+		if !r.Valid() {
+			panic(fmt.Sprintf("requireRole: invalid role %q", r))
+		}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, ok := doctorRoleFromCtx(r)
+			if !ok {
+				writeUnauthorized(w)
+				return
+			}
+			for _, a := range allowed {
+				if role == a {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			writeForbidden(w)
+		})
+	}
 }
 
 // extractBearerToken достаёт токен из заголовка Authorization: Bearer <token>.
@@ -466,6 +536,11 @@ func writeUnauthorized(w http.ResponseWriter) {
 	http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 }
 
+// writeForbidden — 403. Симметрично writeUnauthorized.
+func writeForbidden(w http.ResponseWriter) {
+	http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+}
+
 // ---------------------------------------------------------------
 // Шаг 6.6 — POST /api/auth/refresh, POST /api/auth/logout
 // ---------------------------------------------------------------
@@ -518,13 +593,13 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newAccess, err := IssueAccessToken(doc.ID, doc.Role)
+	newAccess, err := IssueAccessToken(doc.ID, Role(doc.Role))
 	if err != nil {
 		log.Printf("⚠️  refresh: IssueAccessToken(%q): %v", doc.ID, err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	newRefresh, err := IssueRefreshToken(doc.ID, doc.Role)
+	newRefresh, err := IssueRefreshToken(doc.ID, Role(doc.Role))
 	if err != nil {
 		log.Printf("⚠️  refresh: IssueRefreshToken(%q): %v", doc.ID, err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)

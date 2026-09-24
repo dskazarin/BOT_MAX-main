@@ -160,6 +160,54 @@
         }
     }
 
+    // ---------- роли (Шаг 6.8) ----------
+    // Совпадают со значениями Role в backend/auth.go.
+    var ROLE = {
+        SUPERADMIN: 'superadmin',
+        ADMIN:      'admin',
+        DOCTOR:     'doctor'
+    };
+
+    /**
+     * hasRole(...roles) — true, если текущий врач имеет одну
+     * из перечисленных ролей. Без аргументов — false.
+     * Без залогиненного врача — false.
+     */
+    function hasRole() {
+        var roles = Array.prototype.slice.call(arguments);
+        if (roles.length === 0) return false;
+        var d = getDoctor();
+        if (!d || !d.role) return false;
+        return roles.indexOf(d.role) !== -1;
+    }
+
+    function isSuperadmin() { return hasRole(ROLE.SUPERADMIN); }
+    function isAdmin()      { return hasRole(ROLE.ADMIN, ROLE.SUPERADMIN); }
+    function isDoctor()     { return hasRole(ROLE.DOCTOR, ROLE.ADMIN, ROLE.SUPERADMIN); }
+
+    // data-requires-role="role1 role2" — показать элемент, если роль
+    // входит в список. Элемент ДОЛЖЕН быть hidden в HTML изначально.
+    // ВАЖНО: только UX. Сервер (requireRole) — источник правды.
+    function applyRoleVisibility() {
+        var els = document.querySelectorAll('[data-requires-role]');
+        for (var i = 0; i < els.length; i++) {
+            var el = els[i];
+            var raw = el.getAttribute('data-requires-role') || '';
+            var roles = raw.split(/\s+/).filter(Boolean);
+            if (roles.length > 0 && hasRole.apply(null, roles)) {
+                el.hidden = false;
+            } else {
+                el.hidden = true;
+            }
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyRoleVisibility);
+    } else {
+        applyRoleVisibility();
+    }
+
     // ---------- guard ----------
     function requireAuth() {
         if (!getToken()) {
@@ -178,7 +226,14 @@
         refreshAccess:   refreshAccess,
         authFetch:       authFetch,
         logout:          logout,
-        requireAuth:     requireAuth
+        requireAuth:     requireAuth,
+        // Шаг 6.8:
+        ROLE:                ROLE,
+        hasRole:             hasRole,
+        isSuperadmin:        isSuperadmin,
+        isAdmin:             isAdmin,
+        isDoctor:            isDoctor,
+        applyRoleVisibility: applyRoleVisibility
     };
 
 })(window);
