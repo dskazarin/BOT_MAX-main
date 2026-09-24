@@ -315,6 +315,18 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// --- B3.2: rate-limit до bcrypt ---
+	ipKey := "ip:" + clientIP(r)
+	emailKey := "email:" + req.Email
+	if ok, retry := loginLimiterPerIP.Allow(ipKey); !ok {
+		writeTooManyRequests(w, retry)
+		return
+	}
+	if ok, retry := loginLimiterPerEmail.Allow(emailKey); !ok {
+		writeTooManyRequests(w, retry)
+		return
+	}
+
 	doc, err := getDoctorByEmail(db, req.Email)
 	var storedHash string
 	switch {
@@ -363,6 +375,9 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			Role: doc.Role,
 		},
 	})
+	// --- B3.2: успешный логин — сбрасываем счётчики ---
+	loginLimiterPerIP.Reset(ipKey)
+	loginLimiterPerEmail.Reset(emailKey)
 	log.Printf("✅ login: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
 }
 
