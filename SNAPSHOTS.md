@@ -50,15 +50,40 @@
 
 ---
 
+### 6.12 (B3) — rate-limit на /api/auth/login
+- **Дата:** 2026-09-24
+- **Коммиты:**
+  - `5ed6b5e` feat(ratelimit): подпатч 6.12 (B3.1) — in-memory limiter
+  - `a38e2b9` feat(auth): подпатч 6.12 (B3.2) — rate-limit на login
+  - `691c2d5` test(ratelimit): подпатч 6.12 (B3.3) — ratelimit_test.go
+- **Файлы:**
+  - `backend/ratelimit.go` (new) — Limiter (скользящее окно, sync.Mutex), clientIP (XFF+RemoteAddr), writeTooManyRequests (429 + Retry-After + JSON)
+  - `backend/ratelimit_test.go` (new) — 4 теста Limiter + TestClientIP (5 подкейсов)
+  - `backend/auth.go` — врезка в handleAuthLogin: rate-limit до bcrypt, Reset после успешного логина
+- **Что сделано:**
+  - Лимитеры: per-IP 10/15min, per-email 5/15min (in-memory, скользящее окно).
+  - На превышение — HTTP 429 + заголовок Retry-After + тело {"error":"too many requests","retryAfter":N}.
+  - Успешный логин — сбрасывает оба счётчика (per-IP + per-email).
+  - Проверка стоит до getDoctorByEmail/bcrypt — чтобы 429 не стоил дорогой bcrypt-операции.
+  - XFF учитывается первым, иначе RemoteAddr; помечено, что XFF — только за доверенным прокси.
+- **Тесты:**
+  - TestLimiterAllow, TestLimiterReset, TestLimiterWindowExpiry, TestLimiterIndependentKeys — PASS.
+  - TestClientIP: no-xff-with-port, no-xff-no-port, xff-single, xff-multi, xff-with-spaces — PASS.
+- **Smoke (end-to-end через /api/auth/login):**
+  - dev, чистая БД: попытки 1–5 → 401; попытка 6 → 429 retry=899.
+  - 7-й запрос с ВЕРНЫМ паролем → тоже 429 (счётчик исчерпан — правильно).
+  - Свежий процесс (счётчики in-memory обнулились) → 200 + "role":"admin".
+
+---
+
 ## Следующий
 
-### 6.12 (B3) — rate-limit на /api/auth/login
+### 6.13 (B4) — refresh-ротация (черновик)
 - **Статус:** запланирован
-- **Цель:** защита от brute-force / credential stuffing на самом чувствительном эндпоинте.
-- **Опоры:** currentEnv (B1), handleAuthLogin (auth.go).
-- **Идея (черновая):** per-IP + per-email счётчик попыток в скользящем окне; на превышение — HTTP 429 + Retry-After. In-memory (sync.Map + time), без внешних зависимостей.
-- **Файлы (ожидаемо):** `backend/ratelimit.go` (new), `backend/auth.go` (вызов в handleAuthLogin), `backend/ratelimit_test.go` (new).
-- **Проверки (ожидаемо):** go test + smoke: серия неверных логинов → на N+1 приходит 429; успешный логин сбрасывает счётчик.
+- **Цель:** одноразовые refresh-токены (rotation) + blacklist jti при logout; повторное использование старого refresh → инвалидация всей сессии.
+- **Опоры:** IssueAccessToken/IssueRefreshToken/ParseToken/registerAuthRoutes (auth.go), env-валидация (B1).
+- **Файлы (ожидаемо):** `backend/auth.go`, возможно новый `backend/refresh.go`, миграция таблицы (если уже не хранится jti).
+- **Проверки (ожидаемо):** go test + smoke: login → refresh → refresh → old refresh отбивается; logout → refresh больше не работает.
 
 ---
 
