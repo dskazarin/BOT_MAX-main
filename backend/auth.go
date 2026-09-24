@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -123,9 +122,11 @@ type Claims struct {
 var jwtSecretWarned bool
 
 func jwtSecret() []byte {
-	s := os.Getenv("BOTMAX_JWT_SECRET")
-	if s != "" {
-		return []byte(s)
+	if currentEnv == nil {
+		panic("jwtSecret: currentEnv == nil (validateEnv не вызван)")
+	}
+	if currentEnv.JWTSecret != "" {
+		return []byte(currentEnv.JWTSecret)
 	}
 	if !jwtSecretWarned {
 		log.Println("⚠️  BOTMAX_JWT_SECRET не задан — использую dev-секрет. НЕ для прода!")
@@ -494,13 +495,13 @@ var (
 
 func authEnforceEnabled() bool {
 	authEnforceOnce.Do(func() {
-		v := strings.ToLower(strings.TrimSpace(os.Getenv("BOTMAX_AUTH_ENFORCE")))
-		switch v {
-		case "1", "true", "yes", "on":
-			authEnforceVal = true
+		if currentEnv == nil {
+			panic("authEnforceEnabled: currentEnv == nil (validateEnv не вызван)")
+		}
+		authEnforceVal = currentEnv.AuthEnforce
+		if authEnforceVal {
 			log.Println("🔐 auth: enforce ВКЛЮЧЁН (BOTMAX_AUTH_ENFORCE=true)")
-		default:
-			authEnforceVal = false
+		} else {
 			log.Println("⚠️  auth: soft-mode (BOTMAX_AUTH_ENFORCE не установлен)")
 		}
 	})

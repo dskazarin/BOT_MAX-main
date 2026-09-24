@@ -396,6 +396,13 @@ func recoverMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
+	env, errValidate := validateEnv()
+	if errValidate != nil {
+		log.Fatalf("❌ env: %v", errValidate)
+	}
+	currentEnv = env
+	log.Printf("🌍 env=%s auth_enforce=%v jwt_secret_len=%d", env.Name, env.AuthEnforce, len(env.JWTSecret))
+
 	wd, _ := os.Getwd()
 	rootDir := wd
 	if filepath.Base(wd) == "backend" {
