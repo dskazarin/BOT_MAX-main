@@ -1704,7 +1704,9 @@
             html += statusHtml;
             html += '<button class="btn btn-sm btn-info" onclick="event.stopPropagation();openPatientCard(\'' + p.id + '\')" title="Открыть карту">📋</button>';
             html += '<button class="btn btn-sm btn-warning" onclick="event.stopPropagation();openEditPatientModal(\'' + p.id + '\')" title="Редактировать">✏️</button>';
-            html += '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
+            if (window.BotMaxAuth && BotMaxAuth.isAdmin()) {
+                html += '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
+            }
             html += '</div></div>';
         }
         container.innerHTML = html;
@@ -1732,7 +1734,9 @@
             html += '<td style="padding:10px;">';
             html += '<button class="btn btn-sm btn-info" onclick="selectPatient(\'' + p.id + '\')" title="Выбрать">👁️</button> ';
             html += '<button class="btn btn-sm btn-success" onclick="openPatientCard(\'' + p.id + '\')" title="Карта">📋</button> ';
-            html += '<button class="btn btn-sm btn-danger" onclick="deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
+            if (window.BotMaxAuth && BotMaxAuth.isAdmin()) {
+                html += '<button class="btn btn-sm btn-danger" onclick="deletePatient(\'' + p.id + '\')" title="Удалить">🗑️</button>';
+            }
             html += '</td></tr>';
         }
         tbody.innerHTML = html;

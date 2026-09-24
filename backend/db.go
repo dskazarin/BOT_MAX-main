@@ -356,6 +356,9 @@ func updatePatient(db *sql.DB, p *Patient) error {
 // deletePatientByDoctor удаляет пациента по id с проверкой владельца.
 // Возвращает sql.ErrNoRows, если пациента нет или он принадлежит
 // другому врачу. Шаг 6.5.
+//
+// С 6.8 не используется в handlePatientDelete (там admin-only),
+// но оставлена для возможных owner-based сценариев (архив, 6.9+).
 func deletePatientByDoctor(db *sql.DB, id, doctorID string) error {
 	res, err := db.Exec(`DELETE FROM patients WHERE id = ? AND doctor_id = ?`, id, doctorID)
 	if err != nil {
@@ -367,6 +370,65 @@ func deletePatientByDoctor(db *sql.DB, id, doctorID string) error {
 	}
 	if n == 0 {
 		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// deletePatientByID удаляет пациента по id БЕЗ проверки владельца.
+// Используется admin/superadmin — гейтинг снаружи (requireRole).
+// Возвращает sql.ErrNoRows, если пациента нет.
+func deletePatientByID(db *sql.DB, id string) error {
+	res, err := db.Exec(`DELETE FROM patients WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete patient: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// seedAdminRoles идемпотентно создаёт служебных superadmin и admin.
+// Не зависит от seedDefaultDoctor — вызывается отдельно из main.
+// Если врач с таким email уже есть — пропускает.
+func seedAdminRoles(db *sql.DB) error {
+	seeds := []struct {
+		ID       string
+		Email    string
+		Password string
+		Role     string
+		Name     string
+	}{
+		{"SUPER-001", "superadmin@botmax.local", "superadmin", "superadmin", "Суперадмин"},
+		{"ADMIN-001", "admin@botmax.local", "admin", "admin", "Тестовый админ"},
+	}
+
+	for _, s := range seeds {
+		var exists int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM doctors WHERE email = ?`, s.Email).Scan(&exists); err != nil {
+			return fmt.Errorf("check %s: %w", s.Email, err)
+		}
+		if exists > 0 {
+			fmt.Printf("🌱 seed: %s уже есть, пропуск\n", s.Email)
+			continue
+		}
+		hash, err := HashPassword(s.Password)
+		if err != nil {
+			return fmt.Errorf("hash for %s: %w", s.Email, err)
+		}
+		_, err = db.Exec(
+			`INSERT INTO doctors (id, clinic_id, email, password_hash, name, specialty, role, created, active)
+			 VALUES (?, NULL, ?, ?, ?, 'lor', ?, datetime('now'), 1)`,
+			s.ID, s.Email, hash, s.Name, s.Role,
+		)
+		if err != nil {
+			return fmt.Errorf("insert %s: %w", s.Email, err)
+		}
+		fmt.Printf("🌱 seed: создан %s (%s, роль=%s)\n", s.ID, s.Email, s.Role)
 	}
 	return nil
 }

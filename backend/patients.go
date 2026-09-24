@@ -147,7 +147,12 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		handlePatientUpdate(w, r, id)
 	case http.MethodDelete:
-		handlePatientDelete(w, r, id)
+		// Шаг 6.8: удаление пациента — только admin/superadmin.
+		requireRole(RoleAdmin, RoleSuperadmin)(http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				handlePatientDelete(w, r, id)
+			},
+		)).ServeHTTP(w, r)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -213,14 +218,10 @@ func handlePatientUpdate(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 // handlePatientDelete — DELETE /api/patients/{id}.
-// Удаление ограничено врачом-владельцем (Шаг 6.5).
+// Шаг 6.8: admin-only. Гейтинг — requireRole(RoleAdmin, RoleSuperadmin)
+// в handlePatientByID. Admin/superadmin удаляют любого пациента.
 func handlePatientDelete(w http.ResponseWriter, r *http.Request, id string) {
-	docID, ok := resolveDoctorID(r)
-	if !ok {
-		writeUnauthorized(w)
-		return
-	}
-	if err := deletePatientByDoctor(db, id, docID); err != nil {
+	if err := deletePatientByID(db, id); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
