@@ -76,14 +76,43 @@
 
 ---
 
+### 6.13 (B4) — refresh-ротация
+- **Дата:** 2026-09-24
+- **Коммиты:**
+  - `75a7768` feat(refresh): 6.13 (B4.1) — refresh_tokens + store
+  - `1634c64` feat(refresh): 6.13 (B4.2) — jti регистрируется при выдаче
+  - `bf4765d` feat(refresh): 6.13 (B4.3) — ротация + replay-каскад
+  - `60375ca` feat(refresh): 6.13 (B4.4) — logout отзывает jti
+  - `c4ff590` test(refresh): 6.13 (B4.5) — refresh_test.go
+- **Файлы:**
+  - `backend/refresh.go` (new) — store: SaveRefreshJTI, IsRefreshRevoked, RevokeRefreshJTI, RevokeAllForDoctor; lazy-cleanup expired
+  - `backend/refresh_test.go` (new) — 7 тестов через :memory: SQLite
+  - `backend/db.go` — миграция: таблица refresh_tokens + 2 индекса
+  - `backend/auth.go` — IssueRefreshToken возвращает (token, jti, exp, err); handleAuthLogin/handleAuthRefresh регистрируют jti; handleAuthRefresh — ротация + replay-каскад; handleAuthLogout — отзыв jti из тела запроса
+- **Что сделано:**
+  - Одноразовые refresh-токены: при ротации старый jti помечается revoked_at + replaced_by.
+  - Replay: если приходит уже отозванный jti — каскад RevokeAllForDoctor + 401.
+  - Logout с телом {refreshToken} отзывает jti; без тела/с мусором — 200 (не падает).
+  - SaveRefreshJTI чистит expired (lazy-cleanup: DELETE WHERE expires_at < now).
+  - IsRefreshRevoked: неизвестный/пустой jti → true (безопасный дефолт).
+- **Тесты (`:memory:` SQLite):**
+  - TestRefresh_SaveAndNotRevoked, TestRefresh_UnknownIsRevoked, TestRefresh_EmptyJTIRevoked, TestRefresh_Revoke, TestRefresh_RevokeIdempotent, TestRefresh_RevokeAllForDoctor, TestRefresh_SaveCleansExpired — все PASS.
+- **Smoke (end-to-end через /api/auth):**
+  - login → refresh(R1) → 200 (R2). refresh(R1) повторно → 401 + 🚨 REPLAY (каскад, отозвано 1).
+  - refresh(R2) после каскада → 401 (уже revoked).
+  - logout(R1) → 200. refresh(R1) → 401 (отозван).
+  - logout без тела / с мусором → 200.
+
+---
+
 ## Следующий
 
-### 6.13 (B4) — refresh-ротация (черновик)
+### 6.14 (B5) — admin CRUD по докторам (черновик)
 - **Статус:** запланирован
-- **Цель:** одноразовые refresh-токены (rotation) + blacklist jti при logout; повторное использование старого refresh → инвалидация всей сессии.
-- **Опоры:** IssueAccessToken/IssueRefreshToken/ParseToken/registerAuthRoutes (auth.go), env-валидация (B1).
-- **Файлы (ожидаемо):** `backend/auth.go`, возможно новый `backend/refresh.go`, миграция таблицы (если уже не хранится jti).
-- **Проверки (ожидаемо):** go test + smoke: login → refresh → refresh → old refresh отбивается; logout → refresh больше не работает.
+- **Цель:** POST/PATCH/DELETE /api/doctors, доступ только admin/superadmin (через requireRole).
+- **Опоры:** enum Role + requireRole (6.8), resolveDoctorID (6.5), initDB/schema в db.go.
+- **Файлы (ожидаемо):** `backend/doctors.go` (new — CRUD-хендлеры + store), `backend/auth.go` (регистрация маршрутов), возможно `backend/doctors_test.go`.
+- **Проверки (ожидаемо):** go test + smoke: admin создаёт/меняет/удаляет доктора; doctor → 403; аноним → 401.
 
 ---
 
