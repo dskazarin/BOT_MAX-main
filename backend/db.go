@@ -524,6 +524,23 @@ func getDoctorByEmail(db *sql.DB, email string) (*Doctor, error) {
 	return &d, nil
 }
 
+// getDoctorByID ищет врача по id. Возвращает sql.ErrNoRows, если нет.
+func getDoctorByID(db *sql.DB, id string) (*Doctor, error) {
+	const q = `
+		SELECT id, email, password_hash, name, role, active
+		FROM doctors
+		WHERE id = ?
+	`
+	var d Doctor
+	err := db.QueryRow(q, id).Scan(
+		&d.ID, &d.Email, &d.PasswordHash, &d.Name, &d.Role, &d.Active,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
 // touchLastLogin обновляет last_login. Ошибку логина не валит —
 // handler решит, писать её в лог или нет.
 func touchLastLogin(db *sql.DB, doctorID string) error {

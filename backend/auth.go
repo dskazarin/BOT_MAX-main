@@ -240,11 +240,11 @@ func doctorRoleFromCtx(r *http.Request) string {
 // http.DefaultServeMux. Вызывается из main() рядом с
 // registerPatientRoutes() — до создания http.Server.
 func registerAuthRoutes() {
-	// Шаг 6.3
 	http.HandleFunc("/api/auth/login", handleAuthLogin)
+	http.HandleFunc("/api/auth/refresh", handleAuthRefresh)
+	http.HandleFunc("/api/auth/logout", handleAuthLogout)
 
-	// Шаг 6.6: POST /api/auth/refresh, POST /api/auth/logout
-	log.Println("🔐 registerAuthRoutes: /api/auth/login зарегистрирован")
+	log.Println("🔐 registerAuthRoutes: /login, /refresh, /logout зарегистрированы")
 }
 
 // ---------------------------------------------------------------
@@ -464,4 +464,101 @@ func resolveDoctorID(r *http.Request) (string, bool) {
 // writeUnauthorized — единый ответ 401 для handlers.
 func writeUnauthorized(w http.ResponseWriter) {
 	http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+}
+
+// ---------------------------------------------------------------
+// Шаг 6.6 — POST /api/auth/refresh, POST /api/auth/logout
+// ---------------------------------------------------------------
+
+// refreshReq — тело POST /api/auth/refresh.
+type refreshReq struct {
+	RefreshToken string `json:"refreshToken"`
+}
+
+// handleAuthRefresh — POST /api/auth/refresh.
+// Принимает {"refreshToken":"..."}, валидирует его как refresh-токен,
+// выдаёт новую пару access+refresh. Пользователь должен существовать
+// и быть активным (иначе 401).
+func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var req refreshReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.RefreshToken == "" {
+		http.Error(w, `{"error":"refreshToken required"}`, http.StatusBadRequest)
+		return
+	}
+
+	claims, err := ParseToken(req.RefreshToken, "refresh")
+	if err != nil {
+		log.Printf("🔒 refresh: невалидный refresh-токен: %v", err)
+		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Проверяем, что врач ещё существует и активен.
+	doc, err := getDoctorByID(db, claims.DoctorID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Printf("🔒 refresh: врач %q не найден", claims.DoctorID)
+		} else {
+			log.Printf("⚠️  refresh: getDoctorByID(%q): %v", claims.DoctorID, err)
+		}
+		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
+		return
+	}
+	if !doc.Active {
+		log.Printf("🔒 refresh: врач %q деактивирован", doc.ID)
+		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
+		return
+	}
+
+	newAccess, err := IssueAccessToken(doc.ID, doc.Role)
+	if err != nil {
+		log.Printf("⚠️  refresh: IssueAccessToken(%q): %v", doc.ID, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	newRefresh, err := IssueRefreshToken(doc.ID, doc.Role)
+	if err != nil {
+		log.Printf("⚠️  refresh: IssueRefreshToken(%q): %v", doc.ID, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(loginResp{
+		AccessToken:  newAccess,
+		RefreshToken: newRefresh,
+		Doctor: doctorBrief{
+			ID:   doc.ID,
+			Name: doc.Name,
+			Role: doc.Role,
+		},
+	})
+	log.Printf("♻️  refresh: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
+}
+
+// handleAuthLogout — POST /api/auth/logout.
+// Stateless JWT: серверной сессии нет, отзывать нечего. Фронт сам чистит
+// localStorage. Middleware уже проверил access-токен (не в whitelist),
+// поэтому сюда попадают только аутентифицированные запросы.
+func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	docID := doctorIDFromCtx(r)
+	if docID == "" {
+		log.Printf("👋 logout: анонимный (soft-mode?)")
+	} else {
+		log.Printf("👋 logout: %s", docID)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
