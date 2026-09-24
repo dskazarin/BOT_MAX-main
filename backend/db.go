@@ -159,21 +159,48 @@ func seedDefaultDoctor(db *sql.DB) error {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM doctors`).Scan(&count); err != nil {
 		return fmt.Errorf("count doctors: %w", err)
 	}
-	if count > 0 {
+
+	// Первый запуск: таблица пуста — создаём DOC-001 с bcrypt-паролем.
+	if count == 0 {
+		hash, err := HashPassword("doctor@local")
+		if err != nil {
+			return fmt.Errorf("hash default password: %w", err)
+		}
+		_, err = db.Exec(
+			`INSERT INTO doctors (id, clinic_id, email, password_hash, name, specialty, role, created, active)
+			 VALUES (?, NULL, ?, ?, ?, 'lor', 'doctor', datetime('now'), 1)`,
+			"DOC-001",
+			"doctor@local",
+			hash,
+			"Тестовый врач",
+		)
+		if err != nil {
+			return fmt.Errorf("seed doctor: %w", err)
+		}
+		fmt.Println("🌱 Создан тестовый врач DOC-001 (doctor@local, bcrypt)")
 		return nil
 	}
-	_, err := db.Exec(
-		`INSERT INTO doctors (id, clinic_id, email, password_hash, name, specialty, role, created, active)
-		 VALUES (?, NULL, ?, ?, ?, 'lor', 'doctor', datetime('now'), 1)`,
-		"DOC-001",
-		"doctor@local",
-		"!disabled",
-		"Тестовый врач",
-	)
-	if err != nil {
-		return fmt.Errorf("seed doctor: %w", err)
+
+	// Таблица не пуста: мигрируем placeholder у DOC-001 → bcrypt (идемпотентно).
+	var currentHash string
+	err := db.QueryRow(`SELECT password_hash FROM doctors WHERE id = 'DOC-001'`).Scan(&currentHash)
+	if err == sql.ErrNoRows {
+		return nil
 	}
-	fmt.Println("🌱 Создан тестовый врач DOC-001 (doctor@local)")
+	if err != nil {
+		return fmt.Errorf("read DOC-001 password_hash: %w", err)
+	}
+	if IsBcryptHash(currentHash) {
+		return nil
+	}
+	newHash, err := HashPassword("doctor@local")
+	if err != nil {
+		return fmt.Errorf("hash default password: %w", err)
+	}
+	if _, err := db.Exec(`UPDATE doctors SET password_hash = ? WHERE id = 'DOC-001'`, newHash); err != nil {
+		return fmt.Errorf("update DOC-001 password_hash: %w", err)
+	}
+	fmt.Println("🌱 DOC-001: пароль обновлён на bcrypt (было: placeholder)")
 	return nil
 }
 
