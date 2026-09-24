@@ -173,10 +173,10 @@ func IssueAccessToken(doctorID string, role Role) (string, error) {
 }
 
 // IssueRefreshToken выдаёт refresh-токен.
-func IssueRefreshToken(doctorID string, role Role) (string, error) {
-	jti, err := newJTI()
+func IssueRefreshToken(doctorID string, role Role) (token string, jti string, expiresAt time.Time, err error) {
+	jti, err = newJTI()
 	if err != nil {
-		return "", fmt.Errorf("jti: %w", err)
+		return "", "", time.Time{}, fmt.Errorf("jti: %w", err)
 	}
 	now := time.Now()
 	claims := Claims{
@@ -195,9 +195,9 @@ func IssueRefreshToken(doctorID string, role Role) (string, error) {
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := tok.SignedString(jwtSecret())
 	if err != nil {
-		return "", fmt.Errorf("sign refresh: %w", err)
+		return "", "", time.Time{}, fmt.Errorf("sign refresh: %w", err)
 	}
-	return signed, nil
+	return signed, jti, now.Add(RefreshTTL), nil
 }
 
 // ParseToken валидирует токен и возвращает claims.
@@ -354,11 +354,15 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	refresh, err := IssueRefreshToken(doc.ID, Role(doc.Role))
+	refresh, refreshJTI, refreshExp, err := IssueRefreshToken(doc.ID, Role(doc.Role))
 	if err != nil {
 		log.Printf("⚠️  login: IssueRefreshToken(%q): %v", doc.ID, err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if err := SaveRefreshJTI(db, refreshJTI, doc.ID, refreshExp); err != nil {
+		log.Printf("⚠️  login: SaveRefreshJTI(%q): %v", doc.ID, err)
 	}
 
 	if err := touchLastLogin(db, doc.ID); err != nil {
@@ -612,11 +616,15 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	newRefresh, err := IssueRefreshToken(doc.ID, Role(doc.Role))
+	newRefresh, refreshJTI, refreshExp, err := IssueRefreshToken(doc.ID, Role(doc.Role))
 	if err != nil {
 		log.Printf("⚠️  refresh: IssueRefreshToken(%q): %v", doc.ID, err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if err := SaveRefreshJTI(db, refreshJTI, doc.ID, refreshExp); err != nil {
+		log.Printf("⚠️  refresh: SaveRefreshJTI(%q): %v", doc.ID, err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
