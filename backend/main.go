@@ -427,12 +427,7 @@ func main() {
 		log.Fatalf("❌ InitDB: %v", err)
 	}
 	defer db.Close()
-	if err := seedDefaultDoctor(db); err != nil {
-		log.Fatalf("❌ seedDefaultDoctor: %v", err)
-	}
-	if err := seedAdminRoles(db); err != nil {
-		log.Fatalf("❌ seedAdminRoles: %v", err)
-	}
+	runDevSeeds(db, currentEnv)
 	log.Printf("✅ SQLite готова: %s", filepath.Join(rootDir, "bot_max.db"))
 
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
