@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,8 +9,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
+	"syscall"
+	"time"
 )
 
 type Guideline struct {
@@ -376,6 +381,20 @@ var loader *Loader
 var guidelines map[string]*Guideline
 var db *sql.DB
 
+// recoverMiddleware ловит panic в HTTP-хендлерах, логирует и отдаёт 500.
+// Защищает сервер от падения при панике в одном запросе.
+func recoverMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("PANIC %s %s: %v\n%s", r.Method, r.URL.Path, rec, debug.Stack())
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	wd, _ := os.Getwd()
 	rootDir := wd
@@ -452,6 +471,38 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Порт 8082 занят (освободи: fuser -k 8082/tcp): %v", err)
 	}
-	log.Println("🚀 Сервер запущен на http://localhost:8082")
-	log.Fatal(http.Serve(listener, nil))
+
+	srv := &http.Server{
+		Handler:      recoverMiddleware(http.DefaultServeMux),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	// Запуск сервера в горутине, чтобы main() мог слушать сигналы
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Println("🚀 Сервер запущен на http://localhost:8082")
+		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+	}()
+
+	// Graceful shutdown по SIGINT / SIGTERM
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case sig := <-quit:
+		log.Printf("⏹  Получен сигнал %v, начинаю graceful shutdown...", sig)
+	case err := <-serverErr:
+		log.Fatalf("❌ http.Serve: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("⚠️  Shutdown error: %v", err)
+	} else {
+		log.Println("✅ Сервер остановлен")
+	}
 }
