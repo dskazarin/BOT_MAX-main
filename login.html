@@ -192,7 +192,7 @@
     'use strict';
 
     // Если уже авторизованы — сразу в кабинет.
-    if (BotMaxAuth.getToken()) {
+    if (BotMaxAuth.isLoggedIn()) {
         location.replace('doctor_cabinet.html');
         return;
     }
@@ -259,7 +259,7 @@
             if (!data || !data.accessToken || !data.refreshToken || !data.doctor) {
                 throw { kind: 'server', msg: 'Некорректный ответ сервера' };
             }
-            BotMaxAuth.setTokens(data.accessToken, data.refreshToken, data.doctor);
+            BotMaxAuth.setDoctor(data.doctor);
             location.replace('doctor_cabinet.html');
         })
         .catch(function (err) {

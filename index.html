@@ -278,7 +278,7 @@
 // скрыта, если залогинен не-admin (doctor/пациент).
 (function () {
     if (typeof BotMaxAuth === "undefined") return;
-    if (!BotMaxAuth.getToken()) return;           // аноним — оставляем кнопку
+    if (!BotMaxAuth.isLoggedIn()) return;           // аноним — оставляем кнопку
     if (BotMaxAuth.isAdmin()) return;             // admin/superadmin — оставляем
     var btn = document.getElementById("admin-entry-btn");
     if (btn) btn.style.display = "none";

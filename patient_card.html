@@ -976,14 +976,6 @@
         }
     });
 
-    function getAuthHeaders() {
-        // Шаг 6.7: Authorization: Bearer <token> из auth.js
-        if (typeof BotMaxAuth !== 'undefined' && BotMaxAuth.getAuthHeaders) {
-            return BotMaxAuth.getAuthHeaders();
-        }
-        return {};
-    }
-
     // ============================================================
     // Шаг 4.5, коммит 2: pending sync queue + retry
     // ============================================================

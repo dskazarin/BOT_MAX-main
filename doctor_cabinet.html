@@ -589,14 +589,6 @@
     }
     var MIGRATION_FLAG = 'migrated_v1';
 
-    // Шаг 6.7: Authorization: Bearer <token> из auth.js
-    function getAuthHeaders() {
-        if (typeof BotMaxAuth !== 'undefined' && BotMaxAuth.getAuthHeaders) {
-            return BotMaxAuth.getAuthHeaders();
-        }
-        return {};
-    }
-
     function setStorageMode(mode) {
         if (['server', 'cache'].indexOf(mode) === -1) {
             console.warn('❌ Неизвестный STORAGE_MODE:', mode);

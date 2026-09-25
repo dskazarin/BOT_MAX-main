@@ -261,7 +261,7 @@
         window.location.replace("login.html");
         return;
     }
-    if (!BotMaxAuth.getToken()) {
+    if (!BotMaxAuth.isLoggedIn()) {
         window.location.replace("login.html");
         return;
     }
