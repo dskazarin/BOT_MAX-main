@@ -476,6 +476,9 @@ func main() {
 	// CRUD по докторам (B5): /api/doctors, /api/doctors/{id} — только admin/superadmin
 	registerDoctorRoutes()
 
+	// Audit-log (B9): /api/audit — только admin/superadmin
+	registerAuditRoutes()
+
 	http.Handle("/", http.FileServer(http.Dir(rootDir)))
 
 	listener, err := net.Listen("tcp", ":8082")

@@ -343,6 +343,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Всегда вызываем bcrypt (защита от timing-атак).
 	if err := CheckPassword(storedHash, req.Password); err != nil || doc == nil || !doc.Active {
+		auditLog(db, "", "auth.login.fail", "auth", "", clientIP(r), map[string]string{"email": req.Email, "reason": "invalid"})  // B9.2
 		log.Printf("🔒 login: отклонено для %q", req.Email)
 		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
 		return
@@ -386,6 +387,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	loginLimiterPerIP.Reset(ipKey)
 	loginLimiterPerEmail.Reset(emailKey)
 	log.Printf("✅ login: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
+	auditLog(db, doc.ID, "auth.login", "auth", "", clientIP(r), map[string]string{"email": doc.Email, "role": doc.Role})  // B9.2
 }
 
 // ---------------------------------------------------------------
@@ -621,6 +623,7 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 	if revoked {
 		n, _ := RevokeAllForDoctor(db, claims.DoctorID)
 		log.Printf("🚨 refresh: REPLAY jti=%s doctor=%s — каскад, отозвано %d", claims.ID, claims.DoctorID, n)
+		auditLog(db, claims.DoctorID, "auth.refresh.replay", "auth", "", clientIP(r), map[string]any{"jti": claims.ID, "revoked": n})  // B9.2
 		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
 		return
 	}
@@ -678,6 +681,7 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	log.Printf("♻️  refresh: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
+	auditLog(db, doc.ID, "auth.refresh", "auth", "", clientIP(r), nil)  // B9.2
 }
 
 // handleAuthLogout — POST /api/auth/logout.
@@ -718,6 +722,7 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		log.Printf("👋 logout: %s", docID)
 	}
 	// B7.2: снимаем cookie
+	auditLog(db, docID, "auth.logout", "auth", "", clientIP(r), nil)  // B9.2
 	clearAuthCookies(w)
 
 	w.Header().Set("Content-Type", "application/json")
