@@ -399,6 +399,9 @@ func handleDoctorCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// B9.3: audit
+	auditLog(db, doctorIDFromCtx(r), "doctor.create", "doctor", doc.ID, clientIP(r), map[string]string{"email": doc.Email, "role": doc.Role})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(doc); err != nil {
@@ -504,6 +507,9 @@ func handleDoctorUpdate(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
+	// B9.3: audit
+	auditLog(db, doctorIDFromCtx(r), "doctor.update", "doctor", doc.ID, clientIP(r), nil)
+
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(doc); err != nil {
 		log.Printf("⚠️  PATCH /api/doctors/%s encode: %v", id, err)
@@ -542,6 +548,9 @@ func handleDoctorDelete(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// B9.3: audit
+	auditLog(db, doctorIDFromCtx(r), "doctor.delete", "doctor", id, clientIP(r), nil)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": id})
