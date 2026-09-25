@@ -56,3 +56,9 @@ botmax
 bot_max.db
 bot_max.db-shm
 bot_max.db-wal
+
+# Env-файлы (секреты, не коммитим)
+.env
+.env.*
+# ...но шаблон оставляем
+!.env.example
