@@ -105,14 +105,39 @@
 
 ---
 
+### 6.14 (B5) — admin CRUD по докторам
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - `2dffef7` feat(doctors): 6.14 (B5.1) — store
+  - `7486ee7` feat(doctors): 6.14 (B5.2) — HTTP handlers + routes
+  - `a43d24f` feat(doctors): 6.14 (B5.3) — бизнес-правила
+  - `49530f7` test(doctors): 6.14 (B5.4) — doctors_test.go
+- **Файлы:**
+  - `backend/doctors.go` (new) — store + HTTP handlers + registerDoctorRoutes
+  - `backend/doctors_test.go` (new) — 7 тестов через :memory: SQLite
+  - `backend/main.go` — вызов registerDoctorRoutes()
+- **Что сделано:**
+  - Store: listDoctors, createDoctor, updateDoctor, deleteDoctorByID (soft-delete active=0), getDoctorRowByID.
+  - HTTP: GET/POST /api/doctors, GET/PATCH/DELETE /api/doctors/{id} — все под guard requireRole(admin, superadmin).
+  - DoctorRow (расширенная структура) — не трогает минимальный Doctor из db.go.
+  - Бизнес-правила: self-delete/self-deactivate → 400; admin не трогает superadmin (PATCH/DELETE) → 403; admin не создаёт admin/superadmin → 403.
+- **Тесты (:memory: SQLite):**
+  - TestDoctors_CreateAndGet, TestDoctors_CreateDefaults, TestDoctors_CreateValidation (4 подкейса), TestDoctors_CreateUniqueEmail, TestDoctors_List, TestDoctors_Update, TestDoctors_DeleteSoft — все PASS.
+- **Smoke (end-to-end через /api/doctors, BOTMAX_AUTH_ENFORCE=1):**
+  - Аноним → 401; admin GET → 200; admin POST → 201; admin PATCH → 200; admin DELETE → 200.
+  - doctor GET → 403; admin self-delete → 400; admin self-deactivate → 400; admin PATCH SUPER → 403; admin DELETE SUPER → 403; admin POST superadmin → 403.
+  - superadmin PATCH ADMIN → 200; superadmin DELETE ADMIN → 200.
+
+---
+
 ## Следующий
 
-### 6.14 (B5) — admin CRUD по докторам (черновик)
+### 6.15 (B6) — frontend auth-интеграция (черновик)
 - **Статус:** запланирован
-- **Цель:** POST/PATCH/DELETE /api/doctors, доступ только admin/superadmin (через requireRole).
-- **Опоры:** enum Role + requireRole (6.8), resolveDoctorID (6.5), initDB/schema в db.go.
-- **Файлы (ожидаемо):** `backend/doctors.go` (new — CRUD-хендлеры + store), `backend/auth.go` (регистрация маршрутов), возможно `backend/doctors_test.go`.
-- **Проверки (ожидаемо):** go test + smoke: admin создаёт/меняет/удаляет доктора; doctor → 403; аноним → 401.
+- **Цель:** скрытие UI-элементов по ролям, редирект на login.html при 401/отсутствии токена, синхронизация auth.js с новыми эндпоинтами (/api/doctors).
+- **Опоры:** BotMaxAuth (auth.js), data-requires-role (уже есть, не используется), localStorage (botmax_access/botmax_refresh/botmax_doctor).
+- **Файлы (ожидаемо):** auth.js, index.html (и/или другие HTML), возможно новый admin.html.
+- **Проверки (ожидаемо):** ручной прогон в браузере: doctor не видит admin-кнопок; истёкший access → refresh; logout чистит токены.
 
 ---
 
