@@ -125,6 +125,54 @@
         .badge-role-admin      { background: rgba(214, 158, 46, 0.2);  color: #fbd38d; }
         .badge-role-superadmin { background: rgba(159, 122, 234, 0.2); color: #d6bcfa; }
 
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: #2d3748;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 25px 30px;
+            width: 100%;
+            max-width: 520px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        .modal h2 { font-size: 1.2em; color: #fff; margin-bottom: 20px; }
+        .modal .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
+        .modal .field label { font-size: 0.85em; color: #a0aec0; }
+        .modal .field input, .modal .field select {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(0, 0, 0, 0.25);
+            color: #e2e8f0;
+            font-size: 0.95em;
+        }
+        .modal .field input:focus, .modal .field select:focus { outline: 1px solid #667eea; }
+        .modal .field small { color: #718096; font-size: 0.78em; }
+        .modal .actions {
+            display: flex; justify-content: flex-end; gap: 10px;
+            margin-top: 10px;
+        }
+        .alert-error {
+            display: none;
+            background: rgba(229, 62, 62, 0.15);
+            border: 1px solid rgba(229, 62, 62, 0.4);
+            color: #fc8181;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+        .alert-error.show { display: block; }
         .empty { text-align: center; color: #718096; padding: 40px; font-style: italic; }
         .error { color: #fc8181; padding: 20px; text-align: center; }
         .count { color: #a0aec0; font-size: 0.85em; margin-left: 10px; }
@@ -171,6 +219,7 @@
             <input id="fIncludeInactive" type="checkbox" onchange="loadDoctors()">
             Показать неактивных
         </label>
+        <button class="btn btn-success" id="btnAddDoctor" onclick="openCreateModal()">➕ Добавить доктора</button>
     </div>
 
     <div class="table-wrap">
@@ -193,6 +242,47 @@
                 <tr><td colspan="9" class="empty">Загрузка…</td></tr>
             </tbody>
         </table>
+    </div>
+
+    <div class="modal-overlay" id="modalCreate">
+        <div class="modal">
+            <h2>➕ Новый доктор</h2>
+            <div class="alert-error" id="createError"></div>
+            <div class="field">
+                <label for="cEmail">Email *</label>
+                <input id="cEmail" type="email" placeholder="doctor@example.com" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="cPassword">Пароль *</label>
+                <input id="cPassword" type="password" placeholder="не менее 6 символов" autocomplete="new-password">
+            </div>
+            <div class="field">
+                <label for="cName">Имя *</label>
+                <input id="cName" type="text" placeholder="Иванов Иван">
+            </div>
+            <div class="field">
+                <label for="cSpecialty">Специальность</label>
+                <input id="cSpecialty" type="text" placeholder="lor" value="lor">
+                <small>По умолчанию: lor</small>
+            </div>
+            <div class="field">
+                <label for="cRole">Роль</label>
+                <select id="cRole">
+                    <option value="doctor" selected>doctor</option>
+                    <option value="admin" id="optRoleAdmin" hidden>admin</option>
+                    <option value="superadmin" id="optRoleSuper" hidden>superadmin</option>
+                </select>
+                <small id="roleHint">Роль admin/superadmin доступна только superadmin.</small>
+            </div>
+            <div class="field">
+                <label for="cPhone">Телефон</label>
+                <input id="cPhone" type="text" placeholder="+7 900 000-00-00">
+            </div>
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="closeCreateModal()">✖ Отмена</button>
+                <button class="btn btn-success" id="btnCreateSubmit" onclick="submitCreate()">✅ Создать</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -259,6 +349,90 @@ function loadDoctors() {
         tbody.innerHTML = '<tr><td colspan="9" class="error">Ошибка сети: ' + escapeHtml(err.message || err) + '</td></tr>';
     });
 }
+
+// ---------- B15.3: create modal ----------
+
+function showCreateError(msg) {
+    var el = document.getElementById('createError');
+    if (!msg) { el.textContent = ''; el.classList.remove('show'); return; }
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+function openCreateModal() {
+    document.getElementById('cEmail').value = '';
+    document.getElementById('cPassword').value = '';
+    document.getElementById('cName').value = '';
+    document.getElementById('cSpecialty').value = 'lor';
+    document.getElementById('cRole').value = 'doctor';
+    document.getElementById('cPhone').value = '';
+    showCreateError('');
+
+    // B15.3: только superadmin видит admin/superadmin в селекте
+    var isSuper = (typeof BotMaxAuth.isSuperadmin === 'function') && BotMaxAuth.isSuperadmin();
+    document.getElementById('optRoleAdmin').hidden = !isSuper;
+    document.getElementById('optRoleSuper').hidden = !isSuper;
+    document.getElementById('roleHint').style.display = isSuper ? 'none' : 'block';
+
+    document.getElementById('modalCreate').classList.add('open');
+}
+
+function closeCreateModal() {
+    document.getElementById('modalCreate').classList.remove('open');
+}
+
+function extractErr(res) {
+    return res.text().then(function (t) {
+        try {
+            var j = JSON.parse(t);
+            if (j && j.error) return j.error;
+        } catch (e) {}
+        return t || ('HTTP ' + res.status);
+    });
+}
+
+function submitCreate() {
+    var body = {
+        email:     document.getElementById('cEmail').value.trim(),
+        password:  document.getElementById('cPassword').value,
+        name:      document.getElementById('cName').value.trim(),
+        specialty: document.getElementById('cSpecialty').value.trim() || 'lor',
+        role:      document.getElementById('cRole').value,
+        phone:     document.getElementById('cPhone').value.trim()
+    };
+
+    if (!body.email || !body.password || !body.name) {
+        showCreateError('email, password, name — обязательны');
+        return;
+    }
+
+    var btn = document.getElementById('btnCreateSubmit');
+    btn.disabled = true;
+    showCreateError('');
+
+    BotMaxAuth.authFetch('POST', '/api/doctors', body).then(function (res) {
+        if (res.status === 201) {
+            closeCreateModal();
+            loadDoctors();
+            return null;
+        }
+        return extractErr(res).then(function (msg) {
+            showCreateError(msg);
+        });
+    }).catch(function (err) {
+        showCreateError('Ошибка сети: ' + (err && err.message ? err.message : err));
+    }).then(function () {
+        btn.disabled = false;
+    });
+}
+
+// ESC закрывает модалку (только create)
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        var m = document.getElementById('modalCreate');
+        if (m && m.classList.contains('open')) closeCreateModal();
+    }
+});
 
 // Первая загрузка
 loadDoctors();
