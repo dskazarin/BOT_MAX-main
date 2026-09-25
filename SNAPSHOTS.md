@@ -208,14 +208,46 @@
 
 ---
 
+### 6.18 (B9) — audit-log
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - `c82dd85` feat(audit): 6.18 (B9.1) — audit_log схема + store + read-API
+  - `c74f399` feat(audit): 6.18 (B9.2) — audit в auth + регистрация /api/audit
+  - `c1ea053` feat(audit): 6.18 (B9.3) — audit в doctors CRUD
+  - `e7eb130` feat(audit): 6.18 (B9.4) — audit в patients CRUD
+  - `a358260` test(audit): 6.18 (B9.6) — audit_test.go
+- **Файлы:**
+  - `backend/audit.go` (new) — auditLog, auditCleanup, handleAuditList, registerAuditRoutes
+  - `backend/audit_test.go` (new) — 6 тестов store
+  - `backend/db.go` — миграция: таблица audit_log + 3 индекса
+  - `backend/auth.go` — audit на login (успех/отказ), refresh, replay, logout
+  - `backend/doctors.go` — audit на doctor.create/update/delete
+  - `backend/patients.go` — audit на patient.create/update/delete
+  - `backend/main.go` — вызов registerAuditRoutes()
+- **Что сделано:**
+  - Best-effort запись в audit_log: ошибки не влияют на HTTP-ответ.
+  - Фиксируются: doctor_id (actor), action, entity, entity_id, ip, detail (JSON), ts.
+  - Read-API GET /api/audit с фильтрами (limit, doctor_id, action, entity, since, until), только admin/superadmin.
+  - ts формируется в Go (time.Now().UTC()), не SQLite — легче тестировать.
+  - auditCleanup(days) — задел на retention (не вызывается в B9).
+- **Тесты (:memory: SQLite):**
+  - TestAudit_InsertAndFetch, TestAudit_DetailJSON, TestAudit_NilDB, TestAudit_EmptyAction, TestAudit_Cleanup, TestAudit_Order — все PASS.
+- **Smoke (end-to-end через curl):**
+  - auth: login ×2, login.fail ×1, refresh ×1, logout ×1 — GET /api/audit показывает все.
+  - doctors: create/update/delete — doctor.create/update/delete в audit.
+  - patients: create/update/delete — patient.create/update/delete в audit.
+  - GET /api/audit без cookie — 401.
+
+---
+
 ## Следующий
 
-### 6.18 (B9) — audit-log (черновик)
+### 6.19 (B10) — Postgres-миграция (черновик)
 - **Статус:** запланирован
-- **Цель:** журнал действий: login, logout, CRUD patients/doctors — кто, когда, что.
-- **Опоры:** backend/auth.go, backend/doctors.go, backend/patients.go, БД.
-- **Файлы (ожидаемо):** backend/audit.go (new), миграция audit_log, врезки в ключевые хендлеры.
-- **Проверки (ожидаемо):** go test + smoke: после login/logout/CRUD в audit_log появляются записи с doctor_id, action, ts.
+- **Цель:** перейти с SQLite на Postgres (prod-нагрузки, конкурентность, миграции).
+- **Опоры:** db.go (InitDB), все store-функции, современный драйвер (pgx или lib/pq).
+- **Файлы (ожидаемо):** db.go (смена драйвера), миграции (goose/atlas), env (BOTMAX_DB_URL), все store-функции (адаптация под $1 вместо ?).
+- **Проверки (ожидаемо):** go test на Postgres в docker; smoke: те же endpoints работают.
 
 ---
 
