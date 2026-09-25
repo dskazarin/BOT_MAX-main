@@ -422,13 +422,17 @@ func main() {
 
 	// === SQLite (шаг 1) ===
 	var err error
-	db, err = InitDB(filepath.Join(rootDir, "bot_max.db"))
+	dbPath := currentEnv.DBPath
+	if dbPath == "" {
+		dbPath = filepath.Join(rootDir, "bot_max.db")
+	}
+	db, err = InitDB(dbPath)
 	if err != nil {
 		log.Fatalf("❌ InitDB: %v", err)
 	}
 	defer db.Close()
 	runDevSeeds(db, currentEnv)
-	log.Printf("✅ SQLite готова: %s", filepath.Join(rootDir, "bot_max.db"))
+	log.Printf("✅ SQLite готова: %s", dbPath)
 
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
