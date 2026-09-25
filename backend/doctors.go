@@ -16,7 +16,11 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -274,4 +278,240 @@ func scanDoctorRow(rows *sql.Rows) (*DoctorRow, error) {
 	}
 	d.Active = activeInt != 0
 	return &d, nil
+}
+
+// ---------------------------------------------------------------
+// HTTP — B5.2: handlers + registerDoctorRoutes
+// ---------------------------------------------------------------
+//
+// Все роуты защищены requireRole(RoleAdmin, RoleSuperadmin).
+// Обёртка requireRole — из auth.go; применяется так же, как в patients.go.
+//
+//   GET    /api/doctors          — список (по умолчанию только active)
+//   POST   /api/doctors          — создать
+//   GET    /api/doctors/{id}     — один
+//   PATCH  /api/doctors/{id}     — частичное обновление
+//   DELETE /api/doctors/{id}     — soft delete (active=0)
+
+// registerDoctorRoutes регистрирует роуты /api/doctors/*.
+// Вызывается из main() рядом с registerPatientRoutes() и registerAuthRoutes().
+func registerDoctorRoutes() {
+	guard := requireRole(RoleAdmin, RoleSuperadmin)
+
+	http.Handle("/api/doctors", guard(http.HandlerFunc(handleDoctors)))
+	http.Handle("/api/doctors/", guard(http.HandlerFunc(handleDoctorByID)))
+
+	log.Println("🩺 registerDoctorRoutes: /api/doctors, /api/doctors/{id} зарегистрированы (admin/superadmin)")
+}
+
+// handleDoctors — /api/doctors (без /{id}).
+//   GET  → список
+//   POST → создать
+func handleDoctors(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleDoctorsList(w, r)
+	case http.MethodPost:
+		handleDoctorCreate(w, r)
+	default:
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleDoctorsList — GET /api/doctors.
+// Query: ?include_inactive=1 — включить неактивных.
+func handleDoctorsList(w http.ResponseWriter, r *http.Request) {
+	includeInactive := r.URL.Query().Get("include_inactive") == "1"
+
+	docs, err := listDoctors(db, includeInactive)
+	if err != nil {
+		log.Printf("⚠️  GET /api/doctors: %v", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if docs == nil {
+		docs = []*DoctorRow{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(docs); err != nil {
+		log.Printf("⚠️  GET /api/doctors encode: %v", err)
+	}
+}
+
+// createDoctorReq — тело POST /api/doctors.
+type createDoctorReq struct {
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	Name      string `json:"name"`
+	Specialty string `json:"specialty"`
+	Role      string `json:"role"`
+	Phone     string `json:"phone"`
+}
+
+// handleDoctorCreate — POST /api/doctors.
+// 201 + созданный DoctorRow.
+// 400 при пустых обязательных полях.
+// 409 при дубликате email (UNIQUE).
+func handleDoctorCreate(w http.ResponseWriter, r *http.Request) {
+	var req createDoctorReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	in := CreateDoctorInput{
+		Email:     req.Email,
+		Password:  req.Password,
+		Name:      req.Name,
+		Specialty: req.Specialty,
+		Role:      Role(strings.ToLower(strings.TrimSpace(req.Role))),
+		Phone:     req.Phone,
+	}
+
+	doc, err := createDoctor(db, in)
+	if err != nil {
+		msg := err.Error()
+		switch {
+		case strings.Contains(msg, "обязательны"),
+			strings.Contains(msg, "недопустимая роль"):
+			log.Printf("⚠️  POST /api/doctors: %v", err)
+			http.Error(w, `{"error":"`+jsonEscape(msg)+`"}`, http.StatusBadRequest)
+		case strings.Contains(msg, "UNIQUE"),
+			strings.Contains(msg, "constraint failed"):
+			log.Printf("⚠️  POST /api/doctors: конфликт email: %v", err)
+			http.Error(w, `{"error":"email already exists"}`, http.StatusConflict)
+		default:
+			log.Printf("⚠️  POST /api/doctors: %v", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(doc); err != nil {
+		log.Printf("⚠️  POST /api/doctors encode: %v", err)
+	}
+}
+
+// handleDoctorByID — /api/doctors/{id}.
+//   GET    → один
+//   PATCH  → частичное обновление
+//   DELETE → soft delete
+func handleDoctorByID(w http.ResponseWriter, r *http.Request) {
+	id := extractPathID(r.URL.Path, "/api/doctors/")
+	if id == "" {
+		http.Error(w, `{"error":"missing id"}`, http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		handleDoctorGet(w, r, id)
+	case http.MethodPatch:
+		handleDoctorUpdate(w, r, id)
+	case http.MethodDelete:
+		handleDoctorDelete(w, r, id)
+	default:
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleDoctorGet — GET /api/doctors/{id}.
+func handleDoctorGet(w http.ResponseWriter, r *http.Request, id string) {
+	doc, err := getDoctorRowByID(db, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		log.Printf("⚠️  GET /api/doctors/%s: %v", id, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(doc); err != nil {
+		log.Printf("⚠️  GET /api/doctors/%s encode: %v", id, err)
+	}
+}
+
+// updateDoctorReq — тело PATCH /api/doctors/{id}.
+// Все поля — указатели, чтобы отличать «не прислали» от «прислали пусто».
+type updateDoctorReq struct {
+	Name      *string `json:"name"`
+	Specialty *string `json:"specialty"`
+	Phone     *string `json:"phone"`
+	Active    *bool   `json:"active"`
+}
+
+// handleDoctorUpdate — PATCH /api/doctors/{id}.
+func handleDoctorUpdate(w http.ResponseWriter, r *http.Request, id string) {
+	var req updateDoctorReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+
+	in := UpdateDoctorInput{
+		Name:      req.Name,
+		Specialty: req.Specialty,
+		Phone:     req.Phone,
+		Active:    req.Active,
+	}
+
+	doc, err := updateDoctor(db, id, in)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		log.Printf("⚠️  PATCH /api/doctors/%s: %v", id, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(doc); err != nil {
+		log.Printf("⚠️  PATCH /api/doctors/%s encode: %v", id, err)
+	}
+}
+
+// handleDoctorDelete — DELETE /api/doctors/{id} (soft delete).
+func handleDoctorDelete(w http.ResponseWriter, r *http.Request, id string) {
+	if err := deleteDoctorByID(db, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		log.Printf("⚠️  DELETE /api/doctors/%s: %v", id, err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": id})
+}
+
+// ---------------------------------------------------------------
+// Хелперы B5.2
+// ---------------------------------------------------------------
+
+// extractPathID — вытащить id из пути (обрезает префикс).
+// Пустой результат — значит «нет id».
+func extractPathID(path, prefix string) string {
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(path, prefix))
+}
+
+// jsonEscape — грубая замена для безопасной вставки сообщения в JSON-строку.
+// Достаточно для наших статических строк (не пропускает кавычки, \n).
+func jsonEscape(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	return s
 }

@@ -473,6 +473,9 @@ func main() {
 	// Аутентификация (Шаг 6): POST /api/auth/login
 	registerAuthRoutes()
 
+	// CRUD по докторам (B5): /api/doctors, /api/doctors/{id} — только admin/superadmin
+	registerDoctorRoutes()
+
 	http.Handle("/", http.FileServer(http.Dir(rootDir)))
 
 	listener, err := net.Listen("tcp", ":8082")
