@@ -53,6 +53,14 @@ func e2eSetup(t *testing.T) *httptest.Server {
 			DBPath:       "",
 		}
 
+		// Dev-seed: admin, superadmin, doctor (dev-аккаунты)
+		if err := seedDefaultDoctor(db); err != nil {
+			t.Fatalf("seedDefaultDoctor: %v", err)
+		}
+		if err := seedAdminRoles(db); err != nil {
+			t.Fatalf("seedAdminRoles: %v", err)
+		}
+
 		http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -171,5 +179,126 @@ func TestE2E_HealthSmoke(t *testing.T) {
 	}
 	if !strings.Contains(body, `"status":"ok"`) {
 		t.Fatalf("health: unexpected body %s", body)
+	}
+}
+
+// ---------------------------------------------------------------
+// B12.2: auth-сценарии (login / refresh / logout / access)
+// ---------------------------------------------------------------
+
+func TestE2E_Login_Success(t *testing.T) {
+	srv := e2eSetup(t)
+
+	access, refresh, role := e2eLogin(t, srv, "admin@botmax.local", "admin")
+	if access == "" || refresh == "" {
+		t.Fatalf("login: пустые cookie (access=%q refresh=%q)", access, refresh)
+	}
+	if role != "admin" {
+		t.Fatalf("login: role=%q, ожидали admin", role)
+	}
+}
+
+func TestE2E_Login_Fail(t *testing.T) {
+	srv := e2eSetup(t)
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodPost,
+		url:    "/api/auth/login",
+		body:   `{"email":"admin@botmax.local","password":"WRONG"}`,
+	})
+	if status != http.StatusUnauthorized {
+		t.Fatalf("login WRONG: status %d, ожидали 401, body=%s", status, body)
+	}
+}
+
+func TestE2E_Protected_NoAuth(t *testing.T) {
+	srv := e2eSetup(t)
+
+	status, _, body := e2eDo(t, srv, e2eReq{method: http.MethodGet, url: "/api/doctors"})
+	if status != http.StatusUnauthorized {
+		t.Fatalf("GET /api/doctors без auth: status %d, ожидали 401, body=%s", status, body)
+	}
+}
+
+func TestE2E_Protected_WithCookie(t *testing.T) {
+	srv := e2eSetup(t)
+	access, _, _ := e2eLogin(t, srv, "admin@botmax.local", "admin")
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/doctors", cookie: access,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("GET /api/doctors с cookie: status %d, ожидали 200, body=%s", status, body)
+	}
+}
+
+func TestE2E_Refresh_CookieFlow(t *testing.T) {
+	srv := e2eSetup(t)
+	_, refresh, _ := e2eLogin(t, srv, "admin@botmax.local", "admin")
+
+	status, hdr, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodPost, url: "/api/auth/refresh", cookie: refresh,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("refresh без тела: status %d, ожидали 200, body=%s", status, body)
+	}
+
+	var gotAccess, gotRefresh bool
+	for _, c := range hdr.Values("Set-Cookie") {
+		if strings.HasPrefix(c, cookieNameAccess+"=") {
+			gotAccess = true
+		}
+		if strings.HasPrefix(c, cookieNameRefresh+"=") {
+			gotRefresh = true
+		}
+	}
+	if !gotAccess || !gotRefresh {
+		t.Fatalf("refresh: Set-Cookie не содержит access/refresh (access=%v refresh=%v)", gotAccess, gotRefresh)
+	}
+}
+
+func TestE2E_Logout_CookiesCleared(t *testing.T) {
+	srv := e2eSetup(t)
+	access, refresh, _ := e2eLogin(t, srv, "admin@botmax.local", "admin")
+
+	status, hdr, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodPost, url: "/api/auth/logout",
+		cookie: access + "; " + refresh,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("logout: status %d, ожидали 200, body=%s", status, body)
+	}
+
+	var accessCleared, refreshCleared bool
+	for _, c := range hdr.Values("Set-Cookie") {
+		if strings.HasPrefix(c, cookieNameAccess+"=;") && strings.Contains(c, "Max-Age=0") {
+			accessCleared = true
+		}
+		if strings.HasPrefix(c, cookieNameRefresh+"=;") && strings.Contains(c, "Max-Age=0") {
+			refreshCleared = true
+		}
+	}
+	if !accessCleared || !refreshCleared {
+		t.Fatalf("logout: cookie не сняты (access=%v refresh=%v)", accessCleared, refreshCleared)
+	}
+}
+
+func TestE2E_Logout_ThenAccess(t *testing.T) {
+	srv := e2eSetup(t)
+	access, refresh, _ := e2eLogin(t, srv, "admin@botmax.local", "admin")
+
+	status, _, _ := e2eDo(t, srv, e2eReq{
+		method: http.MethodPost, url: "/api/auth/logout",
+		cookie: access + "; " + refresh,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("logout: status %d, ожидали 200", status)
+	}
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodPost, url: "/api/auth/refresh", cookie: refresh,
+	})
+	if status != http.StatusUnauthorized {
+		t.Fatalf("refresh после logout: status %d, ожидали 401, body=%s", status, body)
 	}
 }
