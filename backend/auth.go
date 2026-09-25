@@ -405,7 +405,7 @@ func authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		token := extractBearerToken(r)
+		token := extractAccessToken(r)
 		enforce := authEnforceEnabled()
 
 		if token == "" {
@@ -490,6 +490,19 @@ func extractBearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if len(h) > len(prefix) && strings.EqualFold(h[:len(prefix)], prefix) {
 		return strings.TrimSpace(h[len(prefix):])
+	}
+	return ""
+}
+
+// extractAccessToken — access-токен из Authorization: Bearer или из cookie.
+// Порядок: Bearer → cookie. Bearer имеет приоритет (обратная совместимость
+// со старым фронтом на localStorage).
+func extractAccessToken(r *http.Request) string {
+	if t := extractBearerToken(r); t != "" {
+		return t
+	}
+	if c, err := r.Cookie(cookieNameAccess); err == nil {
+		return c.Value
 	}
 	return ""
 }
