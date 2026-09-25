@@ -250,8 +250,27 @@
             .grid-4 { grid-template-columns: 1fr 1fr; }
         }
     </style>
+    <!-- B6.1: клиентский auth-модуль -->
+    <script src="auth.js"></script>
 </head>
 <body>
+<script>
+// B6.1: страница только для admin/superadmin
+(function(){
+    if (typeof BotMaxAuth === "undefined") {
+        window.location.replace("login.html");
+        return;
+    }
+    if (!BotMaxAuth.getToken()) {
+        window.location.replace("login.html");
+        return;
+    }
+    if (!BotMaxAuth.isAdmin()) {
+        window.location.replace("doctor_cabinet.html");
+        return;
+    }
+})();
+</script>
 
 <div class="container">
     <a href="index.html" class="back-link">⬅ На главную</a>
