@@ -129,6 +129,46 @@ func TestParseAuthEnforce(t *testing.T) {
 // validateEnv
 // ---------------------------------------------------------------
 
+func TestParseCookieSecure(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		isProd  bool
+		want    bool
+		wantErr bool
+	}{
+		{"empty-dev", "", false, false, false},
+		{"empty-prod", "", true, true, false},
+		{"one-dev", "1", false, true, false},
+		{"true-dev", "true", false, true, false},
+		{"yes-prod", "yes", true, true, false},
+		{"on-dev", "on", false, true, false},
+		{"zero-prod", "0", true, false, false},
+		{"false-prod", "false", true, false, false},
+		{"no-dev", "no", false, false, false},
+		{"off-prod", "off", true, false, false},
+		{"junk", "maybe", true, false, true},
+		{"two", "2", false, false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := parseCookieSecure(c.raw, c.isProd)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("ожидали ошибку для raw=%q isProd=%v", c.raw, c.isProd)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("неожиданная ошибка: %v", err)
+			}
+			if got != c.want {
+				t.Fatalf("parseCookieSecure(%q, %v) = %v, ожидали %v", c.raw, c.isProd, got, c.want)
+			}
+		})
+	}
+}
+
 func TestValidateEnv(t *testing.T) {
 	longSecret := strings.Repeat("x", 32)
 	shortSecret := strings.Repeat("x", 31)

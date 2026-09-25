@@ -28,6 +28,9 @@ type Env struct {
 	IsProd      bool
 	JWTSecret   string // "" в dev, если не задан
 	AuthEnforce bool
+	// CookieSecure — ставить Secure на cookie (HTTPS-only).
+	// В prod по умолчанию true, в dev — false (чтобы работало на http://localhost).
+	CookieSecure bool
 }
 
 // devJWTSecret — fallback для dev-режима.
@@ -69,6 +72,25 @@ func parseAuthEnforce(raw string) (bool, error) {
 	}
 }
 
+// parseCookieSecure строго парсит BOTMAX_COOKIE_SECURE.
+//   "" → isProd (default: true в prod, false в dev)
+//   1|true|yes|on  → true
+//   0|false|no|off → false
+//   иначе          → ошибка
+func parseCookieSecure(raw string, isProd bool) (bool, error) {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	switch v {
+	case "":
+		return isProd, nil
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("BOTMAX_COOKIE_SECURE=%q: ожидается 1|0|true|false|yes|no|on|off", raw)
+	}
+}
+
 // validateEnv читает окружение и возвращает Env или ошибку.
 // Никаких side-effect'ов, кроме чтения os.Getenv.
 func validateEnv() (*Env, error) {
@@ -95,10 +117,16 @@ func validateEnv() (*Env, error) {
 		return nil, err
 	}
 
+	cookieSecure, err := parseCookieSecure(os.Getenv("BOTMAX_COOKIE_SECURE"), isProd)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Env{
 		Name:        name,
 		IsProd:      isProd,
 		JWTSecret:   secret,
 		AuthEnforce: enforce,
+		CookieSecure: cookieSecure,
 	}, nil
 }
