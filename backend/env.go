@@ -31,6 +31,8 @@ type Env struct {
 	// CookieSecure — ставить Secure на cookie (HTTPS-only).
 	// В prod по умолчанию true, в dev — false (чтобы работало на http://localhost).
 	CookieSecure bool
+	// DBPath — путь к SQLite-файлу. Пусто → main.go использует rootDir/bot_max.db.
+	DBPath string
 }
 
 // devJWTSecret — fallback для dev-режима.
@@ -122,11 +124,14 @@ func validateEnv() (*Env, error) {
 		return nil, err
 	}
 
+	dbPath := strings.TrimSpace(os.Getenv("BOTMAX_DB_PATH"))
+
 	return &Env{
 		Name:        name,
 		IsProd:      isProd,
 		JWTSecret:   secret,
 		AuthEnforce: enforce,
 		CookieSecure: cookieSecure,
+		DBPath:       dbPath,
 	}, nil
 }

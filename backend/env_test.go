@@ -180,12 +180,14 @@ func TestValidateEnv(t *testing.T) {
 		envSecret string
 		envForce  string
 		envCookieSecure string
+		envDBPath string
 
 		wantName      string
 		wantIsProd    bool
 		wantSecret    string
 		wantEnforce   bool
 		wantCookieSecure bool
+		wantDBPath    string
 		wantErrSubstr string
 	}{
 		{
@@ -277,6 +279,19 @@ func TestValidateEnv(t *testing.T) {
 			envCookieSecure:  "maybe",
 			wantErrSubstr:    "BOTMAX_COOKIE_SECURE",
 		},
+		{
+			name:             "db-path-empty",
+			envName:          "dev",
+			wantName:         "dev",
+			wantDBPath:       "",
+		},
+		{
+			name:             "db-path-custom",
+			envName:          "dev",
+			envDBPath:        "/tmp/foo.db",
+			wantName:         "dev",
+			wantDBPath:       "/tmp/foo.db",
+		},
 	}
 
 	for _, c := range cases {
@@ -285,6 +300,7 @@ func TestValidateEnv(t *testing.T) {
 			t.Setenv("BOTMAX_JWT_SECRET", c.envSecret)
 			t.Setenv("BOTMAX_AUTH_ENFORCE", c.envForce)
 			t.Setenv("BOTMAX_COOKIE_SECURE", c.envCookieSecure)
+			t.Setenv("BOTMAX_DB_PATH", c.envDBPath)
 
 			got, err := validateEnv()
 			if c.wantErrSubstr != "" {
@@ -313,6 +329,9 @@ func TestValidateEnv(t *testing.T) {
 			}
 			if got.CookieSecure != c.wantCookieSecure {
 				t.Errorf("CookieSecure = %v, ожидали %v", got.CookieSecure, c.wantCookieSecure)
+			}
+			if got.DBPath != c.wantDBPath {
+				t.Errorf("DBPath = %q, ожидали %q", got.DBPath, c.wantDBPath)
 			}
 		})
 	}
