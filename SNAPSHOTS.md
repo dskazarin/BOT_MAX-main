@@ -183,14 +183,39 @@
 
 ---
 
+### 6.17 (B8) — полный переход на cookie
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - `370d14f` feat(auth): 6.17 (B8.1) — refresh/logout принимают refresh из cookie
+  - `645f9fc` refactor(frontend): 6.17 (B8.2) — auth.js только на cookie (без localStorage/Bearer)
+  - `f871b81` refactor(frontend): 6.17 (B8.3) — HTML переведены на cookie-auth
+- **Файлы:**
+  - `backend/auth.go` — handleAuthRefresh/handleAuthLogout: best-effort Decode + fallback на cookie botmax_refresh
+  - `auth.js` — убраны K_ACCESS/K_REFRESH, getToken/getRefreshToken/setTokens/getAuthHeaders/Bearer; добавлены isLoggedIn/setDoctor/clearDoctor
+  - `admin_panel.html`, `index.html`, `login.html` — getToken() → isLoggedIn(); setTokens() → setDoctor()
+  - `doctor_cabinet.html`, `patient_card.html` — удалены мёртвые обёртки getAuthHeaders
+- **Что сделано:**
+  - Токены хранятся ТОЛЬКО в HttpOnly-cookie (JS не видит).
+  - localStorage содержит только botmax_doctor (для UI).
+  - refresh/logout работают без тела — сервер берёт refresh из cookie.
+  - Никаких Bearer-заголовков на фронте.
+- **Smoke (end-to-end через curl):**
+  - login → cookie jar (HttpOnly botmax_access + botmax_refresh).
+  - refresh без тела → 200 + новая пара Set-Cookie.
+  - GET /api/doctors с cookie → 200; без cookie → 401.
+  - logout без тела → 200 + Set-Cookie Max-Age=0.
+  - GET после logout (jar обновлён) → 401.
+
+---
+
 ## Следующий
 
-### 6.17 (B8) — полный переход на cookie (черновик)
+### 6.18 (B9) — audit-log (черновик)
 - **Статус:** запланирован
-- **Цель:** убрать access/refresh из localStorage и Authorization: Bearer — оставить только httpOnly-cookie (как в B7).
-- **Опоры:** B7 (cookie уже работают), auth.js, login.html, все HTML-страницы.
-- **Файлы (ожидаемо):** auth.js (убрать K_ACCESS/K_REFRESH, getAuthHeaders, Bearer; оставить botmax_doctor для UI), возможно HTML с инлайн-fetch.
-- **Проверки (ожидаемо):** ручной прогон в браузере: login → cookie; refresh → cookie; logout → снятие; нет botmax_access/botmax_refresh в localStorage.
+- **Цель:** журнал действий: login, logout, CRUD patients/doctors — кто, когда, что.
+- **Опоры:** backend/auth.go, backend/doctors.go, backend/patients.go, БД.
+- **Файлы (ожидаемо):** backend/audit.go (new), миграция audit_log, врезки в ключевые хендлеры.
+- **Проверки (ожидаемо):** go test + smoke: после login/logout/CRUD в audit_log появляются записи с doctor_id, action, ts.
 
 ---
 
