@@ -288,14 +288,27 @@
 
 ---
 
+### 6.23 (B14) — Structured logging
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - 84546e9 — logging.go (slog setup)
+  - ac77485 — main.go на slog
+  - 78f5818 — auth.go на slog
+  - e4389de — doctors/audit/seed/db на slog
+- **Файлы:** logging.go (new), main.go, auth.go, doctors.go, audit.go, seed.go, db.go
+- **Что сделано:** setupLogging(env) → slog.SetDefault: JSON в stdout (prod), text в stderr (dev). Все log.* / fmt.Print* заменены на slog.Info/Warn/Error с key-value полями (44 вызова). log.Fatalf → slog.Error + os.Exit(1).
+- **Проверки:** go test — 20 E2E PASS; smoke: лог в slog-формате (time=… level=INFO msg=… key=value).
+
+---
+
 ## Следующий
 
-### 6.23 (B14) — Structured logging (черновик)
+### 6.24 (B15) — Admin UI для doctors CRUD (черновик)
 - **Статус:** запланирован
-- **Цель:** заменить log.Printf на log/slog с JSON-хендлером (в prod), text-хендлером (в dev).
-- **Опоры:** env.go (currentEnv), main.go, auth.go, doctors.go, patients.go, audit.go, refresh.go, ratelimit.go, seed.go, cookies.go.
-- **Файлы (ожидаемо):** backend/logging.go (new), замена вызовов log.Printf в основных файлах.
-- **Проверки (ожидаемо):** go test + smoke: в логе JSON с полями (level, msg, time).
+- **Цель:** страница admin_doctors.html — таблица докторов + кнопки create/patch/deactivate.
+- **Опоры:** /api/doctors (B5), auth.js, admin_panel.html (ссылка).
+- **Файлы (ожидаемо):** admin_doctors.html (new), ссылка в admin_panel.html.
+- **Проверки (ожидаемо):** ручной smoke: admin видит таблицу, создаёт/меняет/удаляет доктора; doctor — redirect.
 
 ---
 
