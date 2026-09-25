@@ -173,6 +173,24 @@
             margin-bottom: 15px;
         }
         .alert-error.show { display: block; }
+        .alert-top {
+            display: none;
+            background: rgba(229, 62, 62, 0.15);
+            border: 1px solid rgba(229, 62, 62, 0.4);
+            color: #fc8181;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+        .alert-top.show { display: block; }
+        .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .modal .check-row {
+            display: flex; align-items: center; gap: 8px;
+            color: #cbd5e0; font-size: 0.95em;
+            margin-bottom: 15px;
+        }
+        .modal .check-row input { width: 16px; height: 16px; accent-color: #667eea; }
         .empty { text-align: center; color: #718096; padding: 40px; font-style: italic; }
         .error { color: #fc8181; padding: 20px; text-align: center; }
         .count { color: #a0aec0; font-size: 0.85em; margin-left: 10px; }
@@ -222,6 +240,8 @@
         <button class="btn btn-success" id="btnAddDoctor" onclick="openCreateModal()">➕ Добавить доктора</button>
     </div>
 
+    <div class="alert-top" id="topError"></div>
+
     <div class="table-wrap">
         <div class="count" id="countLabel"></div>
         <table>
@@ -236,6 +256,7 @@
                     <th style="width:100px">Активен</th>
                     <th style="width:160px">Создан</th>
                     <th style="width:160px">Последний вход</th>
+                    <th style="width:200px">Действия</th>
                 </tr>
             </thead>
             <tbody id="tbody">
@@ -284,6 +305,37 @@
             </div>
         </div>
     </div>
+
+    <div class="modal-overlay" id="modalEdit">
+        <div class="modal">
+            <h2>✏️ Редактирование доктора</h2>
+            <div class="alert-error" id="editError"></div>
+            <div class="field">
+                <label>ID</label>
+                <input id="eId" type="text" disabled>
+            </div>
+            <div class="field">
+                <label for="eName">Имя</label>
+                <input id="eName" type="text">
+            </div>
+            <div class="field">
+                <label for="eSpecialty">Специальность</label>
+                <input id="eSpecialty" type="text">
+            </div>
+            <div class="field">
+                <label for="ePhone">Телефон</label>
+                <input id="ePhone" type="text">
+            </div>
+            <div class="check-row">
+                <input id="eActive" type="checkbox">
+                <label for="eActive">Активен</label>
+            </div>
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="closeEditModal()">✖ Отмена</button>
+                <button class="btn btn-success" id="btnEditSubmit" onclick="submitEdit()">✅ Сохранить</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -307,16 +359,37 @@ function renderRows(rows) {
     var count = document.getElementById('countLabel');
 
     if (!rows || rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty">Пусто — докторов нет</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="empty">Пусто — докторов нет</td></tr>';
         count.textContent = 'Найдено: 0';
         return;
     }
+    var me = (typeof BotMaxAuth.getDoctor === 'function') ? BotMaxAuth.getDoctor() : null;
+    var myId = me && me.id ? me.id : '';
+    var iAmSuper = (typeof BotMaxAuth.isSuperadmin === 'function') && BotMaxAuth.isSuperadmin();
+
     var html = '';
     for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
         var activeBadge = r.active
             ? '<span class="badge badge-active">да</span>'
             : '<span class="badge badge-inactive">нет</span>';
+        var isSelf = (r.id === myId);
+        var isSuperTarget = (r.role === 'superadmin');
+        var blockedBySuper = isSuperTarget && !iAmSuper;
+        var canMutate = !isSelf && !blockedBySuper;
+
+        var actions = '<div class="row-actions">';
+        actions += '<button class="btn btn-sm btn-warning" onclick="openEditModal(\'' + escapeHtml(r.id) + '\')">✏️</button>';
+        if (canMutate) {
+            if (r.active) {
+                actions += '<button class="btn btn-sm btn-danger" onclick="toggleActive(\'' + escapeHtml(r.id) + '\', false)">🚫</button>';
+            } else {
+                actions += '<button class="btn btn-sm btn-success" onclick="toggleActive(\'' + escapeHtml(r.id) + '\', true)">✅</button>';
+            }
+            actions += '<button class="btn btn-sm btn-danger" onclick="confirmDelete(\'' + escapeHtml(r.id) + '\', \'' + escapeHtml(r.email) + '\')">🗑️</button>';
+        }
+        actions += '</div>';
+
         html += '<tr>';
         html += '<td class="mono">' + escapeHtml(r.id) + '</td>';
         html += '<td class="mono">' + escapeHtml(r.email) + '</td>';
@@ -327,6 +400,7 @@ function renderRows(rows) {
         html += '<td>' + activeBadge + '</td>';
         html += '<td class="mono">' + escapeHtml(r.created) + '</td>';
         html += '<td class="mono">' + escapeHtml(r.lastLogin) + '</td>';
+        html += '<td>' + actions + '</td>';
         html += '</tr>';
     }
     tbody.innerHTML = html;
@@ -337,7 +411,7 @@ function loadDoctors() {
     var includeInactive = document.getElementById('fIncludeInactive').checked;
     var url = '/api/doctors' + (includeInactive ? '?include_inactive=1' : '');
     var tbody = document.getElementById('tbody');
-    tbody.innerHTML = '<tr><td colspan="9" class="empty">Загрузка…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">Загрузка…</td></tr>';
 
     BotMaxAuth.authFetch('GET', url).then(function (res) {
         if (!res.ok) {
@@ -431,6 +505,136 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         var m = document.getElementById('modalCreate');
         if (m && m.classList.contains('open')) closeCreateModal();
+    }
+});
+
+// ---------- B15.4: edit / toggle / delete ----------
+
+function showTopError(msg) {
+    var el = document.getElementById('topError');
+    if (!msg) { el.textContent = ''; el.classList.remove('show'); return; }
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(function () { el.classList.remove('show'); }, 6000);
+}
+
+function findRowById(id) {
+    // ищем в текущем DOM по data-id? проще — перезапрашивать не будем,
+    // берём данные из уже отрендеренной строки по id колонки.
+    var rows = document.querySelectorAll('#tbody tr');
+    for (var i = 0; i < rows.length; i++) {
+        var firstCell = rows[i].querySelector('td.mono');
+        if (firstCell && firstCell.textContent.trim() === id) {
+            return rows[i];
+        }
+    }
+    return null;
+}
+
+function showEditError(msg) {
+    var el = document.getElementById('editError');
+    if (!msg) { el.textContent = ''; el.classList.remove('show'); return; }
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+// храним полный объект последнего загруженного списка — чтобы edit знал поля
+var lastDoctors = [];
+var origRenderRows = renderRows;
+renderRows = function (rows) {
+    lastDoctors = rows || [];
+    origRenderRows(rows);
+};
+
+function getDoctorById(id) {
+    for (var i = 0; i < lastDoctors.length; i++) {
+        if (lastDoctors[i].id === id) return lastDoctors[i];
+    }
+    return null;
+}
+
+function openEditModal(id) {
+    var r = getDoctorById(id);
+    if (!r) { showTopError('Доктор не найден в текущем списке'); return; }
+    document.getElementById('eId').value = r.id;
+    document.getElementById('eName').value = r.name || '';
+    document.getElementById('eSpecialty').value = r.specialty || '';
+    document.getElementById('ePhone').value = r.phone || '';
+    document.getElementById('eActive').checked = !!r.active;
+    showEditError('');
+
+    // self: нельзя снять active
+    var me = (typeof BotMaxAuth.getDoctor === 'function') ? BotMaxAuth.getDoctor() : null;
+    var isSelf = me && me.id === r.id;
+    var eActive = document.getElementById('eActive');
+    eActive.disabled = isSelf;
+    if (isSelf) eActive.checked = true;
+
+    document.getElementById('modalEdit').classList.add('open');
+}
+
+function closeEditModal() {
+    document.getElementById('modalEdit').classList.remove('open');
+}
+
+function submitEdit() {
+    var id = document.getElementById('eId').value;
+    if (!id) return;
+
+    var body = {
+        name:      document.getElementById('eName').value.trim(),
+        specialty: document.getElementById('eSpecialty').value.trim(),
+        phone:     document.getElementById('ePhone').value.trim()
+    };
+    var eActive = document.getElementById('eActive');
+    if (!eActive.disabled) {
+        body.active = !!eActive.checked;
+    }
+
+    var btn = document.getElementById('btnEditSubmit');
+    btn.disabled = true;
+    showEditError('');
+
+    BotMaxAuth.authFetch('PATCH', '/api/doctors/' + encodeURIComponent(id), body).then(function (res) {
+        if (res.ok) {
+            closeEditModal();
+            loadDoctors();
+            return null;
+        }
+        return extractErr(res).then(function (msg) { showEditError(msg); });
+    }).catch(function (err) {
+        showEditError('Ошибка сети: ' + (err && err.message ? err.message : err));
+    }).then(function () { btn.disabled = false; });
+}
+
+function toggleActive(id, makeActive) {
+    var r = getDoctorById(id);
+    if (!r) { showTopError('Доктор не найден'); return; }
+    var verb = makeActive ? 'активировать' : 'деактивировать';
+    if (!confirm('Вы уверены, что хотите ' + verb + ' ' + r.email + '?')) return;
+
+    BotMaxAuth.authFetch('PATCH', '/api/doctors/' + encodeURIComponent(id), { active: !!makeActive })
+        .then(function (res) {
+            if (res.ok) { loadDoctors(); return; }
+            return extractErr(res).then(function (msg) { showTopError(msg); });
+        })
+        .catch(function (err) { showTopError('Ошибка сети: ' + (err && err.message ? err.message : err)); });
+}
+
+function confirmDelete(id, email) {
+    if (!confirm('УДАЛИТЬ доктора ' + email + '?\nДействие необратимо.')) return;
+
+    BotMaxAuth.authFetch('DELETE', '/api/doctors/' + encodeURIComponent(id)).then(function (res) {
+        if (res.ok) { loadDoctors(); return; }
+        return extractErr(res).then(function (msg) { showTopError(msg); });
+    }).catch(function (err) { showTopError('Ошибка сети: ' + (err && err.message ? err.message : err)); });
+}
+
+// ESC закрывает edit-модалку
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        var m = document.getElementById('modalEdit');
+        if (m && m.classList.contains('open')) closeEditModal();
     }
 });
 
