@@ -302,3 +302,85 @@ func TestE2E_Logout_ThenAccess(t *testing.T) {
 		t.Fatalf("refresh после logout: status %d, ожидали 401, body=%s", status, body)
 	}
 }
+
+// ---------------------------------------------------------------
+// B12.3: роли — 401/403/200
+// ---------------------------------------------------------------
+
+func TestE2E_Role_Doctor_Forbidden_Doctors(t *testing.T) {
+	srv := e2eSetup(t)
+	access, _, role := e2eLogin(t, srv, "doctor@local", "doctor@local")
+	if role != "doctor" {
+		t.Fatalf("login doctor: role=%q", role)
+	}
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/doctors", cookie: access,
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("doctor → /api/doctors: status %d, ожидали 403, body=%s", status, body)
+	}
+}
+
+func TestE2E_Role_Doctor_Forbidden_Audit(t *testing.T) {
+	srv := e2eSetup(t)
+	access, _, _ := e2eLogin(t, srv, "doctor@local", "doctor@local")
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/audit", cookie: access,
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("doctor → /api/audit: status %d, ожидали 403, body=%s", status, body)
+	}
+}
+
+func TestE2E_Role_Admin_Allowed_Doctors(t *testing.T) {
+	srv := e2eSetup(t)
+	access, _, _ := e2eLogin(t, srv, "admin@botmax.local", "admin")
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/doctors", cookie: access,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("admin → /api/doctors: status %d, ожидали 200, body=%s", status, body)
+	}
+}
+
+func TestE2E_Role_Admin_Allowed_Audit(t *testing.T) {
+	srv := e2eSetup(t)
+	access, _, _ := e2eLogin(t, srv, "admin@botmax.local", "admin")
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/audit", cookie: access,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("admin → /api/audit: status %d, ожидали 200, body=%s", status, body)
+	}
+}
+
+func TestE2E_Role_Superadmin_Allowed_Audit(t *testing.T) {
+	srv := e2eSetup(t)
+	access, _, role := e2eLogin(t, srv, "superadmin@botmax.local", "superadmin")
+	if role != "superadmin" {
+		t.Fatalf("login superadmin: role=%q", role)
+	}
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/audit", cookie: access,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("superadmin → /api/audit: status %d, ожидали 200, body=%s", status, body)
+	}
+}
+
+func TestE2E_Role_Doctor_Allowed_Patients(t *testing.T) {
+	srv := e2eSetup(t)
+	access, _, _ := e2eLogin(t, srv, "doctor@local", "doctor@local")
+
+	status, _, body := e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/patients", cookie: access,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("doctor → /api/patients: status %d, ожидали 200, body=%s", status, body)
+	}
+}
