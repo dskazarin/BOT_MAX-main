@@ -77,6 +77,7 @@
         if (!rt) return Promise.resolve(false);
 
         refreshPromise = fetch('/api/auth/refresh', {
+			credentials: "include",
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refreshToken: rt })
@@ -110,6 +111,7 @@
             getAuthHeaders()
         );
         var opts = { method: method, headers: headers };
+		opts.credentials = "include";  // B7.4: cookie
         if (rawBody !== undefined) {
             opts.body = JSON.stringify(rawBody);
         }
@@ -148,6 +150,7 @@
         // Fire-and-forget: не блокируем UI, не ждём долго.
         try {
             fetch('/api/auth/logout', {
+			credentials: "include",
                 method: 'POST',
                 headers: Object.assign(
                     { 'Content-Type': 'application/json' },
