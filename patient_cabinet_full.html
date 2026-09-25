@@ -389,8 +389,20 @@
             .growth-table { font-size: 0.7em; }
         }
     </style>
+    <!-- B6.2: клиентский auth-модуль -->
+    <script src="auth.js"></script>
 </head>
 <body>
+<script>
+// B6.2: страница только для залогиненных
+(function () {
+    if (typeof BotMaxAuth === "undefined") {
+        window.location.replace("login.html");
+        return;
+    }
+    BotMaxAuth.requireAuth();
+})();
+</script>
 <div class="container">
     <div class="header">
         <div class="user-info">
