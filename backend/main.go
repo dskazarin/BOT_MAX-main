@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -387,7 +387,7 @@ func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("PANIC %s %s: %v\n%s", r.Method, r.URL.Path, rec, debug.Stack())
+				slog.Error("panic", "method", r.Method, "path", r.URL.Path, "rec", rec, "stack", string(debug.Stack()))
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		}()
@@ -398,10 +398,11 @@ func recoverMiddleware(next http.Handler) http.Handler {
 func main() {
 	env, errValidate := validateEnv()
 	if errValidate != nil {
-		log.Fatalf("❌ env: %v", errValidate)
+		slog.Error("env", "err", errValidate); os.Exit(1)
 	}
 	currentEnv = env
-	log.Printf("🌍 env=%s auth_enforce=%v jwt_secret_len=%d", env.Name, env.AuthEnforce, len(env.JWTSecret))
+	setupLogging(currentEnv)
+	slog.Info("env", "name", env.Name, "auth_enforce", env.AuthEnforce, "jwt_secret_len", len(env.JWTSecret))
 
 	wd, _ := os.Getwd()
 	rootDir := wd
@@ -414,11 +415,11 @@ func main() {
 		}
 	}
 
-	log.Printf("📂 Корень проекта: %s", rootDir)
+	slog.Info("корень проекта", "rootDir", rootDir)
 
 	loader = NewLoader(filepath.Join(rootDir, "guidelines"))
 	guidelines, _ = loader.LoadAll()
-	log.Printf("✅ Загружено %d рекомендаций", len(guidelines))
+	slog.Info("загружено рекомендаций", "count", len(guidelines))
 
 	// === SQLite (шаг 1) ===
 	var err error
@@ -428,11 +429,11 @@ func main() {
 	}
 	db, err = InitDB(dbPath)
 	if err != nil {
-		log.Fatalf("❌ InitDB: %v", err)
+		slog.Error("InitDB", "err", err); os.Exit(1)
 	}
 	defer db.Close()
 	runDevSeeds(db, currentEnv)
-	log.Printf("✅ SQLite готова: %s", dbPath)
+	slog.Info("SQLite готова", "dbPath", dbPath)
 
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -487,7 +488,7 @@ func main() {
 
 	listener, err := net.Listen("tcp", ":8082")
 	if err != nil {
-		log.Fatalf("❌ Порт 8082 занят (освободи: fuser -k 8082/tcp): %v", err)
+		slog.Error("порт 8082 занят", "err", err, "hint", "fuser -k 8082/tcp"); os.Exit(1)
 	}
 
 	srv := &http.Server{
@@ -500,7 +501,7 @@ func main() {
 	// Запуск сервера в горутине, чтобы main() мог слушать сигналы
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Println("🚀 Сервер запущен на http://localhost:8082")
+		slog.Info("сервер запущен", "url", "http://localhost:8082")
 		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
@@ -511,16 +512,16 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case sig := <-quit:
-		log.Printf("⏹  Получен сигнал %v, начинаю graceful shutdown...", sig)
+		slog.Info("получен сигнал, graceful shutdown", "signal", sig.String())
 	case err := <-serverErr:
-		log.Fatalf("❌ http.Serve: %v", err)
+		slog.Error("http.Serve", "err", err); os.Exit(1)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("⚠️  Shutdown error: %v", err)
+		slog.Warn("shutdown error", "err", err)
 	} else {
-		log.Println("✅ Сервер остановлен")
+		slog.Info("сервер остановлен")
 	}
 }
