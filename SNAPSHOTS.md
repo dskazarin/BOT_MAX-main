@@ -240,14 +240,27 @@
 
 ---
 
+### 6.19 (B10) — Docker + CI
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - dfd9897 — Dockerfile
+  - e86ec7d — .dockerignore
+  - 0edde1a — docker-compose.yml
+  - 79f88fd — GitHub Actions CI
+  - e4f2b86 — .env.example + .gitignore
+  - 5237d0a — README переписан
+- **Файлы:** Dockerfile, .dockerignore, docker-compose.yml, .github/workflows/ci.yml, .env.example, .gitignore, README.md
+- **Что сделано:** multi-stage Dockerfile (alpine + tini), CI (vet/build/test + docker smoke), compose с заделом на Postgres.
+- **Проверки:** go vet / build / test -race — зелёные; docker build — через CI.
+---
 ## Следующий
 
-### 6.19 (B10) — Postgres-миграция (черновик)
+### 6.20 (B11) — BOTMAX_DB_PATH в main.go (черновик)
 - **Статус:** запланирован
-- **Цель:** перейти с SQLite на Postgres (prod-нагрузки, конкурентность, миграции).
-- **Опоры:** db.go (InitDB), все store-функции, современный драйвер (pgx или lib/pq).
-- **Файлы (ожидаемо):** db.go (смена драйвера), миграции (goose/atlas), env (BOTMAX_DB_URL), все store-функции (адаптация под $1 вместо ?).
-- **Проверки (ожидаемо):** go test на Postgres в docker; smoke: те же endpoints работают.
+- **Цель:** вынести путь к SQLite из хардкода в env BOTMAX_DB_PATH (default — rootDir/bot_max.db).
+- **Опоры:** main.go (InitDB call), env.go (Env struct).
+- **Файлы (ожидаемо):** backend/env.go (+DBPath), backend/main.go (использовать env.DBPath), .env.example.
+- **Проверки (ожидаемо):** go test + smoke: BOTMAX_DB_PATH=/tmp/foo.db → файл там; docker-compose volume /data работает.
 
 ---
 
