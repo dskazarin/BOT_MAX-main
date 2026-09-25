@@ -301,14 +301,43 @@
 
 ---
 
+### 6.24 (B15) — Admin UI для doctors CRUD
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - e745200 — admin_doctors.html (каркас, read-only)
+  - 93c953d — ссылка «👨⚕️ Доктора» в admin_panel
+  - b86c00a — create-модалка (POST /api/doctors)
+  - f056b08 — edit/toggle/delete (PATCH + DELETE)
+- **Файлы:** admin_doctors.html (new, ~645 строк), admin_panel.html (ссылка)
+- **Что сделано:**
+  - Тёмная страница admin_doctors.html по шаблону admin_audit.html: inline-guard requireAuth → login.html, isAdmin → doctor_cabinet.html; authFetch, escapeHtml.
+  - Таблица докторов: ID, Email, Имя, Роль, Специальность, Телефон, Активен, Создан, Последний вход, Действия.
+  - Фильтр «Показать неактивных» → GET /api/doctors?include_inactive=1.
+  - Create-модалка: email/password/name/specialty/role/phone → POST. Селект admin/superadmin виден только superadmin. Ошибки 400/403/409 — в alert внутри модалки.
+  - Edit-модалка: name/specialty/phone/active → PATCH. Self-защита: свои строки — active disabled.
+  - Deactivate/Activate → PATCH {active:bool}; Delete → DELETE (confirm). Self + superadmin-строки заблокированы на фронте (совпадает с 400/403 бэка).
+- **Проверки:** go vet — OK; go build -o /tmp/botmax_server ./backend — OK; go test ./backend/... — PASS.
+- **Smoke (localhost:8082, BOTMAX_ENV=dev, BOTMAX_DB_PATH=/tmp/b15_smoke.db):**
+  - /api/health → ok
+  - admin_doctors.html → HTTP 200
+  - admin_panel.html содержит ссылки 📜 Журнал + 👨⚕️ Доктора
+  - login superadmin@botmax.local → 200
+  - GET /api/doctors → seed SUPER-001, ADMIN-001, DOC-001
+  - POST → DOC-1790334820-887b756c (201)
+  - PATCH name/phone → OK; PATCH active=false → OK
+  - GET ?include_inactive=1 → 4 записи (включая деактивированного)
+  - DELETE → {"ok":true}
+  - audit: doctor.create, doctor.update×2, doctor.delete — все присутствуют.
+  - **Примечание:** фильтр /api/audit?action=... — точное совпадение (doctor.create ✓, doctor. ✗). Особенность B9, не баг.
+
 ## Следующий
 
-### 6.24 (B15) — Admin UI для doctors CRUD (черновик)
+### 6.25 (B16) — TODO (уточнить)
 - **Статус:** запланирован
-- **Цель:** страница admin_doctors.html — таблица докторов + кнопки create/patch/deactivate.
-- **Опоры:** /api/doctors (B5), auth.js, admin_panel.html (ссылка).
-- **Файлы (ожидаемо):** admin_doctors.html (new), ссылка в admin_panel.html.
-- **Проверки (ожидаемо):** ручной smoke: admin видит таблицу, создаёт/меняет/удаляет доктора; doctor — redirect.
+- **Цель:** TBD — по итогам B15. Возможные кандидаты:
+  - роль-специфичные ограничения в admin_doctors (admin не видит admin/superadmin в списке);
+  - улучшение фильтра /api/audit до prefix/substring (сейчас — точное совпадение);
+  - интеграция admin_doctors с doctor_cabinet.html (переход «глазами доктора»).
 
 ---
 
