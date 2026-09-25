@@ -593,9 +593,12 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req refreshReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
-		return
+	// B8.1: Decode — best-effort: тело может быть пустым (cookie-режим).
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.RefreshToken == "" {
+		if c, err := r.Cookie(cookieNameRefresh); err == nil {
+			req.RefreshToken = c.Value
+		}
 	}
 	if req.RefreshToken == "" {
 		http.Error(w, `{"error":"refreshToken required"}`, http.StatusBadRequest)
@@ -690,7 +693,13 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	// Best-effort: читаем опциональный refreshToken из тела.
 	// Ошибки parse/revoke не фатальны — logout всегда отвечает 200.
 	var req refreshReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.RefreshToken != "" {
+	_ = json.NewDecoder(r.Body).Decode(&req)  // B8.1: best-effort
+	if req.RefreshToken == "" {
+		if c, err := r.Cookie(cookieNameRefresh); err == nil {
+			req.RefreshToken = c.Value
+		}
+	}
+	if req.RefreshToken != "" {
 		if claims, err := ParseToken(req.RefreshToken, "refresh"); err == nil {
 			if err := RevokeRefreshJTI(db, claims.ID, ""); err != nil {
 				log.Printf("⚠️  logout: RevokeRefreshJTI(%q): %v", claims.ID, err)
