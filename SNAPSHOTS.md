@@ -253,14 +253,25 @@
 - **Что сделано:** multi-stage Dockerfile (alpine + tini), CI (vet/build/test + docker smoke), compose с заделом на Postgres.
 - **Проверки:** go vet / build / test -race — зелёные; docker build — через CI.
 ---
+### 6.20 (B11) — BOTMAX_DB_PATH в main.go
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - c02d873 — BOTMAX_DB_PATH в Env
+  - 426b546 — main.go использует BOTMAX_DB_PATH
+- **Файлы:** backend/env.go, backend/env_test.go, backend/main.go, .env.example
+- **Что сделано:** путь к SQLite вынесен в env; fallback на rootDir/bot_max.db; docker volume /data работает.
+- **Smoke:** BOTMAX_DB_PATH=/tmp/foo.db → файл создан, /api/health → ok; без env → rootDir (как раньше).
+
+---
+
 ## Следующий
 
-### 6.20 (B11) — BOTMAX_DB_PATH в main.go (черновик)
+### 6.21 (B12) — E2E-тесты (черновик)
 - **Статус:** запланирован
-- **Цель:** вынести путь к SQLite из хардкода в env BOTMAX_DB_PATH (default — rootDir/bot_max.db).
-- **Опоры:** main.go (InitDB call), env.go (Env struct).
-- **Файлы (ожидаемо):** backend/env.go (+DBPath), backend/main.go (использовать env.DBPath), .env.example.
-- **Проверки (ожидаемо):** go test + smoke: BOTMAX_DB_PATH=/tmp/foo.db → файл там; docker-compose volume /data работает.
+- **Цель:** интеграционные тесты HTTP-контракта: auth (login/refresh/logout), роли (requireRole), CRUD patients/doctors, audit.
+- **Опоры:** httptest.NewServer + :memory: SQLite + registerAuthRoutes / registerDoctorRoutes / registerPatientRoutes / registerAuditRoutes.
+- **Файлы (ожидаемо):** backend/e2e_test.go (new).
+- **Проверки (ожидаемо):** go test — все сценарии зелёные.
 
 ---
 
