@@ -1,0 +1,82 @@
+# ============================================================
+# BOT_MAX — docker-compose.yml
+# B10.3 · 2026-09-25
+#
+# Запуск:  docker compose up --build
+# Стоп:    docker compose down
+# Логи:    docker compose logs -f botmax
+#
+# Требуется .env в корне (см. .env.example).
+# ============================================================
+
+services:
+  botmax:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: botmax
+    image: botmax:local
+
+    ports:
+      - "8082:8082"
+
+    # Переменные окружения — из файла .env
+    env_file:
+      - .env
+
+    # SQLite-БД хранится в volume, чтобы переживать пересборку
+    # ВАЖНО: пока main.go пишет в rootDir/bot_max.db (/app/bot_max.db),
+    # volume /data не используется. Перенос BOTMAX_DB_PATH в main.go — B11.
+    # Пока монтируем /app, чтобы БД сохранялась:
+    volumes:
+      - botmax-db:/app
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8082/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # Ограничения ресурсов (опционально, для прода)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "1.0"
+    #       memory: 256M
+
+  # ------------------------------------------------------------
+  # Задел на B11 (Postgres-миграция)
+  #
+  # Раскомментировать, когда перейдём с SQLite на Postgres.
+  # Также нужно будет:
+  #   - изменить DB-драйвер в go.mod
+  #   - переписать InitDB (db.go) под $1-плейсхолдеры
+  #   - задать BOTMAX_DB_URL=postgres://...
+  # ------------------------------------------------------------
+  #
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: botmax-postgres
+  #   environment:
+  #     POSTGRES_DB: ${BOTMAX_PG_DB:-botmax}
+  #     POSTGRES_USER: ${BOTMAX_PG_USER:-botmax}
+  #     POSTGRES_PASSWORD: ${BOTMAX_PG_PASSWORD:-changeme}
+  #   volumes:
+  #     - botmax-pg:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${BOTMAX_PG_USER:-botmax}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  # SQLite (том для /app в контейнере)
+  botmax-db:
+  # Postgres (задел на B11)
+  # botmax-pg:
