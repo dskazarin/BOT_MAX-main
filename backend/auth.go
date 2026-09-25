@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -129,7 +129,7 @@ func jwtSecret() []byte {
 		return []byte(currentEnv.JWTSecret)
 	}
 	if !jwtSecretWarned {
-		log.Println("⚠️  BOTMAX_JWT_SECRET не задан — использую dev-секрет. НЕ для прода!")
+		slog.Warn("BOTMAX_JWT_SECRET не задан — dev-секрет, НЕ для прода")
 		jwtSecretWarned = true
 	}
 	return []byte(devJWTSecret)
@@ -267,7 +267,7 @@ func registerAuthRoutes() {
 	http.HandleFunc("/api/auth/refresh", handleAuthRefresh)
 	http.HandleFunc("/api/auth/logout", handleAuthLogout)
 
-	log.Println("🔐 registerAuthRoutes: /login, /refresh, /logout зарегистрированы")
+	slog.Info("registerAuthRoutes", "routes", "/login, /refresh, /logout")
 }
 
 // ---------------------------------------------------------------
@@ -336,7 +336,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		// Не нашли — оставляем пустой hash, bcrypt всё равно отработает.
 		doc = nil
 	default:
-		log.Printf("⚠️  login: getDoctorByEmail(%q): %v", req.Email, err)
+		slog.Warn("login: getDoctorByEmail", "email", req.Email, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -344,30 +344,30 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// Всегда вызываем bcrypt (защита от timing-атак).
 	if err := CheckPassword(storedHash, req.Password); err != nil || doc == nil || !doc.Active {
 		auditLog(db, "", "auth.login.fail", "auth", "", clientIP(r), map[string]string{"email": req.Email, "reason": "invalid"})  // B9.2
-		log.Printf("🔒 login: отклонено для %q", req.Email)
+		slog.Warn("login отклонено", "email", req.Email)
 		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
 		return
 	}
 
 	access, err := IssueAccessToken(doc.ID, Role(doc.Role))
 	if err != nil {
-		log.Printf("⚠️  login: IssueAccessToken(%q): %v", doc.ID, err)
+		slog.Warn("login: IssueAccessToken", "id", doc.ID, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	refresh, refreshJTI, refreshExp, err := IssueRefreshToken(doc.ID, Role(doc.Role))
 	if err != nil {
-		log.Printf("⚠️  login: IssueRefreshToken(%q): %v", doc.ID, err)
+		slog.Warn("login: IssueRefreshToken", "id", doc.ID, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 
 	if err := SaveRefreshJTI(db, refreshJTI, doc.ID, refreshExp); err != nil {
-		log.Printf("⚠️  login: SaveRefreshJTI(%q): %v", doc.ID, err)
+		slog.Warn("login: SaveRefreshJTI", "id", doc.ID, "err", err)
 	}
 
 	if err := touchLastLogin(db, doc.ID); err != nil {
-		log.Printf("⚠️  login: touchLastLogin(%q): %v", doc.ID, err) // не критично
+		slog.Warn("login: touchLastLogin", "id", doc.ID, "err", err) // не критично
 	}
 
 	// B7.2: ставим access+refresh cookie (в дополнение к JSON)
@@ -386,7 +386,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// --- B3.2: успешный логин — сбрасываем счётчики ---
 	loginLimiterPerIP.Reset(ipKey)
 	loginLimiterPerEmail.Reset(emailKey)
-	log.Printf("✅ login: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
+	slog.Info("login", "id", doc.ID, "email", doc.Email, "role", doc.Role)
 	auditLog(db, doc.ID, "auth.login", "auth", "", clientIP(r), map[string]string{"email": doc.Email, "role": doc.Role})  // B9.2
 }
 
@@ -412,11 +412,11 @@ func authMiddleware(next http.Handler) http.Handler {
 
 		if token == "" {
 			if enforce {
-				log.Printf("🔒 auth: нет токена %s %s → 401", r.Method, r.URL.Path)
+				slog.Warn("auth: нет токена", "method", r.Method, "path", r.URL.Path)
 				http.Error(w, `{"error":"authorization required"}`, http.StatusUnauthorized)
 				return
 			}
-			log.Printf("⚠️  auth: soft-mode, нет токена %s %s (пропускаем)", r.Method, r.URL.Path)
+			slog.Warn("auth: soft-mode, нет токена", "method", r.Method, "path", r.URL.Path)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -424,12 +424,11 @@ func authMiddleware(next http.Handler) http.Handler {
 		claims, err := ParseToken(token, "access")
 		if err != nil {
 			if enforce {
-				log.Printf("🔒 auth: невалидный токен %s %s: %v", r.Method, r.URL.Path, err)
+				slog.Warn("auth: невалидный токен", "method", r.Method, "path", r.URL.Path, "err", err)
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
-			log.Printf("⚠️  auth: soft-mode, невалидный токен %s %s: %v (пропускаем)",
-				r.Method, r.URL.Path, err)
+			slog.Warn("auth: soft-mode, невалидный токен", "method", r.Method, "path", r.URL.Path, "err", err)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -537,9 +536,9 @@ func authEnforceEnabled() bool {
 		}
 		authEnforceVal = currentEnv.AuthEnforce
 		if authEnforceVal {
-			log.Println("🔐 auth: enforce ВКЛЮЧЁН (BOTMAX_AUTH_ENFORCE=true)")
+			slog.Info("auth: enforce включён")
 		} else {
-			log.Println("⚠️  auth: soft-mode (BOTMAX_AUTH_ENFORCE не установлен)")
+			slog.Warn("auth: soft-mode (BOTMAX_AUTH_ENFORCE не установлен)")
 		}
 	})
 	return authEnforceVal
@@ -609,20 +608,20 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := ParseToken(req.RefreshToken, "refresh")
 	if err != nil {
-		log.Printf("🔒 refresh: невалидный refresh-токен: %v", err)
+		slog.Warn("refresh: невалидный токен", "err", err)
 		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
 		return
 	}
 
 	revoked, rerr := IsRefreshRevoked(db, claims.ID)
 	if rerr != nil {
-		log.Printf("⚠️  refresh: IsRefreshRevoked(%q): %v", claims.ID, rerr)
+		slog.Warn("refresh: IsRefreshRevoked", "jti", claims.ID, "err", rerr)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	if revoked {
 		n, _ := RevokeAllForDoctor(db, claims.DoctorID)
-		log.Printf("🚨 refresh: REPLAY jti=%s doctor=%s — каскад, отозвано %d", claims.ID, claims.DoctorID, n)
+		slog.Error("refresh: REPLAY, каскад", "jti", claims.ID, "doctor", claims.DoctorID, "revoked", n)
 		auditLog(db, claims.DoctorID, "auth.refresh.replay", "auth", "", clientIP(r), map[string]any{"jti": claims.ID, "revoked": n})  // B9.2
 		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
 		return
@@ -632,39 +631,39 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 	doc, err := getDoctorByID(db, claims.DoctorID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			log.Printf("🔒 refresh: врач %q не найден", claims.DoctorID)
+			slog.Warn("refresh: врач не найден", "doctor", claims.DoctorID)
 		} else {
-			log.Printf("⚠️  refresh: getDoctorByID(%q): %v", claims.DoctorID, err)
+			slog.Warn("refresh: getDoctorByID", "doctor", claims.DoctorID, "err", err)
 		}
 		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
 		return
 	}
 	if !doc.Active {
-		log.Printf("🔒 refresh: врач %q деактивирован", doc.ID)
+		slog.Warn("refresh: врач деактивирован", "doctor", doc.ID)
 		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
 		return
 	}
 
 	newAccess, err := IssueAccessToken(doc.ID, Role(doc.Role))
 	if err != nil {
-		log.Printf("⚠️  refresh: IssueAccessToken(%q): %v", doc.ID, err)
+		slog.Warn("refresh: IssueAccessToken", "id", doc.ID, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	newRefresh, refreshJTI, refreshExp, err := IssueRefreshToken(doc.ID, Role(doc.Role))
 	if err != nil {
-		log.Printf("⚠️  refresh: IssueRefreshToken(%q): %v", doc.ID, err)
+		slog.Warn("refresh: IssueRefreshToken", "id", doc.ID, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 
 	if err := SaveRefreshJTI(db, refreshJTI, doc.ID, refreshExp); err != nil {
-		log.Printf("⚠️  refresh: SaveRefreshJTI(%q): %v", doc.ID, err)
+		slog.Warn("refresh: SaveRefreshJTI", "id", doc.ID, "err", err)
 	}
 
 	// Ротация: старый jti помечаем отозванным, указывая замену.
 	if err := RevokeRefreshJTI(db, claims.ID, refreshJTI); err != nil {
-		log.Printf("⚠️  refresh: RevokeRefreshJTI(%q): %v", claims.ID, err)
+		slog.Warn("refresh: RevokeRefreshJTI", "jti", claims.ID, "err", err)
 	}
 
 	// B7.2: ротация cookie (в дополнение к JSON)
@@ -680,7 +679,7 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 			Role: doc.Role,
 		},
 	})
-	log.Printf("♻️  refresh: %s (%s) роль=%s", doc.ID, doc.Email, doc.Role)
+	slog.Info("refresh", "id", doc.ID, "email", doc.Email, "role", doc.Role)
 	auditLog(db, doc.ID, "auth.refresh", "auth", "", clientIP(r), nil)  // B9.2
 }
 
@@ -706,20 +705,20 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	if req.RefreshToken != "" {
 		if claims, err := ParseToken(req.RefreshToken, "refresh"); err == nil {
 			if err := RevokeRefreshJTI(db, claims.ID, ""); err != nil {
-				log.Printf("⚠️  logout: RevokeRefreshJTI(%q): %v", claims.ID, err)
+				slog.Warn("logout: RevokeRefreshJTI", "jti", claims.ID, "err", err)
 			} else {
-				log.Printf("👋 logout: refresh jti=%s doctor=%s отозван", claims.ID, claims.DoctorID)
+				slog.Info("logout: refresh отозван", "jti", claims.ID, "doctor", claims.DoctorID)
 			}
 		} else {
-			log.Printf("👋 logout: refresh-токен невалиден: %v", err)
+			slog.Info("logout: refresh невалиден", "err", err)
 		}
 	}
 
 	docID := doctorIDFromCtx(r)
 	if docID == "" {
-		log.Printf("👋 logout: анонимный (soft-mode?)")
+		slog.Info("logout: анонимный")
 	} else {
-		log.Printf("👋 logout: %s", docID)
+		slog.Info("logout", "doctor", docID)
 	}
 	// B7.2: снимаем cookie
 	auditLog(db, docID, "auth.logout", "auth", "", clientIP(r), nil)  // B9.2
