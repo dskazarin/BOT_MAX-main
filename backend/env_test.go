@@ -35,6 +35,7 @@ func clearEnvVars(t *testing.T) {
 	t.Setenv("BOTMAX_ENV", "")
 	t.Setenv("BOTMAX_JWT_SECRET", "")
 	t.Setenv("BOTMAX_AUTH_ENFORCE", "")
+	t.Setenv("BOTMAX_COOKIE_SECURE", "")
 	// t.Setenv("", "") не отвязывает переменную — Go выставит её в пустую строку,
 	// что для нас эквивалентно «не задано» (normalize/parse трактуют "" как default).
 }
@@ -178,11 +179,13 @@ func TestValidateEnv(t *testing.T) {
 		envName   string
 		envSecret string
 		envForce  string
+		envCookieSecure string
 
 		wantName      string
 		wantIsProd    bool
 		wantSecret    string
 		wantEnforce   bool
+		wantCookieSecure bool
 		wantErrSubstr string
 	}{
 		{
@@ -218,6 +221,7 @@ func TestValidateEnv(t *testing.T) {
 			wantName:   "prod",
 			wantIsProd: true,
 			wantSecret: longSecret,
+			wantCookieSecure: true,
 		},
 		{
 			name:       "prod-64-ok",
@@ -226,6 +230,7 @@ func TestValidateEnv(t *testing.T) {
 			wantName:   "prod",
 			wantIsProd: true,
 			wantSecret: longSecret + longSecret,
+			wantCookieSecure: true,
 		},
 		{
 			name:          "prod-пусто-err",
@@ -249,6 +254,29 @@ func TestValidateEnv(t *testing.T) {
 			envForce:      "maybe",
 			wantErrSubstr: "BOTMAX_AUTH_ENFORCE",
 		},
+		{
+			name:             "dev-cookie-secure-true",
+			envName:          "dev",
+			envCookieSecure:  "1",
+			wantName:         "dev",
+			wantCookieSecure: true,
+		},
+		{
+			name:             "prod-cookie-secure-false",
+			envName:          "prod",
+			envSecret:        longSecret,
+			envCookieSecure:  "0",
+			wantName:         "prod",
+			wantIsProd:       true,
+			wantSecret:       longSecret,
+			wantCookieSecure: false,
+		},
+		{
+			name:             "cookie-secure-junk",
+			envName:          "dev",
+			envCookieSecure:  "maybe",
+			wantErrSubstr:    "BOTMAX_COOKIE_SECURE",
+		},
 	}
 
 	for _, c := range cases {
@@ -256,6 +284,7 @@ func TestValidateEnv(t *testing.T) {
 			t.Setenv("BOTMAX_ENV", c.envName)
 			t.Setenv("BOTMAX_JWT_SECRET", c.envSecret)
 			t.Setenv("BOTMAX_AUTH_ENFORCE", c.envForce)
+			t.Setenv("BOTMAX_COOKIE_SECURE", c.envCookieSecure)
 
 			got, err := validateEnv()
 			if c.wantErrSubstr != "" {
@@ -281,6 +310,9 @@ func TestValidateEnv(t *testing.T) {
 			}
 			if got.AuthEnforce != c.wantEnforce {
 				t.Errorf("AuthEnforce = %v, ожидали %v", got.AuthEnforce, c.wantEnforce)
+			}
+			if got.CookieSecure != c.wantCookieSecure {
+				t.Errorf("CookieSecure = %v, ожидали %v", got.CookieSecure, c.wantCookieSecure)
 			}
 		})
 	}
