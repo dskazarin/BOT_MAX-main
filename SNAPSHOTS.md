@@ -130,14 +130,37 @@
 
 ---
 
+### 6.15 (B6) — frontend auth-интеграция
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - `240fa35` feat(frontend): 6.15 (B6.1) — admin_panel защищена
+  - `c376dd1` feat(frontend): 6.15 (B6.3) — admin-кнопка скрыта для не-admin
+  - `52ce4c1` feat(frontend): 6.15 (B6.2) — patient_cabinet_full защищён requireAuth
+- **Файлы:**
+  - `admin_panel.html` — подключён auth.js + guard requireAuth()+isAdmin()
+  - `index.html` — admin-кнопка (#admin-entry-btn) скрывается для не-admin
+  - `patient_cabinet_full.html` — подключён auth.js + requireAuth()
+- **Что сделано:**
+  - admin_panel.html: аноним → login.html, doctor → doctor_cabinet.html, admin/superadmin → видит панель.
+  - index.html: admin-кнопка видна анониму (для логина) и админам; скрыта для doctor.
+  - patient_cabinet_full.html: requireAuth() — аноним → login.html.
+  - Уже было (шаг 6.7): auth.js с BotMaxAuth (authFetch, refreshAccess, isAdmin/isDoctor, applyRoleVisibility); doctor_cabinet.html и patient_card.html — защищены.
+- **Smoke (curl -L, файл отдаётся + guard присутствует):**
+  - admin_panel.html → 200, 2× B6.1
+  - index.html → 200, 1× B6.3, 2× admin-entry-btn
+  - patient_cabinet_full.html → 200, 2× B6.2, 1× BotMaxAuth.requireAuth
+  - auth.js → 200
+
+---
+
 ## Следующий
 
-### 6.15 (B6) — frontend auth-интеграция (черновик)
+### 6.16 (B7) — CSRF / httpOnly-cookies (черновик)
 - **Статус:** запланирован
-- **Цель:** скрытие UI-элементов по ролям, редирект на login.html при 401/отсутствии токена, синхронизация auth.js с новыми эндпоинтами (/api/doctors).
-- **Опоры:** BotMaxAuth (auth.js), data-requires-role (уже есть, не используется), localStorage (botmax_access/botmax_refresh/botmax_doctor).
-- **Файлы (ожидаемо):** auth.js, index.html (и/или другие HTML), возможно новый admin.html.
-- **Проверки (ожидаемо):** ручной прогон в браузере: doctor не видит admin-кнопок; истёкший access → refresh; logout чистит токены.
+- **Цель:** переход с localStorage-токенов на httpOnly-cookies + CSRF-защита (double-submit или SameSite=Strict).
+- **Опоры:** handleAuthLogin/Refresh/Logout (auth.go), auth.js (frontend), refresh-ротация (B4).
+- **Файлы (ожидаемо):** backend/auth.go (установка/снятие cookies), auth.js (credentials: include, убрать localStorage), возможен middleware CSRF.
+- **Проверки (ожидаемо):** login устанавливает Set-Cookie HttpOnly+Secure+SameSite; fetch с credentials; CSRF-токен в отдельной cookie/заголовке; logout снимает cookie.
 
 ---
 
