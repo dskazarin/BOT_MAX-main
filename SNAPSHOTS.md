@@ -153,14 +153,44 @@
 
 ---
 
+### 6.16 (B7) — CSRF / httpOnly-cookies
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - `a118425` feat(env): 6.16 (B7.1) — CookieSecure в Env
+  - `aeabf42` test(env): 6.16 (B7.1.1) — TestValidateEnv + CookieSecure
+  - `d373e19` feat(auth): 6.16 (B7.2) — cookie access+refresh в login/refresh/logout
+  - `3f1b3be` feat(auth): 6.16 (B7.3) — middleware читает access из cookie
+  - `b7f369e` feat(frontend): 6.16 (B7.4) — credentials include в auth.js + login.html
+- **Файлы:**
+  - `backend/env.go` — Env.CookieSecure + parseCookieSecure (BOTMAX_COOKIE_SECURE, default=IsProd)
+  - `backend/env_test.go` — TestParseCookieSecure (12 кейсов) + TestValidateEnv (13 кейсов)
+  - `backend/cookies.go` (new) — setAuthCookies / clearAuthCookies (HttpOnly, SameSite=Strict, Secure=IsProd, Path=/api и /api/auth)
+  - `backend/auth.go` — cookie в login/refresh/logout; extractAccessToken (Bearer → cookie)
+  - `auth.js` — credentials: include в refreshAccess, buildOpts, logout
+  - `login.html` — credentials: include в fetch login
+- **Что сделано:**
+  - BOTMAX_COOKIE_SECURE: "" → IsProd; 1/true/yes/on → true; 0/false/no/off → false; мусор → ошибка.
+  - login/refresh ставят Set-Cookie botmax_access + botmax_refresh (параллельно JSON — обратная совместимость).
+  - logout снимает cookie (Max-Age=0).
+  - middleware читает access из Authorization: Bearer ИЛИ из cookie botmax_access.
+  - SameSite=Strict достаточно для same-origin SPA — отдельный CSRF-токен не нужен.
+- **Smoke (end-to-end через curl):**
+  - login → 2× Set-Cookie (Path=/api, Path=/api/auth, HttpOnly, SameSite=Strict).
+  - GET /api/doctors с cookie (без Bearer) → 200.
+  - GET /api/doctors без cookie и Bearer → 401.
+  - GET /api/doctors с Bearer (обратная совместимость) → 200.
+  - logout с cookie → 200 + 2× Set-Cookie с Max-Age=0.
+
+---
+
 ## Следующий
 
-### 6.16 (B7) — CSRF / httpOnly-cookies (черновик)
+### 6.17 (B8) — полный переход на cookie (черновик)
 - **Статус:** запланирован
-- **Цель:** переход с localStorage-токенов на httpOnly-cookies + CSRF-защита (double-submit или SameSite=Strict).
-- **Опоры:** handleAuthLogin/Refresh/Logout (auth.go), auth.js (frontend), refresh-ротация (B4).
-- **Файлы (ожидаемо):** backend/auth.go (установка/снятие cookies), auth.js (credentials: include, убрать localStorage), возможен middleware CSRF.
-- **Проверки (ожидаемо):** login устанавливает Set-Cookie HttpOnly+Secure+SameSite; fetch с credentials; CSRF-токен в отдельной cookie/заголовке; logout снимает cookie.
+- **Цель:** убрать access/refresh из localStorage и Authorization: Bearer — оставить только httpOnly-cookie (как в B7).
+- **Опоры:** B7 (cookie уже работают), auth.js, login.html, все HTML-страницы.
+- **Файлы (ожидаемо):** auth.js (убрать K_ACCESS/K_REFRESH, getAuthHeaders, Bearer; оставить botmax_doctor для UI), возможно HTML с инлайн-fetch.
+- **Проверки (ожидаемо):** ручной прогон в браузере: login → cookie; refresh → cookie; logout → снятие; нет botmax_access/botmax_refresh в localStorage.
 
 ---
 
