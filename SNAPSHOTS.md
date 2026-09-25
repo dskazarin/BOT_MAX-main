@@ -264,14 +264,27 @@
 
 ---
 
+### 6.21 (B12) — E2E-тесты
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - edb8d5c — каркас httptest + smoke health
+  - 9cca582 — auth-сценарии (login/refresh/logout)
+  - 155a19f — роли (401/403/200)
+  - 383c182 — CRUD + audit
+- **Файлы:** backend/e2e_test.go (new) — 20 тестов
+- **Что сделано:** httptest.NewServer поверх http.DefaultServeMux, :memory: SQLite, seed (admin/superadmin/doctor). Покрыты: health, auth (login ok/fail, refresh cookie, logout + replay), роли (401/403/200), CRUD patients/doctors, audit-записи и фильтры.
+- **Проверки:** go test -v -run TestE2E → 20 PASS.
+
+---
+
 ## Следующий
 
-### 6.21 (B12) — E2E-тесты (черновик)
+### 6.22 (B13) — Admin UI для /api/audit (черновик)
 - **Статус:** запланирован
-- **Цель:** интеграционные тесты HTTP-контракта: auth (login/refresh/logout), роли (requireRole), CRUD patients/doctors, audit.
-- **Опоры:** httptest.NewServer + :memory: SQLite + registerAuthRoutes / registerDoctorRoutes / registerPatientRoutes / registerAuditRoutes.
-- **Файлы (ожидаемо):** backend/e2e_test.go (new).
-- **Проверки (ожидаемо):** go test — все сценарии зелёные.
+- **Цель:** страница admin_audit.html — таблица audit_log с фильтрами (limit, action, doctor_id, since/until).
+- **Опоры:** GET /api/audit (B9), auth.js, admin_panel.html.
+- **Файлы (ожидаемо):** admin_audit.html (new), ссылка в admin_panel.html.
+- **Проверки (ожидаемо):** ручной smoke: admin видит журнал, doctor — 403/redirect.
 
 ---
 
