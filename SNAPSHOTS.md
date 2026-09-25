@@ -277,14 +277,25 @@
 
 ---
 
+### 6.22 (B13) — Admin UI для /api/audit
+- **Дата:** 2026-09-25
+- **Коммиты:**
+  - 7561af2 — admin_audit.html (audit UI)
+  - 5cd1383 — ссылка на журнал в admin_panel
+- **Файлы:** admin_audit.html (new), admin_panel.html (ссылка)
+- **Что сделано:** тёмная страница admin_audit.html — таблица audit_log с фильтрами (action, doctor_id, since, limit), кнопки «Применить»/«Сбросить»/«Обновить», guard requireAuth+isAdmin, authFetch. Ссылка «📜 Журнал» в шапке admin_panel.html.
+- **Проверки:** go test — 20 E2E PASS; smoke: admin_audit.html → 200, admin_panel.html содержит ссылку.
+
+---
+
 ## Следующий
 
-### 6.22 (B13) — Admin UI для /api/audit (черновик)
+### 6.23 (B14) — Structured logging (черновик)
 - **Статус:** запланирован
-- **Цель:** страница admin_audit.html — таблица audit_log с фильтрами (limit, action, doctor_id, since/until).
-- **Опоры:** GET /api/audit (B9), auth.js, admin_panel.html.
-- **Файлы (ожидаемо):** admin_audit.html (new), ссылка в admin_panel.html.
-- **Проверки (ожидаемо):** ручной smoke: admin видит журнал, doctor — 403/redirect.
+- **Цель:** заменить log.Printf на log/slog с JSON-хендлером (в prod), text-хендлером (в dev).
+- **Опоры:** env.go (currentEnv), main.go, auth.go, doctors.go, patients.go, audit.go, refresh.go, ratelimit.go, seed.go, cookies.go.
+- **Файлы (ожидаемо):** backend/logging.go (new), замена вызовов log.Printf в основных файлах.
+- **Проверки (ожидаемо):** go test + smoke: в логе JSON с полями (level, msg, time).
 
 ---
 
