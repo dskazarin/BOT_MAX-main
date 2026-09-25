@@ -103,6 +103,9 @@ func handlePatientCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// B9.4: audit
+	auditLog(db, doctorIDFromCtx(r), "patient.create", "patient", p.ID, clientIP(r), nil)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(p)
@@ -213,6 +216,9 @@ func handlePatientUpdate(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
+	// B9.4: audit
+	auditLog(db, doctorIDFromCtx(r), "patient.update", "patient", p.ID, clientIP(r), nil)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(p)
 }
@@ -229,6 +235,8 @@ func handlePatientDelete(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// B9.4: audit
+	auditLog(db, doctorIDFromCtx(r), "patient.delete", "patient", id, clientIP(r), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
