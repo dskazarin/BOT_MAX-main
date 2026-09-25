@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -205,7 +206,7 @@ func seedDefaultDoctor(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("seed doctor: %w", err)
 		}
-		fmt.Println("🌱 Создан тестовый врач DOC-001 (doctor@local, bcrypt)")
+		slog.Info("seed: создан тестовый врач DOC-001", "email", "doctor@local")
 		return nil
 	}
 
@@ -228,7 +229,7 @@ func seedDefaultDoctor(db *sql.DB) error {
 	if _, err := db.Exec(`UPDATE doctors SET password_hash = ? WHERE id = 'DOC-001'`, newHash); err != nil {
 		return fmt.Errorf("update DOC-001 password_hash: %w", err)
 	}
-	fmt.Println("🌱 DOC-001: пароль обновлён на bcrypt (было: placeholder)")
+	slog.Info("seed: DOC-001 пароль обновлён на bcrypt (было placeholder)")
 	return nil
 }
 
@@ -441,7 +442,7 @@ func seedAdminRoles(db *sql.DB) error {
 			return fmt.Errorf("check %s: %w", s.Email, err)
 		}
 		if exists > 0 {
-			fmt.Printf("🌱 seed: %s уже есть, пропуск\n", s.Email)
+			slog.Info("seed: уже есть, пропуск", "email", s.Email)
 			continue
 		}
 		hash, err := HashPassword(s.Password)
@@ -456,7 +457,7 @@ func seedAdminRoles(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("insert %s: %w", s.Email, err)
 		}
-		fmt.Printf("🌱 seed: создан %s (%s, роль=%s)\n", s.ID, s.Email, s.Role)
+		slog.Info("seed: создан", "id", s.ID, "email", s.Email, "role", s.Role)
 	}
 	return nil
 }

@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -301,7 +301,7 @@ func registerDoctorRoutes() {
 	http.Handle("/api/doctors", guard(http.HandlerFunc(handleDoctors)))
 	http.Handle("/api/doctors/", guard(http.HandlerFunc(handleDoctorByID)))
 
-	log.Println("🩺 registerDoctorRoutes: /api/doctors, /api/doctors/{id} зарегистрированы (admin/superadmin)")
+	slog.Info("registerDoctorRoutes", "routes", "/api/doctors, /api/doctors/{id}")
 }
 
 // handleDoctors — /api/doctors (без /{id}).
@@ -325,7 +325,7 @@ func handleDoctorsList(w http.ResponseWriter, r *http.Request) {
 
 	docs, err := listDoctors(db, includeInactive)
 	if err != nil {
-		log.Printf("⚠️  GET /api/doctors: %v", err)
+		slog.Warn("GET /api/doctors", "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -335,7 +335,7 @@ func handleDoctorsList(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(docs); err != nil {
-		log.Printf("⚠️  GET /api/doctors encode: %v", err)
+		slog.Warn("GET /api/doctors encode", "err", err)
 	}
 }
 
@@ -386,14 +386,14 @@ func handleDoctorCreate(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(msg, "обязательны"),
 			strings.Contains(msg, "недопустимая роль"):
-			log.Printf("⚠️  POST /api/doctors: %v", err)
+			slog.Warn("POST /api/doctors", "err", err)
 			http.Error(w, `{"error":"`+jsonEscape(msg)+`"}`, http.StatusBadRequest)
 		case strings.Contains(msg, "UNIQUE"),
 			strings.Contains(msg, "constraint failed"):
-			log.Printf("⚠️  POST /api/doctors: конфликт email: %v", err)
+			slog.Warn("POST /api/doctors: конфликт email", "err", err)
 			http.Error(w, `{"error":"email already exists"}`, http.StatusConflict)
 		default:
-			log.Printf("⚠️  POST /api/doctors: %v", err)
+			slog.Warn("POST /api/doctors", "err", err)
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		}
 		return
@@ -405,7 +405,7 @@ func handleDoctorCreate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(doc); err != nil {
-		log.Printf("⚠️  POST /api/doctors encode: %v", err)
+		slog.Warn("POST /api/doctors encode", "err", err)
 	}
 }
 
@@ -440,14 +440,14 @@ func handleDoctorGet(w http.ResponseWriter, r *http.Request, id string) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
-		log.Printf("⚠️  GET /api/doctors/%s: %v", id, err)
+		slog.Warn("GET /api/doctors/{id}", "id", id, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(doc); err != nil {
-		log.Printf("⚠️  GET /api/doctors/%s encode: %v", id, err)
+		slog.Warn("GET /api/doctors/{id} encode", "id", id, "err", err)
 	}
 }
 
@@ -502,7 +502,7 @@ func handleDoctorUpdate(w http.ResponseWriter, r *http.Request, id string) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
-		log.Printf("⚠️  PATCH /api/doctors/%s: %v", id, err)
+		slog.Warn("PATCH /api/doctors/{id}", "id", id, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -512,7 +512,7 @@ func handleDoctorUpdate(w http.ResponseWriter, r *http.Request, id string) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(doc); err != nil {
-		log.Printf("⚠️  PATCH /api/doctors/%s encode: %v", id, err)
+		slog.Warn("PATCH /api/doctors/{id} encode", "id", id, "err", err)
 	}
 }
 
@@ -544,7 +544,7 @@ func handleDoctorDelete(w http.ResponseWriter, r *http.Request, id string) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
-		log.Printf("⚠️  DELETE /api/doctors/%s: %v", id, err)
+		slog.Warn("DELETE /api/doctors/{id}", "id", id, "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}

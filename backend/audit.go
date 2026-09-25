@@ -13,7 +13,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,7 +46,7 @@ func auditLog(db *sql.DB, doctorID, action, entity, entityID, ip string, detail 
 		nullIfEmpty(ip), detailJSON,
 	)
 	if err != nil {
-		log.Printf("⚠️  audit: insert (%s / %s): %v", action, entityID, err)
+		slog.Warn("audit: insert", "action", action, "entityId", entityID, "err", err)
 	}
 }
 
@@ -66,7 +66,7 @@ type auditRow struct {
 func registerAuditRoutes() {
 	guard := requireRole(RoleAdmin, RoleSuperadmin)
 	http.Handle("/api/audit", guard(http.HandlerFunc(handleAuditList)))
-	log.Println("📜 registerAuditRoutes: /api/audit зарегистрирован (admin/superadmin)")
+	slog.Info("registerAuditRoutes", "route", "/api/audit")
 }
 
 // handleAuditList — GET /api/audit.
@@ -124,7 +124,7 @@ func handleAuditList(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(sqlQ, args...)
 	if err != nil {
-		log.Printf("⚠️  GET /api/audit: %v", err)
+		slog.Warn("GET /api/audit", "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -141,7 +141,7 @@ func handleAuditList(w http.ResponseWriter, r *http.Request) {
 			detail   sql.NullString
 		)
 		if err := rows.Scan(&row.ID, &row.Ts, &docID, &row.Action, &entity, &entityID, &ip, &detail); err != nil {
-			log.Printf("⚠️  GET /api/audit scan: %v", err)
+			slog.Warn("GET /api/audit scan", "err", err)
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
@@ -163,14 +163,14 @@ func handleAuditList(w http.ResponseWriter, r *http.Request) {
 		out = append(out, row)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("⚠️  GET /api/audit rows: %v", err)
+		slog.Warn("GET /api/audit rows", "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(out); err != nil {
-		log.Printf("⚠️  GET /api/audit encode: %v", err)
+		slog.Warn("GET /api/audit encode", "err", err)
 	}
 }
 

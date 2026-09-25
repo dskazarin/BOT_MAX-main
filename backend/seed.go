@@ -8,7 +8,8 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"log/slog"
+	"os"
 )
 
 // ShouldSeedDevAccounts — сидим ли dev-тестовые аккаунты.
@@ -26,17 +27,17 @@ func ShouldSeedDevAccounts(env *Env) bool {
 
 // runDevSeeds выполняет dev-seed'ы, если это разрешено окружением.
 // В prod пишет явный лог о пропуске и ничего не делает.
-// При ошибке seed — log.Fatalf (как было в main).
+// При ошибке seed — slog.Error + os.Exit(1).
 func runDevSeeds(db *sql.DB, env *Env) {
 	if !ShouldSeedDevAccounts(env) {
-		log.Printf("🌱 seed: пропущен (env=%s, dev-аккаунты в prod не создаются)", envNameOrUnknown(env))
+		slog.Info("seed: пропущен (prod)", "env", envNameOrUnknown(env))
 		return
 	}
 	if err := seedDefaultDoctor(db); err != nil {
-		log.Fatalf("❌ seedDefaultDoctor: %v", err)
+		slog.Error("seedDefaultDoctor", "err", err); os.Exit(1)
 	}
 	if err := seedAdminRoles(db); err != nil {
-		log.Fatalf("❌ seedAdminRoles: %v", err)
+		slog.Error("seedAdminRoles", "err", err); os.Exit(1)
 	}
 }
 
