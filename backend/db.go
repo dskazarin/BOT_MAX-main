@@ -144,6 +144,21 @@ func InitDB(path string) (*sql.DB, error) {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_refresh_doctor ON refresh_tokens(doctor_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_refresh_expires ON refresh_tokens(expires_at);`,
+
+        // === Audit-log (B9.1) ===
+        `CREATE TABLE IF NOT EXISTS audit_log (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts         TEXT NOT NULL,
+                doctor_id  TEXT,
+                action     TEXT NOT NULL,
+                entity     TEXT,
+                entity_id  TEXT,
+                ip         TEXT,
+                detail     TEXT
+        );`,
+        `CREATE INDEX IF NOT EXISTS idx_audit_ts     ON audit_log(ts DESC);`,
+        `CREATE INDEX IF NOT EXISTS idx_audit_doctor ON audit_log(doctor_id, ts DESC);`,
+        `CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, ts DESC);`,
 	}
 
 	for _, stmt := range schema {
