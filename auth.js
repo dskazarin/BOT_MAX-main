@@ -1,21 +1,23 @@
 /* ============================================================
  * BOT_MAX — auth.js
- * Шаг 6.7 · 2026-09-24
+ * Шаг 6.7 · 2026-09-24 · обновлено 6.17 (B8.2) 2026-09-25
  *
  * Клиентский модуль авторизации. Экспортирует window.BotMaxAuth.
  *
  * Ключи localStorage:
- *   botmax_access   — JWT access (15m)
- *   botmax_refresh  — JWT refresh (7d)
- *   botmax_doctor   — JSON { id, name, role }
+ *   botmax_doctor — JSON { id, name, role }  (единственный ключ)
+ *
+ * Токены (access + refresh) хранятся ТОЛЬКО в HttpOnly-cookie
+ * (устанавливаются сервером на /api/auth/login и /api/auth/refresh).
+ * JS их не видит и не может прочитать.
  *
  * Контракт:
  *   authFetch(method, url, rawBody, extraHeaders) -> Promise<Response>
  *     - ставит Content-Type: application/json
- *     - ставит Authorization: Bearer <access> (если токен есть)
+ *     - ставит credentials: 'include' (для cookie)
  *     - добавляет extraHeaders (напр. X-Idempotency-Key)
  *     - при 401 и НЕ-auth-пути: single-flight refresh + 1 retry
- *     - если refresh провалился: clearTokens() + redirect login.html
+ *     - если refresh провалился: clearDoctor() + redirect login.html
  *
  * Важно: authFetch возвращает Response (не JSON), чтобы вызывающий
  * код (apiRequest) сам решал, как обрабатывать res.ok / 204 / json.
@@ -25,20 +27,10 @@
     'use strict';
 
     // ---------- Константы ----------
-    var K_ACCESS  = 'botmax_access';
-    var K_REFRESH = 'botmax_refresh';
     var K_DOCTOR  = 'botmax_doctor';
     var LOGIN_URL = 'login.html';
 
-    // ---------- Storage ----------
-    function getToken() {
-        return localStorage.getItem(K_ACCESS) || '';
-    }
-
-    function getRefreshToken() {
-        return localStorage.getItem(K_REFRESH) || '';
-    }
-
+    // ---------- Storage (только doctor) ----------
     function getDoctor() {
         try {
             return JSON.parse(localStorage.getItem(K_DOCTOR) || 'null');
@@ -47,22 +39,27 @@
         }
     }
 
-    function setTokens(access, refresh, doctor) {
-        if (access)  localStorage.setItem(K_ACCESS,  access);
-        if (refresh) localStorage.setItem(K_REFRESH, refresh);
-        if (doctor)  localStorage.setItem(K_DOCTOR,  JSON.stringify(doctor));
+    function setDoctor(doctor) {
+        if (doctor) {
+            localStorage.setItem(K_DOCTOR, JSON.stringify(doctor));
+        }
     }
 
-    function clearTokens() {
-        localStorage.removeItem(K_ACCESS);
-        localStorage.removeItem(K_REFRESH);
+    function clearDoctor() {
         localStorage.removeItem(K_DOCTOR);
     }
 
-    // ---------- Headers ----------
-    function getAuthHeaders() {
-        var t = getToken();
-        return t ? { Authorization: 'Bearer ' + t } : {};
+    // isLoggedIn — есть ли данные о враче (признак залогиненности).
+    // Реальная проверка токена — на сервере: если access-cookie истёк,
+    // authFetch словит 401 и попробует refresh.
+    function isLoggedIn() {
+        return !!getDoctor();
+    }
+
+    // clearTokens — обратная совместимость (старые HTML вызывают).
+    // Теперь чистит только doctor.
+    function clearTokens() {
+        clearDoctor();
     }
 
     // ---------- Single-flight refresh ----------
@@ -73,19 +70,21 @@
     function refreshAccess() {
         if (refreshPromise) return refreshPromise;
 
-        var rt = getRefreshToken();
-        if (!rt) return Promise.resolve(false);
+        // Не пытаемся refresh-ить, если вообще никто не залогинен.
+        if (!isLoggedIn()) return Promise.resolve(false);
 
         refreshPromise = fetch('/api/auth/refresh', {
-			credentials: "include",
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: rt })
+            body: '{}'
         }).then(function (res) {
             if (!res.ok) return false;
             return res.json().then(function (data) {
-                if (!data || !data.accessToken) return false;
-                setTokens(data.accessToken, data.refreshToken, data.doctor);
+                // Сервер возвращает doctor в JSON — обновим localStorage.
+                if (data && data.doctor) {
+                    setDoctor(data.doctor);
+                }
                 return true;
             });
         }).catch(function () {
@@ -107,11 +106,13 @@
     function buildOpts(method, rawBody, extraHeaders) {
         var headers = Object.assign(
             { 'Content-Type': 'application/json' },
-            extraHeaders || {},
-            getAuthHeaders()
+            extraHeaders || {}
         );
-        var opts = { method: method, headers: headers };
-		opts.credentials = "include";  // B7.4: cookie
+        var opts = {
+            method: method,
+            headers: headers,
+            credentials: 'include'
+        };
         if (rawBody !== undefined) {
             opts.body = JSON.stringify(rawBody);
         }
@@ -127,13 +128,13 @@
                 // 401 на обычном API-пути → пробуем refresh один раз.
                 return refreshAccess().then(function (ok) {
                     if (!ok) {
-                        clearTokens();
+                        clearDoctor();
                         if (location.pathname.indexOf(LOGIN_URL) === -1) {
                             location.replace(LOGIN_URL);
                         }
                         return res; // отдаём оригинальный 401
                     }
-                    // retry с новым токеном (тело не изменилось)
+                    // retry (тело не изменилось)
                     return fetch(url, buildOpts(method, rawBody, extraHeaders));
                 });
             });
@@ -141,22 +142,19 @@
 
     // ---------- logout ----------
     function logout() {
-        var rt = getRefreshToken();
         var done = function () {
-            clearTokens();
+            clearDoctor();
             location.replace(LOGIN_URL);
         };
 
-        // Fire-and-forget: не блокируем UI, не ждём долго.
+        // Fire-and-forget: не блокируем UI.
+        // refresh-токен сервер возьмёт из cookie.
         try {
             fetch('/api/auth/logout', {
-			credentials: "include",
                 method: 'POST',
-                headers: Object.assign(
-                    { 'Content-Type': 'application/json' },
-                    getAuthHeaders()
-                ),
-                body: JSON.stringify({ refreshToken: rt })
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}'
             }).catch(function () {}).then(done);
         } catch (e) {
             done();
@@ -213,24 +211,27 @@
 
     // ---------- guard ----------
     function requireAuth() {
-        if (!getToken()) {
+        if (!isLoggedIn()) {
             location.replace(LOGIN_URL);
         }
     }
 
     // ---------- export ----------
     global.BotMaxAuth = {
-        getToken:        getToken,
-        getRefreshToken: getRefreshToken,
-        getDoctor:       getDoctor,
-        setTokens:       setTokens,
-        clearTokens:     clearTokens,
-        getAuthHeaders:  getAuthHeaders,
-        refreshAccess:   refreshAccess,
-        authFetch:       authFetch,
-        logout:          logout,
-        requireAuth:     requireAuth,
-        // Шаг 6.8:
+        // storage (только doctor)
+        getDoctor:   getDoctor,
+        setDoctor:   setDoctor,
+        clearDoctor: clearDoctor,
+        isLoggedIn:  isLoggedIn,
+        clearTokens: clearTokens, // обратная совместимость
+
+        // auth-flow
+        refreshAccess: refreshAccess,
+        authFetch:     authFetch,
+        logout:        logout,
+        requireAuth:   requireAuth,
+
+        // роли
         ROLE:                ROLE,
         hasRole:             hasRole,
         isSuperadmin:        isSuperadmin,
