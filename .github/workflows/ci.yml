@@ -1,0 +1,83 @@
+# ============================================================
+# BOT_MAX — CI (GitHub Actions)
+# B10.4 · 2026-09-25
+#
+# Триггеры: push и PR в main.
+# Jobs:
+#   * build-and-test — vet + build + test -race
+#   * docker-build   — docker build + smoke-проверка контейнера
+# ============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: vet · build · test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build -o /tmp/botmax ./backend
+
+      - name: go test (race)
+        run: go test -count=1 -race ./backend/...
+
+  docker-build:
+    name: docker build + smoke
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t botmax:ci .
+
+      - name: Smoke — запуск контейнера и healthcheck
+        run: |
+          docker run -d --name botmax-ci -p 8082:8082 \
+            -e BOTMAX_ENV=dev \
+            -e BOTMAX_JWT_SECRET=ci-test-secret-not-for-prod-0123456789abcdef \
+            -e BOTMAX_AUTH_ENFORCE=true \
+            botmax:ci
+
+          # Дать серверу подняться
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://localhost:8082/api/health >/dev/null 2>&1; then
+              echo "health OK"
+              break
+            fi
+            sleep 1
+          done
+
+          # Финальная проверка
+          if ! curl -fsS http://localhost:8082/api/health; then
+            echo "❌ healthcheck провален, логи контейнера:"
+            docker logs botmax-ci
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop botmax-ci 2>/dev/null || true
+          docker rm botmax-ci 2>/dev/null || true
