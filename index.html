@@ -214,7 +214,7 @@
 
     <!-- Верхняя панель: вход для администратора -->
     <div class="top-bar">
-        <a href="admin_panel.html" class="admin-btn" title="Вход для администратора">
+        <a href="admin_panel.html" id="admin-entry-btn" class="admin-btn" title="Вход для администратора">
             ⚙️ <span>Администратор</span>
         </a>
     </div>
@@ -272,5 +272,17 @@
 
     </div>
 
+<script src="auth.js"></script>
+<script>
+// B6.3: admin-кнопка видна анониму (для логина) и админам;
+// скрыта, если залогинен не-admin (doctor/пациент).
+(function () {
+    if (typeof BotMaxAuth === "undefined") return;
+    if (!BotMaxAuth.getToken()) return;           // аноним — оставляем кнопку
+    if (BotMaxAuth.isAdmin()) return;             // admin/superadmin — оставляем
+    var btn = document.getElementById("admin-entry-btn");
+    if (btn) btn.style.display = "none";
+})();
+</script>
 </body>
 </html>
