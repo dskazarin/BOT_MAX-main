@@ -360,6 +360,17 @@ func handleDoctorCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// B5.3: admin не может создавать admin/superadmin
+	actorRole, _ := doctorRoleFromCtx(r)
+	wantRole := Role(strings.ToLower(strings.TrimSpace(req.Role)))
+	if wantRole == "" {
+		wantRole = RoleDoctor
+	}
+	if actorRole != RoleSuperadmin && (wantRole == RoleAdmin || wantRole == RoleSuperadmin) {
+		http.Error(w, `{"error":"only superadmin can create admin/superadmin"}`, http.StatusForbidden)
+		return
+	}
+
 	in := CreateDoctorInput{
 		Email:     req.Email,
 		Password:  req.Password,
@@ -454,6 +465,27 @@ func handleDoctorUpdate(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
+	// B5.3: бизнес-правила
+	selfID, _ := resolveDoctorID(r)
+	if id == selfID && req.Active != nil && !*req.Active {
+		http.Error(w, `{"error":"cannot deactivate yourself"}`, http.StatusBadRequest)
+		return
+	}
+	actorRole, _ := doctorRoleFromCtx(r)
+	target, err := getDoctorRowByID(db, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if target.Role == string(RoleSuperadmin) && actorRole != RoleSuperadmin {
+		http.Error(w, `{"error":"only superadmin can modify superadmin"}`, http.StatusForbidden)
+		return
+	}
+
 	in := UpdateDoctorInput{
 		Name:      req.Name,
 		Specialty: req.Specialty,
@@ -473,14 +505,35 @@ func handleDoctorUpdate(w http.ResponseWriter, r *http.Request, id string) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(doc); err != nil {
+	if err = json.NewEncoder(w).Encode(doc); err != nil {
 		log.Printf("⚠️  PATCH /api/doctors/%s encode: %v", id, err)
 	}
 }
 
 // handleDoctorDelete — DELETE /api/doctors/{id} (soft delete).
 func handleDoctorDelete(w http.ResponseWriter, r *http.Request, id string) {
-	if err := deleteDoctorByID(db, id); err != nil {
+	// B5.3: бизнес-правила
+	selfID, _ := resolveDoctorID(r)
+	if id == selfID {
+		http.Error(w, `{"error":"cannot delete yourself"}`, http.StatusBadRequest)
+		return
+	}
+	actorRole, _ := doctorRoleFromCtx(r)
+	target, err := getDoctorRowByID(db, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if target.Role == string(RoleSuperadmin) && actorRole != RoleSuperadmin {
+		http.Error(w, `{"error":"only superadmin can modify superadmin"}`, http.StatusForbidden)
+		return
+	}
+
+	if err = deleteDoctorByID(db, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
