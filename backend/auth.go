@@ -369,6 +369,9 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		log.Printf("⚠️  login: touchLastLogin(%q): %v", doc.ID, err) // не критично
 	}
 
+	// B7.2: ставим access+refresh cookie (в дополнение к JSON)
+	setAuthCookies(w, access, refresh)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(loginResp{
 		AccessToken:  access,
@@ -645,6 +648,9 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		log.Printf("⚠️  refresh: RevokeRefreshJTI(%q): %v", claims.ID, err)
 	}
 
+	// B7.2: ротация cookie (в дополнение к JSON)
+	setAuthCookies(w, newAccess, newRefresh)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(loginResp{
 		AccessToken:  newAccess,
@@ -689,6 +695,9 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Printf("👋 logout: %s", docID)
 	}
+	// B7.2: снимаем cookie
+	clearAuthCookies(w)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
