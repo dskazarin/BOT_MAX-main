@@ -69,6 +69,27 @@ func registerAuditRoutes() {
 	slog.Info("registerAuditRoutes", "route", "/api/audit")
 }
 
+// auditActionClause строит SQL-условие для фильтра action.
+//
+// B16 (6.25): поддержка префиксного поиска через '*'.
+//   - "doctor.create"   → action = ?
+//   - "doctor.*"        → action LIKE ? ESCAPE '\'  (prefix = "doctor.%")
+//
+// Знаки '%', '_' и '\' в prefix экранируются, чтобы не трактовались
+// как wildcards.
+func auditActionClause(action string) (string, []any) {
+	action = strings.TrimSpace(action)
+	if action == "" {
+		return "", nil
+	}
+	if !strings.HasSuffix(action, "*") {
+		return "action = ?", []any{action}
+	}
+	prefix := strings.TrimSuffix(action, "*")
+	repl := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	pattern := repl.Replace(prefix) + "%"
+	return `action LIKE ? ESCAPE '\'`, []any{pattern}
+}
 // handleAuditList — GET /api/audit.
 // Query:
 //   - limit=N            (default 100, max 1000)
@@ -99,8 +120,11 @@ func handleAuditList(w http.ResponseWriter, r *http.Request) {
 		args = append(args, v)
 	}
 	if v := strings.TrimSpace(q.Get("action")); v != "" {
-		where = append(where, "action = ?")
-		args = append(args, v)
+		clause, cargs := auditActionClause(v)
+		if clause != "" {
+			where = append(where, clause)
+			args = append(args, cargs...)
+		}
 	}
 	if v := strings.TrimSpace(q.Get("entity")); v != "" {
 		where = append(where, "entity = ?")

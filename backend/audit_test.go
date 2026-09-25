@@ -196,6 +196,45 @@ func TestAudit_Cleanup(t *testing.T) {
 }
 
 // ---------------------------------------------------------------
+// 5b. auditActionClause — точное/префикс + экранирование
+// ---------------------------------------------------------------
+
+func TestAudit_ActionClause(t *testing.T) {
+	cases := []struct {
+		name       string
+		in         string
+		wantClause string
+		wantArg    string
+	}{
+		{"empty", "", "", ""},
+		{"exact", "doctor.create", "action = ?", "doctor.create"},
+		{"prefix", "doctor.*", `action LIKE ? ESCAPE '\'`, "doctor.%"},
+		{"prefix2", "auth.*", `action LIKE ? ESCAPE '\'`, "auth.%"},
+		{"escape_pct", "doc%.*", `action LIKE ? ESCAPE '\'`, `doc\%.%`},
+		{"escape_us", "doc_.*", `action LIKE ? ESCAPE '\'`, `doc\_.%`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotClause, gotArgs := auditActionClause(c.in)
+			if gotClause != c.wantClause {
+				t.Fatalf("clause = %q, ожидали %q", gotClause, c.wantClause)
+			}
+			if c.wantClause == "" {
+				if len(gotArgs) != 0 {
+					t.Fatalf("args = %v, ожидали пусто", gotArgs)
+				}
+				return
+			}
+			if len(gotArgs) != 1 {
+				t.Fatalf("len(args) = %d, ожидали 1", len(gotArgs))
+			}
+			if got := gotArgs[0].(string); got != c.wantArg {
+				t.Fatalf("arg = %q, ожидали %q", got, c.wantArg)
+			}
+		})
+	}
+}
+// ---------------------------------------------------------------
 // 6. Порядок — свежая первая
 // ---------------------------------------------------------------
 

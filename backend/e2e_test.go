@@ -593,5 +593,33 @@ func TestE2E_Audit_Filters(t *testing.T) {
 	if strings.Contains(body, `"action":"auth.login"`) {
 		t.Fatalf("audit filter: фильтр по action не работает, в ответе есть auth.login")
 	}
+
+	// B16 (6.25): префиксный фильтр — action=doctor.*
+	status, _, body = e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/audit?action=doctor.*&limit=100", cookie: access,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("audit filter: prefix status %d", status)
+	}
+	if !strings.Contains(body, `"action":"doctor.create"`) {
+		t.Fatalf("audit filter: prefix не вернул doctor.create, body=%s", body[:min(len(body), 400)])
+	}
+	if strings.Contains(body, `"action":"auth.login"`) {
+		t.Fatalf("audit filter: prefix захватил auth.login")
+	}
+
+	// Точный фильтр всё ещё работает (обратная совместимость)
+	status, _, body = e2eDo(t, srv, e2eReq{
+		method: http.MethodGet, url: "/api/audit?action=auth.login&limit=100", cookie: access,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("audit filter: exact status %d", status)
+	}
+	if !strings.Contains(body, `"action":"auth.login"`) {
+		t.Fatalf("audit filter: exact не вернул auth.login")
+	}
+	if strings.Contains(body, `"action":"doctor.create"`) {
+		t.Fatalf("audit filter: exact захватил doctor.create")
+	}
 }
 
