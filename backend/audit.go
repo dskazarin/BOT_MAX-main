@@ -69,26 +69,37 @@ func registerAuditRoutes() {
 	slog.Info("registerAuditRoutes", "route", "/api/audit")
 }
 
-// auditActionClause строит SQL-условие для фильтра action.
+// auditPrefixClause строит SQL-условие для фильтра по колонке column.
 //
-// B16 (6.25): поддержка префиксного поиска через '*'.
-//   - "doctor.create"   → action = ?
-//   - "doctor.*"        → action LIKE ? ESCAPE '\'  (prefix = "doctor.%")
+// B16 (6.25): поддержка префиксного поиска через '*' для action.
+// B17.1 (6.26): общий хелпер, используется также для entity.
+//   - "doctor.create"   → column = ?
+//   - "doctor.*"        → column LIKE ? ESCAPE '\'  (prefix = "doctor.%")
 //
 // Знаки '%', '_' и '\' в prefix экранируются, чтобы не трактовались
 // как wildcards.
-func auditActionClause(action string) (string, []any) {
-	action = strings.TrimSpace(action)
-	if action == "" {
+func auditPrefixClause(column, value string) (string, []any) { // B17_1_APPLIED
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return "", nil
 	}
-	if !strings.HasSuffix(action, "*") {
-		return "action = ?", []any{action}
+	if !strings.HasSuffix(value, "*") {
+		return column + " = ?", []any{value}
 	}
-	prefix := strings.TrimSuffix(action, "*")
+	prefix := strings.TrimSuffix(value, "*")
 	repl := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	pattern := repl.Replace(prefix) + "%"
-	return `action LIKE ? ESCAPE '\'`, []any{pattern}
+	return column + ` LIKE ? ESCAPE '\'`, []any{pattern}
+}
+
+// auditActionClause — обёртка над auditPrefixClause для колонки action.
+func auditActionClause(action string) (string, []any) {
+	return auditPrefixClause("action", action)
+}
+
+// auditEntityClause — обёртка над auditPrefixClause для колонки entity (B17.1).
+func auditEntityClause(entity string) (string, []any) {
+	return auditPrefixClause("entity", entity)
 }
 
 // handleAuditList — GET /api/audit.
@@ -96,7 +107,7 @@ func auditActionClause(action string) (string, []any) {
 //   - limit=N            (default 100, max 1000)
 //   - doctor_id=...      фильтр по врачу
 //   - action=...         фильтр по типу действия
-//   - entity=...         фильтр по сущности
+//   - entity=...         фильтр по сущности (поддерживает '*' префикс, B17.1)
 //   - since=YYYY-MM-DD   ts >= since
 //   - until=YYYY-MM-DD   ts <= until
 func handleAuditList(w http.ResponseWriter, r *http.Request) {
@@ -128,8 +139,10 @@ func handleAuditList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v := strings.TrimSpace(q.Get("entity")); v != "" {
-		where = append(where, "entity = ?")
-		args = append(args, v)
+		if clause, cargs := auditEntityClause(v); clause != "" {
+			where = append(where, clause)
+			args = append(args, cargs...)
+		}
 	}
 	if v := strings.TrimSpace(q.Get("since")); v != "" {
 		where = append(where, "ts >= ?")

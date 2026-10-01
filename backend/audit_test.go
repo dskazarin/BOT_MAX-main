@@ -235,6 +235,83 @@ func TestAudit_ActionClause(t *testing.T) {
 	}
 }
 
+// B17_1_TESTS_APPLIED
+
+// TestAudit_EntityClause — зеркало TestAudit_ActionClause для entity (B17.1).
+func TestAudit_EntityClause(t *testing.T) {
+	cases := []struct {
+		name       string
+		in         string
+		wantClause string
+		wantArg    string
+	}{
+		{"empty", "", "", ""},
+		{"exact", "doctor", "entity = ?", "doctor"},
+		{"prefix", "doctor.*", `entity LIKE ? ESCAPE '\'`, "doctor.%"},
+		{"prefix2", "auth.*", `entity LIKE ? ESCAPE '\'`, "auth.%"},
+		{"escape_pct", "doc%.*", `entity LIKE ? ESCAPE '\'`, `doc\%.%`},
+		{"escape_us", "doc_.*", `entity LIKE ? ESCAPE '\'`, `doc\_.%`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gotClause, gotArgs := auditEntityClause(c.in)
+			if gotClause != c.wantClause {
+				t.Fatalf("clause = %q, ожидали %q", gotClause, c.wantClause)
+			}
+			if c.wantClause == "" {
+				if len(gotArgs) != 0 {
+					t.Fatalf("args = %v, ожидали пусто", gotArgs)
+				}
+				return
+			}
+			if len(gotArgs) != 1 {
+				t.Fatalf("len(args) = %d, ожидали 1", len(gotArgs))
+			}
+			if got := gotArgs[0].(string); got != c.wantArg {
+				t.Fatalf("arg = %q, ожидали %q", got, c.wantArg)
+			}
+		})
+	}
+}
+
+// TestAudit_EntityPrefix_Filter — интеграция: auditEntityClause("doctor.*")
+// отбирает только записи entity='doctor' (B17.1).
+func TestAudit_EntityPrefix_Filter(t *testing.T) {
+	db := newTestDB(t)
+
+	// Entity-значения с точкой — реалистичный сценарий для префиксного
+	// фильтра (entity=doctor.*). В текущей системе entity бывают и
+	// однословными (doctor, auth, patient), но фильтр '*' — это LIKE-prefix,
+	// поэтому для проверки нужны составные значения.
+	auditLog(db, "D1", "doctor.create", "doctor.profile", "DOC-1", "1.1.1.1", nil)
+	auditLog(db, "D1", "doctor.update", "doctor.schedule", "DOC-1", "1.1.1.1", nil)
+	auditLog(db, "D1", "patient.view", "patient.card", "PAT-1", "1.1.1.1", nil)
+	auditLog(db, "D1", "auth.login", "auth.session", "", "1.1.1.1", nil)
+
+	clause, args := auditEntityClause("doctor.*")
+	if clause == "" {
+		t.Fatal("пустой clause для doctor.*")
+	}
+	q := `SELECT entity FROM audit_log WHERE ` + clause
+	rows, err := db.Query(q, args...)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+
+	var got []string
+	for rows.Next() {
+		var e string
+		if err := rows.Scan(&e); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, e)
+	}
+	if len(got) != 2 || got[0] != "doctor.profile" || got[1] != "doctor.schedule" {
+		t.Fatalf("получено %v, ожидали [doctor.profile doctor.schedule]", got)
+	}
+}
+
 // ---------------------------------------------------------------
 // 6. Порядок — свежая первая
 // ---------------------------------------------------------------
