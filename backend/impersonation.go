@@ -121,6 +121,13 @@ func handleImpersonationStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"target doctor is inactive"}`, http.StatusBadRequest)
 		return
 	}
+	// B20.4.1: запрет имперсонировать superadmin'а даже супер-админом.
+	// UI скрывает кнопку, но API можно дёрнуть напрямую — нужен guard
+	// на бэкенде (defense-in-depth, часть Q6 «запрет эскалации»).
+	if target.Role == string(RoleSuperadmin) {
+		http.Error(w, `{"error":"cannot impersonate superadmin"}`, http.StatusBadRequest)
+		return
+	}
 
 	tok, err := IssueImpersonationToken(actorID, actorRole, target.ID)
 	if err != nil {
