@@ -437,6 +437,16 @@ func main() {
 	runDevSeeds(db, currentEnv)
 	slog.Info("SQLite готова", "dbPath", dbPath)
 
+	// === B19.3: фоновый retention audit_log ===
+	// Запускается всегда, но при days<=0 runAuditRetention сразу выходит;
+	// при этом db остаётся под защитой defer db.Close() до конца main().
+	bgCtx, bgCancel := context.WithCancel(context.Background())
+	bgDone := make(chan struct{})
+	go func() {
+		defer close(bgDone)
+		runAuditRetention(bgCtx, db, currentEnv.AuditRetentionDays, currentEnv.AuditCleanupInterval)
+	}()
+
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -519,6 +529,15 @@ func main() {
 	case err := <-serverErr:
 		slog.Error("http.Serve", "err", err)
 		os.Exit(1)
+	}
+
+	// === B19.3: останов фонового retention перед srv.Shutdown ===
+	bgCancel()
+	select {
+	case <-bgDone:
+		slog.Info("audit retention: goroutine остановлена")
+	case <-time.After(3 * time.Second):
+		slog.Warn("audit retention: не остановилась за 3s, продолжаем shutdown")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
