@@ -358,13 +358,39 @@
 
 ## Следующий
 
-### 6.26 (B17) — TODO (уточнить)
+### 6.26 (B17.1) — ЗАКРЫТ
+- **Статус:** закрыт (коммит 8b41965 + prep 1ae7f8a)
+- **Что сделано:** префиксный фильтр `entity=doctor.*` (симметрия с `action`).
+  - `auditActionClause` отрефакторена в общий `auditPrefixClause(column, value)`
+    + обёртки `auditActionClause("action", …)` / `auditEntityClause("entity", …)`.
+  - `handleAuditList` теперь использует `auditEntityClause` вместо `"entity = ?"`.
+  - Тесты: `TestAudit_EntityClause` (6 кейсов, зеркало action) +
+    `TestAudit_EntityPrefix_Filter` (интеграционный, составные entity).
+  - **Семантика:** `.*` — это LIKE-prefix (`doctor.%`), не матчит однословное
+    `doctor`. В текущей системе entity однословные → `entity=doctor.*` = `[]`;
+    `entity=doctor` (exact) работает. Симметрия с `action=doctor.*` сохранена.
+  - **Smoke:** HTTP `?entity=doctor` → 1 запись `doctor.create`;
+    `?action=doctor.*` (B16) → та же запись (регрессии нет);
+    `?entity=doctor.*` → `[]` (ожидаемо).
+
+### 6.26 (B17.2) — ЗАПЛАНИРОВАН
 - **Статус:** запланирован
-- **Цель:** TBD — по итогам B16. Возможные кандидаты:
-  - префиксный фильтр `entity=doctor.*` по аналогии с `action` (симметрия API);
+- **Цель:** UI-placeholder для префиксного фильтра `entity=doctor.*` в `admin_audit.html`
+  (по образцу B16.2 для `action=doctor.*`).
+- **Подпатчи:**
+  - добавить `<input id="fEntity" ...>` рядом с `fAction` (строка ~169);
+  - прокинуть значение в `params.push('entity=' + ...)` (строка ~239);
+  - smoke: `curl -s http://localhost:8082/admin_audit.html | grep -i 'fEntity\|entity\.\*'`.
+- **Коммит:** `docs(admin-ui): 6.26 (B17.2) — placeholder для префиксного фильтра entity=doctor.*`.
+
+### 6.27 (B18) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** TBD. Возможные кандидаты:
   - роль-специфичные ограничения в admin_doctors (admin не видит admin/superadmin в списке);
   - интеграция admin_doctors с doctor_cabinet.html (переход «глазами доктора»);
   - audit retention (auditCleanup уже есть как задел — обвязать флагом/крон).
+
+<!-- B17_1_SNAPSHOT_APPLIED -->
 
 ---
 
