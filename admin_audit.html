@@ -238,9 +238,11 @@ function buildQuery() {
     var params = [];
     var a  = document.getElementById('fAction').value.trim();
     var d  = document.getElementById('fDoctor').value.trim();
+    var e  = document.getElementById('fEntity').value.trim();
     var s  = document.getElementById('fSince').value;
     var l  = document.getElementById('fLimit').value;
     if (a)  params.push('action=' + encodeURIComponent(a));
+    if (e)  params.push('entity=' + encodeURIComponent(e));
     if (d)  params.push('doctor_id=' + encodeURIComponent(d));
     if (s)  params.push('since=' + encodeURIComponent(s));
     if (l)  params.push('limit=' + encodeURIComponent(l));
