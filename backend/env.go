@@ -12,6 +12,10 @@ package main
 //                          1|true|yes|on            → true
 //                          0|false|no|off           → false
 //                          иначе                    → ошибка
+//   * BOTMAX_AUDIT_RETENTION_DAYS: "" → 0 (retention выключен)
+//                                   N  → N (удалять записи старше N дней); N < 0 → ошибка
+//   * BOTMAX_AUDIT_CLEANUP_INTERVAL: ""  → 24h
+//                                    dur → dur (Go duration, > 0); иначе → ошибка
 //
 // validateEnv() НЕ логирует и НЕ фаталит — это делает main() (B1.3).
 // Так тестируемо без os.Exit.
@@ -19,7 +23,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Env — разобранные и провалидированные параметры окружения.
@@ -33,6 +39,10 @@ type Env struct {
 	CookieSecure bool
 	// DBPath — путь к SQLite-файлу. Пусто → main.go использует rootDir/bot_max.db.
 	DBPath string
+	// AuditRetentionDays — сколько дней хранить audit_log. 0 → retention выключен.
+	AuditRetentionDays int
+	// AuditCleanupInterval — период между прогонами очистки (B19).
+	AuditCleanupInterval time.Duration
 }
 
 // devJWTSecret — fallback для dev-режима.
@@ -94,6 +104,40 @@ func parseCookieSecure(raw string, isProd bool) (bool, error) {
 	}
 }
 
+// parseNonNegativeInt строго парсит целое >= 0.
+// Пусто → def. Мусор/отрицательное → ошибка.
+func parseNonNegativeInt(name, raw string, def int) (int, error) {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q: ожидается целое >= 0", name, raw)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("%s=%q: ожидается целое >= 0", name, raw)
+	}
+	return n, nil
+}
+
+// parseDuration строго парсит time.Duration > 0.
+// Пусто → def. Мусор/<= 0 → ошибка.
+func parseDuration(name, raw string, def time.Duration) (time.Duration, error) {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q: ожидается Go duration (> 0), напр. 24h, 30m, 10s", name, raw)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("%s=%q: duration должен быть > 0", name, raw)
+	}
+	return d, nil
+}
+
 // validateEnv читает окружение и возвращает Env или ошибку.
 // Никаких side-effect'ов, кроме чтения os.Getenv.
 func validateEnv() (*Env, error) {
@@ -127,12 +171,25 @@ func validateEnv() (*Env, error) {
 
 	dbPath := strings.TrimSpace(os.Getenv("BOTMAX_DB_PATH"))
 
+	retentionDays, err := parseNonNegativeInt(
+		"BOTMAX_AUDIT_RETENTION_DAYS", os.Getenv("BOTMAX_AUDIT_RETENTION_DAYS"), 0)
+	if err != nil {
+		return nil, err
+	}
+	cleanupInterval, err := parseDuration(
+		"BOTMAX_AUDIT_CLEANUP_INTERVAL", os.Getenv("BOTMAX_AUDIT_CLEANUP_INTERVAL"), 24*time.Hour)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Env{
-		Name:         name,
-		IsProd:       isProd,
-		JWTSecret:    secret,
-		AuthEnforce:  enforce,
-		CookieSecure: cookieSecure,
-		DBPath:       dbPath,
+		Name:                 name,
+		IsProd:               isProd,
+		JWTSecret:            secret,
+		AuthEnforce:          enforce,
+		CookieSecure:         cookieSecure,
+		DBPath:               dbPath,
+		AuditRetentionDays:   retentionDays,
+		AuditCleanupInterval: cleanupInterval,
 	}, nil
 }

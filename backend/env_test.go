@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ---------------------------------------------------------------
@@ -36,6 +37,8 @@ func clearEnvVars(t *testing.T) {
 	t.Setenv("BOTMAX_JWT_SECRET", "")
 	t.Setenv("BOTMAX_AUTH_ENFORCE", "")
 	t.Setenv("BOTMAX_COOKIE_SECURE", "")
+	t.Setenv("BOTMAX_AUDIT_RETENTION_DAYS", "")
+	t.Setenv("BOTMAX_AUDIT_CLEANUP_INTERVAL", "")
 	// t.Setenv("", "") не отвязывает переменную — Go выставит её в пустую строку,
 	// что для нас эквивалентно «не задано» (normalize/parse трактуют "" как default).
 }
@@ -127,6 +130,87 @@ func TestParseAuthEnforce(t *testing.T) {
 }
 
 // ---------------------------------------------------------------
+// parseNonNegativeInt
+// ---------------------------------------------------------------
+
+func TestParseNonNegativeInt(t *testing.T) {
+	const def = 42
+	cases := []struct {
+		in      string
+		want    int
+		wantErr bool
+	}{
+		{"", def, false},
+		{"0", 0, false},
+		{"30", 30, false},
+		{"  7  ", 7, false},
+		{"365", 365, false},
+		{"-1", 0, true},
+		{"-100", 0, true},
+		{"abc", 0, true},
+		{"3.5", 0, true},
+		{"1 2", 0, true},
+	}
+	for _, c := range cases {
+		got, err := parseNonNegativeInt("X", c.in, def)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("parseNonNegativeInt(%q): ожидали ошибку, получили %d", c.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("parseNonNegativeInt(%q): неожиданная ошибка: %v", c.in, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("parseNonNegativeInt(%q) = %d, ожидали %d", c.in, got, c.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------
+// parseDuration
+// ---------------------------------------------------------------
+
+func TestParseDuration(t *testing.T) {
+	def := 24 * time.Hour
+	cases := []struct {
+		in      string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", def, false},
+		{"24h", 24 * time.Hour, false},
+		{"30m", 30 * time.Minute, false},
+		{"10s", 10 * time.Second, false},
+		{"1h30m", 90 * time.Minute, false},
+		{"  2h  ", 2 * time.Hour, false},
+		{"0s", 0, true},
+		{"0", 0, true},
+		{"-1h", 0, true},
+		{"abc", 0, true},
+		{"24", 0, true},
+	}
+	for _, c := range cases {
+		got, err := parseDuration("X", c.in, def)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("parseDuration(%q): ожидали ошибку, получили %v", c.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("parseDuration(%q): неожиданная ошибка: %v", c.in, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("parseDuration(%q) = %v, ожидали %v", c.in, got, c.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------
 // validateEnv
 // ---------------------------------------------------------------
 
@@ -181,6 +265,8 @@ func TestValidateEnv(t *testing.T) {
 		envForce        string
 		envCookieSecure string
 		envDBPath       string
+		envRetention    string
+		envCleanup      string
 
 		wantName         string
 		wantIsProd       bool
@@ -188,6 +274,8 @@ func TestValidateEnv(t *testing.T) {
 		wantEnforce      bool
 		wantCookieSecure bool
 		wantDBPath       string
+		wantRetention    int
+		wantCleanup      time.Duration
 		wantErrSubstr    string
 	}{
 		{
@@ -292,6 +380,53 @@ func TestValidateEnv(t *testing.T) {
 			wantName:   "dev",
 			wantDBPath: "/tmp/foo.db",
 		},
+		{
+			name:          "retention-default",
+			envName:       "dev",
+			wantName:      "dev",
+			wantRetention: 0,
+			wantCleanup:   24 * time.Hour,
+		},
+		{
+			name:          "retention-30",
+			envName:       "dev",
+			envRetention:  "30",
+			wantName:      "dev",
+			wantRetention: 30,
+			wantCleanup:   24 * time.Hour,
+		},
+		{
+			name:          "cleanup-1h",
+			envName:       "dev",
+			envCleanup:    "1h",
+			wantName:      "dev",
+			wantRetention: 0,
+			wantCleanup:   time.Hour,
+		},
+		{
+			name:          "retention-junk-err",
+			envName:       "dev",
+			envRetention:  "abc",
+			wantErrSubstr: "BOTMAX_AUDIT_RETENTION_DAYS",
+		},
+		{
+			name:          "retention-negative-err",
+			envName:       "dev",
+			envRetention:  "-1",
+			wantErrSubstr: "BOTMAX_AUDIT_RETENTION_DAYS",
+		},
+		{
+			name:          "cleanup-junk-err",
+			envName:       "dev",
+			envCleanup:    "maybe",
+			wantErrSubstr: "BOTMAX_AUDIT_CLEANUP_INTERVAL",
+		},
+		{
+			name:          "cleanup-zero-err",
+			envName:       "dev",
+			envCleanup:    "0s",
+			wantErrSubstr: "BOTMAX_AUDIT_CLEANUP_INTERVAL",
+		},
 	}
 
 	for _, c := range cases {
@@ -301,6 +436,8 @@ func TestValidateEnv(t *testing.T) {
 			t.Setenv("BOTMAX_AUTH_ENFORCE", c.envForce)
 			t.Setenv("BOTMAX_COOKIE_SECURE", c.envCookieSecure)
 			t.Setenv("BOTMAX_DB_PATH", c.envDBPath)
+			t.Setenv("BOTMAX_AUDIT_RETENTION_DAYS", c.envRetention)
+			t.Setenv("BOTMAX_AUDIT_CLEANUP_INTERVAL", c.envCleanup)
 
 			got, err := validateEnv()
 			if c.wantErrSubstr != "" {
@@ -332,6 +469,14 @@ func TestValidateEnv(t *testing.T) {
 			}
 			if got.DBPath != c.wantDBPath {
 				t.Errorf("DBPath = %q, ожидали %q", got.DBPath, c.wantDBPath)
+			}
+			if got.AuditRetentionDays != c.wantRetention {
+				t.Errorf("AuditRetentionDays = %d, ожидали %d", got.AuditRetentionDays, c.wantRetention)
+			}
+			// wantCleanup == 0 означает «не проверяем»: у старых кейсов
+			// (до B19.1) поле wantCleanup не задано, а validateEnv вернёт дефолт 24h.
+			if c.wantCleanup != 0 && got.AuditCleanupInterval != c.wantCleanup {
+				t.Errorf("AuditCleanupInterval = %v, ожидали %v", got.AuditCleanupInterval, c.wantCleanup)
 			}
 		})
 	}
