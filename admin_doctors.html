@@ -367,6 +367,12 @@ function renderRows(rows) {
     var myId = me && me.id ? me.id : '';
     var iAmSuper = (typeof BotMaxAuth.isSuperadmin === 'function') && BotMaxAuth.isSuperadmin();
 
+    // B18: defense-in-depth — admin не должен видеть admin/superadmin.
+    // Backend (/api/doctors) уже фильтрует, дублируем на UI от регрессий.
+    if (!iAmSuper) {
+        rows = rows.filter(function (r) { return r.role === 'doctor'; });
+    }
+
     var html = '';
     for (var i = 0; i < rows.length; i++) {
         var r = rows[i];
