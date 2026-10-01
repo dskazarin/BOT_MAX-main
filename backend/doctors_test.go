@@ -9,8 +9,12 @@ package main
 // в B5.3 smoke; здесь — только store.
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -252,4 +256,122 @@ func TestDoctors_DeleteSoft(t *testing.T) {
 	if err := deleteDoctorByID(db, "no-such"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("delete несуществующего: err = %v, ожидали ErrNoRows", err)
 	}
+}
+
+// ---------------------------------------------------------------
+// HTTP: handleDoctorsList — role-scoped visibility (B18)
+// ---------------------------------------------------------------
+
+// TestHandleDoctorsList_RoleFilter проверяет, что non-superadmin
+// не видит в списке admin/superadmin, а superadmin видит всех.
+// Подменяем глобальную db (см. main.go), т.к. handleDoctorsList
+// читает её напрямую. Тесты не параллельные — подмена безопасна.
+func TestHandleDoctorsList_RoleFilter(t *testing.T) {
+	saved := db
+	db = newTestDB(t)
+	t.Cleanup(func() { db = saved })
+
+	// Фикстуры:
+	//   d1 — doctor, active
+	//   d2 — doctor, soft-deleted (проверим include_inactive)
+	//   a1 — admin
+	//   s1 — superadmin
+	d1, err := createDoctor(db, CreateDoctorInput{
+		Email: "d1@t.local", Password: "x12345678", Name: "D1", Role: RoleDoctor,
+	})
+	if err != nil {
+		t.Fatalf("create d1: %v", err)
+	}
+	d2, err := createDoctor(db, CreateDoctorInput{
+		Email: "d2@t.local", Password: "x12345678", Name: "D2", Role: RoleDoctor,
+	})
+	if err != nil {
+		t.Fatalf("create d2: %v", err)
+	}
+	if err := deleteDoctorByID(db, d2.ID); err != nil {
+		t.Fatalf("soft-delete d2: %v", err)
+	}
+	if _, err := createDoctor(db, CreateDoctorInput{
+		Email: "a1@t.local", Password: "x12345678", Name: "A1", Role: RoleAdmin,
+	}); err != nil {
+		t.Fatalf("create a1: %v", err)
+	}
+	if _, err := createDoctor(db, CreateDoctorInput{
+		Email: "s1@t.local", Password: "x12345678", Name: "S1", Role: RoleSuperadmin,
+	}); err != nil {
+		t.Fatalf("create s1: %v", err)
+	}
+	_ = d1 // d1 используется только как фикстура
+
+	cases := []struct {
+		name            string
+		role            Role
+		hasRole         bool
+		includeInactive bool
+		wantLen         int
+		wantRoles       []string
+	}{
+		{
+			name: "admin sees only doctors (active)",
+			role: RoleAdmin, hasRole: true,
+			wantLen: 1, wantRoles: []string{"doctor"},
+		},
+		{
+			name: "superadmin sees all (active)",
+			role: RoleSuperadmin, hasRole: true,
+			wantLen: 3, wantRoles: []string{"superadmin", "admin", "doctor"},
+		},
+		{
+			name:    "no role in ctx → safe default (doctors only)",
+			hasRole: false,
+			wantLen: 1, wantRoles: []string{"doctor"},
+		},
+		{
+			name: "admin + include_inactive=1 sees both doctors",
+			role: RoleAdmin, hasRole: true, includeInactive: true,
+			wantLen: 2, wantRoles: []string{"doctor", "doctor"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tc.hasRole {
+				ctx = context.WithValue(ctx, ctxKeyDoctorRole, tc.role)
+			}
+			url := "/api/doctors"
+			if tc.includeInactive {
+				url += "?include_inactive=1"
+			}
+			req := httptest.NewRequest(http.MethodGet, url, nil).WithContext(ctx)
+			rec := httptest.NewRecorder()
+
+			handleDoctorsList(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("code = %d, want 200; body=%s", rec.Code, rec.Body.String())
+			}
+			var got []*DoctorRow
+			if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if len(got) != tc.wantLen {
+				t.Fatalf("len = %d, want %d (roles=%v)", len(got), tc.wantLen, rolesOf(got))
+			}
+			for i, wantRole := range tc.wantRoles {
+				if got[i].Role != wantRole {
+					t.Fatalf("got[%d].Role = %q, want %q (roles=%v)", i, got[i].Role, wantRole, rolesOf(got))
+				}
+			}
+		})
+	}
+}
+
+// rolesOf — хелпер для читаемых сообщений об ошибке.
+func rolesOf(docs []*DoctorRow) []string {
+	out := make([]string, len(docs))
+	for i, d := range docs {
+		out[i] = d.Role
+	}
+	return out
 }
