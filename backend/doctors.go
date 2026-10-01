@@ -28,16 +28,16 @@ import (
 // DoctorRow — расширенное представление врача для админ-CRUD.
 // (Базовый Doctor в db.go — только ID/Email/PasswordHash/Name/Role/Active.)
 type DoctorRow struct {
-	ID           string `json:"id"`
-	Email        string `json:"email"`
-	Name         string `json:"name"`
-	Role         string `json:"role"`
-	Specialty    string `json:"specialty"`
-	Phone        string `json:"phone,omitempty"`
-	ClinicID     string `json:"clinicId,omitempty"`
-	Created      string `json:"created"`
-	LastLogin    string `json:"lastLogin,omitempty"`
-	Active       bool   `json:"active"`
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	Specialty string `json:"specialty"`
+	Phone     string `json:"phone,omitempty"`
+	ClinicID  string `json:"clinicId,omitempty"`
+	Created   string `json:"created"`
+	LastLogin string `json:"lastLogin,omitempty"`
+	Active    bool   `json:"active"`
 	// PasswordHash — не отдаём наружу (json:"-"), но нужен для внутренних проверок.
 	PasswordHash string `json:"-"`
 }
@@ -305,8 +305,9 @@ func registerDoctorRoutes() {
 }
 
 // handleDoctors — /api/doctors (без /{id}).
-//   GET  → список
-//   POST → создать
+//
+//	GET  → список
+//	POST → создать
 func handleDoctors(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -410,9 +411,10 @@ func handleDoctorCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDoctorByID — /api/doctors/{id}.
-//   GET    → один
-//   PATCH  → частичное обновление
-//   DELETE → soft delete
+//
+//	GET    → один
+//	PATCH  → частичное обновление
+//	DELETE → soft delete
 func handleDoctorByID(w http.ResponseWriter, r *http.Request) {
 	id := extractPathID(r.URL.Path, "/api/doctors/")
 	if id == "" {

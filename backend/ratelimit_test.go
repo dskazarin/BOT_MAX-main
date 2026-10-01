@@ -110,10 +110,10 @@ func TestLimiterIndependentKeys(t *testing.T) {
 
 func TestClientIP(t *testing.T) {
 	cases := []struct {
-		name    string
-		xff     string
-		remote  string
-		wantIP  string
+		name   string
+		xff    string
+		remote string
+		wantIP string
 	}{
 		{
 			name:   "no-xff-remote-with-port",

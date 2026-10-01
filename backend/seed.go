@@ -34,10 +34,12 @@ func runDevSeeds(db *sql.DB, env *Env) {
 		return
 	}
 	if err := seedDefaultDoctor(db); err != nil {
-		slog.Error("seedDefaultDoctor", "err", err); os.Exit(1)
+		slog.Error("seedDefaultDoctor", "err", err)
+		os.Exit(1)
 	}
 	if err := seedAdminRoles(db); err != nil {
-		slog.Error("seedAdminRoles", "err", err); os.Exit(1)
+		slog.Error("seedAdminRoles", "err", err)
+		os.Exit(1)
 	}
 }
 

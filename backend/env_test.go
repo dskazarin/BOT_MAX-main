@@ -175,20 +175,20 @@ func TestValidateEnv(t *testing.T) {
 	shortSecret := strings.Repeat("x", 31)
 
 	cases := []struct {
-		name      string
-		envName   string
-		envSecret string
-		envForce  string
+		name            string
+		envName         string
+		envSecret       string
+		envForce        string
 		envCookieSecure string
-		envDBPath string
+		envDBPath       string
 
-		wantName      string
-		wantIsProd    bool
-		wantSecret    string
-		wantEnforce   bool
+		wantName         string
+		wantIsProd       bool
+		wantSecret       string
+		wantEnforce      bool
 		wantCookieSecure bool
-		wantDBPath    string
-		wantErrSubstr string
+		wantDBPath       string
+		wantErrSubstr    string
 	}{
 		{
 			name:       "dev-пусто",
@@ -210,28 +210,28 @@ func TestValidateEnv(t *testing.T) {
 			wantSecret: "short-ok-in-dev",
 		},
 		{
-			name:       "dev-enforce=true",
-			envName:    "test",
-			envForce:   "on",
-			wantName:   "dev",
+			name:        "dev-enforce=true",
+			envName:     "test",
+			envForce:    "on",
+			wantName:    "dev",
 			wantEnforce: true,
 		},
 		{
-			name:       "prod-32-ok",
-			envName:    "prod",
-			envSecret:  longSecret,
-			wantName:   "prod",
-			wantIsProd: true,
-			wantSecret: longSecret,
+			name:             "prod-32-ok",
+			envName:          "prod",
+			envSecret:        longSecret,
+			wantName:         "prod",
+			wantIsProd:       true,
+			wantSecret:       longSecret,
 			wantCookieSecure: true,
 		},
 		{
-			name:       "prod-64-ok",
-			envName:    "production",
-			envSecret:  longSecret + longSecret,
-			wantName:   "prod",
-			wantIsProd: true,
-			wantSecret: longSecret + longSecret,
+			name:             "prod-64-ok",
+			envName:          "production",
+			envSecret:        longSecret + longSecret,
+			wantName:         "prod",
+			wantIsProd:       true,
+			wantSecret:       longSecret + longSecret,
 			wantCookieSecure: true,
 		},
 		{
@@ -274,23 +274,23 @@ func TestValidateEnv(t *testing.T) {
 			wantCookieSecure: false,
 		},
 		{
-			name:             "cookie-secure-junk",
-			envName:          "dev",
-			envCookieSecure:  "maybe",
-			wantErrSubstr:    "BOTMAX_COOKIE_SECURE",
+			name:            "cookie-secure-junk",
+			envName:         "dev",
+			envCookieSecure: "maybe",
+			wantErrSubstr:   "BOTMAX_COOKIE_SECURE",
 		},
 		{
-			name:             "db-path-empty",
-			envName:          "dev",
-			wantName:         "dev",
-			wantDBPath:       "",
+			name:       "db-path-empty",
+			envName:    "dev",
+			wantName:   "dev",
+			wantDBPath: "",
 		},
 		{
-			name:             "db-path-custom",
-			envName:          "dev",
-			envDBPath:        "/tmp/foo.db",
-			wantName:         "dev",
-			wantDBPath:       "/tmp/foo.db",
+			name:       "db-path-custom",
+			envName:    "dev",
+			envDBPath:  "/tmp/foo.db",
+			wantName:   "dev",
+			wantDBPath: "/tmp/foo.db",
 		},
 	}
 

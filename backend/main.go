@@ -398,7 +398,8 @@ func recoverMiddleware(next http.Handler) http.Handler {
 func main() {
 	env, errValidate := validateEnv()
 	if errValidate != nil {
-		slog.Error("env", "err", errValidate); os.Exit(1)
+		slog.Error("env", "err", errValidate)
+		os.Exit(1)
 	}
 	currentEnv = env
 	setupLogging(currentEnv)
@@ -429,7 +430,8 @@ func main() {
 	}
 	db, err = InitDB(dbPath)
 	if err != nil {
-		slog.Error("InitDB", "err", err); os.Exit(1)
+		slog.Error("InitDB", "err", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 	runDevSeeds(db, currentEnv)
@@ -488,7 +490,8 @@ func main() {
 
 	listener, err := net.Listen("tcp", ":8082")
 	if err != nil {
-		slog.Error("порт 8082 занят", "err", err, "hint", "fuser -k 8082/tcp"); os.Exit(1)
+		slog.Error("порт 8082 занят", "err", err, "hint", "fuser -k 8082/tcp")
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
@@ -514,7 +517,8 @@ func main() {
 	case sig := <-quit:
 		slog.Info("получен сигнал, graceful shutdown", "signal", sig.String())
 	case err := <-serverErr:
-		slog.Error("http.Serve", "err", err); os.Exit(1)
+		slog.Error("http.Serve", "err", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

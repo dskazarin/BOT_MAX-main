@@ -68,7 +68,6 @@ const (
 
 type ctxKey string
 
-
 // ---------------------------------------------------------------
 // Пароли
 // ---------------------------------------------------------------
@@ -343,7 +342,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Всегда вызываем bcrypt (защита от timing-атак).
 	if err := CheckPassword(storedHash, req.Password); err != nil || doc == nil || !doc.Active {
-		auditLog(db, "", "auth.login.fail", "auth", "", clientIP(r), map[string]string{"email": req.Email, "reason": "invalid"})  // B9.2
+		auditLog(db, "", "auth.login.fail", "auth", "", clientIP(r), map[string]string{"email": req.Email, "reason": "invalid"}) // B9.2
 		slog.Warn("login отклонено", "email", req.Email)
 		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
 		return
@@ -387,7 +386,7 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	loginLimiterPerIP.Reset(ipKey)
 	loginLimiterPerEmail.Reset(emailKey)
 	slog.Info("login", "id", doc.ID, "email", doc.Email, "role", doc.Role)
-	auditLog(db, doc.ID, "auth.login", "auth", "", clientIP(r), map[string]string{"email": doc.Email, "role": doc.Role})  // B9.2
+	auditLog(db, doc.ID, "auth.login", "auth", "", clientIP(r), map[string]string{"email": doc.Email, "role": doc.Role}) // B9.2
 }
 
 // ---------------------------------------------------------------
@@ -455,7 +454,8 @@ func authMiddleware(next http.Handler) http.Handler {
 //   - 403 Forbidden — роль есть, но не входит в allowed.
 //
 // Пример:
-//   requireRole(RoleAdmin, RoleSuperadmin)
+//
+//	requireRole(RoleAdmin, RoleSuperadmin)
 func requireRole(allowed ...Role) func(http.Handler) http.Handler {
 	if len(allowed) == 0 {
 		panic("requireRole: empty allowed roles")
@@ -622,7 +622,7 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 	if revoked {
 		n, _ := RevokeAllForDoctor(db, claims.DoctorID)
 		slog.Error("refresh: REPLAY, каскад", "jti", claims.ID, "doctor", claims.DoctorID, "revoked", n)
-		auditLog(db, claims.DoctorID, "auth.refresh.replay", "auth", "", clientIP(r), map[string]any{"jti": claims.ID, "revoked": n})  // B9.2
+		auditLog(db, claims.DoctorID, "auth.refresh.replay", "auth", "", clientIP(r), map[string]any{"jti": claims.ID, "revoked": n}) // B9.2
 		http.Error(w, `{"error":"invalid refresh token"}`, http.StatusUnauthorized)
 		return
 	}
@@ -680,7 +680,7 @@ func handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	slog.Info("refresh", "id", doc.ID, "email", doc.Email, "role", doc.Role)
-	auditLog(db, doc.ID, "auth.refresh", "auth", "", clientIP(r), nil)  // B9.2
+	auditLog(db, doc.ID, "auth.refresh", "auth", "", clientIP(r), nil) // B9.2
 }
 
 // handleAuthLogout — POST /api/auth/logout.
@@ -696,7 +696,7 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	// Best-effort: читаем опциональный refreshToken из тела.
 	// Ошибки parse/revoke не фатальны — logout всегда отвечает 200.
 	var req refreshReq
-	_ = json.NewDecoder(r.Body).Decode(&req)  // B8.1: best-effort
+	_ = json.NewDecoder(r.Body).Decode(&req) // B8.1: best-effort
 	if req.RefreshToken == "" {
 		if c, err := r.Cookie(cookieNameRefresh); err == nil {
 			req.RefreshToken = c.Value
@@ -721,7 +721,7 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		slog.Info("logout", "doctor", docID)
 	}
 	// B7.2: снимаем cookie
-	auditLog(db, docID, "auth.logout", "auth", "", clientIP(r), nil)  // B9.2
+	auditLog(db, docID, "auth.logout", "auth", "", clientIP(r), nil) // B9.2
 	clearAuthCookies(w)
 
 	w.Header().Set("Content-Type", "application/json")

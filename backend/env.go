@@ -75,10 +75,11 @@ func parseAuthEnforce(raw string) (bool, error) {
 }
 
 // parseCookieSecure строго парсит BOTMAX_COOKIE_SECURE.
-//   "" → isProd (default: true в prod, false в dev)
-//   1|true|yes|on  → true
-//   0|false|no|off → false
-//   иначе          → ошибка
+//
+//	"" → isProd (default: true в prod, false в dev)
+//	1|true|yes|on  → true
+//	0|false|no|off → false
+//	иначе          → ошибка
 func parseCookieSecure(raw string, isProd bool) (bool, error) {
 	v := strings.ToLower(strings.TrimSpace(raw))
 	switch v {
@@ -127,10 +128,10 @@ func validateEnv() (*Env, error) {
 	dbPath := strings.TrimSpace(os.Getenv("BOTMAX_DB_PATH"))
 
 	return &Env{
-		Name:        name,
-		IsProd:      isProd,
-		JWTSecret:   secret,
-		AuthEnforce: enforce,
+		Name:         name,
+		IsProd:       isProd,
+		JWTSecret:    secret,
+		AuthEnforce:  enforce,
 		CookieSecure: cookieSecure,
 		DBPath:       dbPath,
 	}, nil
