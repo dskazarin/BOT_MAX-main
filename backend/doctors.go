@@ -330,6 +330,19 @@ func handleDoctorsList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// B18: role-scoped visibility. Non-superadmin (admin) не видит admin/superadmin.
+	actorRole, _ := doctorRoleFromCtx(r)
+	if actorRole != RoleSuperadmin {
+		filtered := docs[:0]
+		for _, d := range docs {
+			if d.Role == string(RoleDoctor) {
+				filtered = append(filtered, d)
+			}
+		}
+		docs = filtered
+	}
+
 	if docs == nil {
 		docs = []*DoctorRow{}
 	}
