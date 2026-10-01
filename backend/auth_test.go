@@ -168,3 +168,129 @@ func setupImpersonationEnv(t *testing.T) {
 		CookieSecure: false,
 	}
 }
+
+// ---------------------------------------------------------------
+// B20.2 — actor в контексте + requireNonImpersonated
+// ---------------------------------------------------------------
+
+// TestWithActor_NoActor — actorID=="" → контекст без изменений.
+func TestWithActor_NoActor(t *testing.T) {
+	ctx := context.Background()
+	ctx2 := withActor(ctx, "", "")
+	if ctx2 != ctx {
+		t.Fatalf("withActor(\"\", \"\") должен вернуть тот же ctx")
+	}
+	if _, ok := actorIDFromCtx(reqWithCtx(ctx2)); ok {
+		t.Fatalf("actorIDFromCtx должен вернуть false")
+	}
+}
+
+// TestActorFromCtx_Empty — без withActor → ("", false).
+func TestActorFromCtx_Empty(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	if id, ok := actorIDFromCtx(r); ok || id != "" {
+		t.Fatalf("actorIDFromCtx: got (%q,%v), want (\"\",false)", id, ok)
+	}
+	if role, ok := actorRoleFromCtx(r); ok || role != "" {
+		t.Fatalf("actorRoleFromCtx: got (%q,%v), want (\"\",false)", role, ok)
+	}
+}
+
+// TestActorFromCtx_Set — round-trip через withActor.
+func TestActorFromCtx_Set(t *testing.T) {
+	ctx := withActor(context.Background(), "actor-1", RoleSuperadmin)
+	r := reqWithCtx(ctx)
+	id, ok := actorIDFromCtx(r)
+	if !ok || id != "actor-1" {
+		t.Fatalf("actorIDFromCtx: got (%q,%v), want (\"actor-1\",true)", id, ok)
+	}
+	role, ok := actorRoleFromCtx(r)
+	if !ok || role != RoleSuperadmin {
+		t.Fatalf("actorRoleFromCtx: got (%q,%v), want (superadmin,true)", role, ok)
+	}
+}
+
+// TestRequireNonImpersonated_Pass — обычная сессия: next вызван, 200.
+func TestRequireNonImpersonated_Pass(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/doctors", nil)
+	w := httptest.NewRecorder()
+	called := false
+	h := requireNonImpersonated(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	h.ServeHTTP(w, r)
+	if !called {
+		t.Fatal("next не вызван для обычной сессии")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, want 200", w.Code)
+	}
+}
+
+// TestRequireNonImpersonated_Block — impersonation: 403, next НЕ вызван.
+func TestRequireNonImpersonated_Block(t *testing.T) {
+	ctx := withActor(context.Background(), "actor-1", RoleSuperadmin)
+	r := httptest.NewRequest(http.MethodGet, "/api/doctors", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	called := false
+	h := requireNonImpersonated(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	h.ServeHTTP(w, r)
+	if called {
+		t.Fatal("next вызван в impersonation-режиме — утечка эскалации")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("code: got %d, want 403", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type: got %q, want application/json", ct)
+	}
+}
+
+// TestAuthMiddleware_PutsActorInCtx — интеграционный: impersonation-токен
+// в Authorization проходит authMiddleware и кладёт actor в ctx.
+func TestAuthMiddleware_PutsActorInCtx(t *testing.T) {
+	setupImpersonationEnv(t)
+
+	tok, err := IssueImpersonationToken("actor-1", RoleSuperadmin, "doctor-1")
+	if err != nil {
+		t.Fatalf("IssueImpersonationToken: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/api/patients", nil)
+	r.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+
+	var gotActorID string
+	var gotActorRole Role
+	var gotDoctorID string
+	var gotRole Role
+	h := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotActorID, _ = actorIDFromCtx(r)
+		gotActorRole, _ = actorRoleFromCtx(r)
+		gotDoctorID = doctorIDFromCtx(r)
+		gotRole, _ = doctorRoleFromCtx(r)
+		w.WriteHeader(http.StatusOK)
+	}))
+	h.ServeHTTP(w, r)
+
+	if gotActorID != "actor-1" {
+		t.Errorf("actorID: got %q, want actor-1", gotActorID)
+	}
+	if gotActorRole != RoleSuperadmin {
+		t.Errorf("actorRole: got %q, want superadmin", gotActorRole)
+	}
+	if gotDoctorID != "doctor-1" {
+		t.Errorf("doctorID: got %q, want doctor-1", gotDoctorID)
+	}
+	if gotRole != RoleDoctor {
+		t.Errorf("role: got %q, want doctor", gotRole)
+	}
+}
+
+// reqWithCtx — http.Request с заданным ctx (хелпер для тестов B20.2).
+func reqWithCtx(ctx context.Context) *http.Request {
+	return httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+}

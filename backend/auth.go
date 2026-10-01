@@ -67,6 +67,11 @@ const (
 	ctxKeyDoctorID ctxKey = "doctorID"
 	// ctxKeyDoctorRole — ключ роли.
 	ctxKeyDoctorRole ctxKey = "doctorRole"
+	// ctxKeyActorID — ключ actor_id (B20, impersonation).
+	// Пусто в обычной сессии, задан в impersonation.
+	ctxKeyActorID ctxKey = "actorID"
+	// ctxKeyActorRole — ключ роли actor'а (B20, impersonation).
+	ctxKeyActorRole ctxKey = "actorRole"
 )
 
 type ctxKey string
@@ -312,6 +317,17 @@ func withDoctorID(ctx context.Context, doctorID string, role Role) context.Conte
 	return ctx
 }
 
+// withActor кладёт actor_id/actor_role в context (B20, impersonation).
+// no-op, если actorID == "" — чтобы не засорять обычные сессии.
+func withActor(ctx context.Context, actorID string, actorRole Role) context.Context {
+	if actorID == "" {
+		return ctx
+	}
+	ctx = context.WithValue(ctx, ctxKeyActorID, actorID)
+	ctx = context.WithValue(ctx, ctxKeyActorRole, actorRole)
+	return ctx
+}
+
 // doctorIDFromCtx достаёт doctorID из context.
 // Возвращает "" если не установлен.
 func doctorIDFromCtx(r *http.Request) string {
@@ -326,6 +342,26 @@ func doctorIDFromCtx(r *http.Request) string {
 func doctorRoleFromCtx(r *http.Request) (Role, bool) {
 	v, ok := r.Context().Value(ctxKeyDoctorRole).(Role)
 	return v, ok
+}
+
+// actorIDFromCtx достаёт actor_id из context (B20, impersonation).
+// В обычной сессии возвращает ("", false).
+func actorIDFromCtx(r *http.Request) (string, bool) {
+	v, ok := r.Context().Value(ctxKeyActorID).(string)
+	if !ok || v == "" {
+		return "", false
+	}
+	return v, true
+}
+
+// actorRoleFromCtx достаёт actor_role из context (B20, impersonation).
+// Возвращает ("", false), если actor не задан.
+func actorRoleFromCtx(r *http.Request) (Role, bool) {
+	v, ok := r.Context().Value(ctxKeyActorRole).(Role)
+	if !ok || !v.Valid() {
+		return "", false
+	}
+	return v, true
 }
 
 // ---------------------------------------------------------------
@@ -508,6 +544,8 @@ func authMiddleware(next http.Handler) http.Handler {
 
 		// Токен валиден — кладём в context и пропускаем.
 		ctx := withDoctorID(r.Context(), claims.DoctorID, claims.Role)
+		// B20: если это impersonation-токен (actor_id задан) — кладём actor.
+		ctx = withActor(ctx, claims.ActorID, claims.ActorRole)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -556,6 +594,26 @@ func requireRole(allowed ...Role) func(http.Handler) http.Handler {
 			writeForbidden(w)
 		})
 	}
+}
+
+// requireNonImpersonated — 403, если текущая сессия является impersonation
+// (B20, Q6 «запрет эскалации»). Ставится на роуты CRUD докторов, /api/audit
+// и любые будущие «опасные» группы: impersonated-сессия не должна менять
+// роли/учётки и читать журнал действий.
+//
+// В обычной сессии (actor_id не задан) — пропускает без изменений.
+func requireNonImpersonated(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := actorIDFromCtx(r); ok {
+			slog.Warn("impersonation: доступ к защищённому роуту запрещён",
+				"method", r.Method, "path", r.URL.Path)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"forbidden: impersonation mode"}`))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // extractBearerToken достаёт токен из заголовка Authorization: Bearer <token>.
