@@ -496,15 +496,98 @@
 
 <!-- B19_SNAPSHOT_APPLIED -->
 
-### 6.29 (B20) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** TBD. Возможный кандидат (перенесён из §6.27):
-  - impersonation «глазами доктора» — переход `admin_doctors.html` → `doctor_cabinet.html`.
-    Требует решить: TTL сессии/токена, аудит (`action=impersonation.start` / `.stop`),
-    UI-индикатор «вы в режиме impersonation», права (только superadmin?), запрет
-    эскалации привилегий.
+### 6.29 (B20) — ЗАКРЫТ
+- **Дата:** 2026-10-01
+- **Статус:** закрыт (коммиты bf6effb + 060db35 + 708326b + 09948a7 + a4b9afa + 136cfc6)
+- **Цель:** impersonation «глазами доктора» — переход `admin_doctors.html` → `doctor_cabinet.html`.
+- **Решения по §6.29 (были — открытые вопросы):**
+  - **Кто может impersonate:** только `superadmin` (requireRole(RoleSuperadmin)
+    в registerImpersonationRoutes). Admin-роль доступа не имеет.
+  - **Форма токена:** отдельные claims в access-JWT: `actor_id`, `actor_role`,
+    `act_as` (без отдельной сессии). `DoctorID=target`, `Role=RoleDoctor` —
+    запрет эскалации уже на уровне токена. Refresh для impersonation
+    не выдаётся.
+  - **TTL:** 15 минут (константа `ImpersonationTTL = 15 * time.Minute`),
+    без env-флага.
+  - **Аудит:** `impersonation.start` / `impersonation.stop` в `audit_log`
+    (doctor_id=actor, entity=doctor, entity_id=target,
+    detail={actor_role, target_role}).
+  - **UI:** кнопка 👁 «Войти как» в admin_doctors.html (только superadmin,
+    только active-doctor, не сам себя); sticky-баннер + кнопка
+    «Выйти из режима» в doctor_cabinet.html (init через
+    `GET /api/impersonation/whoami`).
+  - **Запрет эскалации:**
+    - impersonation-токен всегда `role=doctor` → `requireRole(Admin/Superadmin)`
+      автоматически отсекает опасные роуты;
+    - `requireNonImpersonated` на `/api/doctors/*` и `/api/audit` —
+      defense-in-depth;
+    - guard B20.4.1: нельзя имперсонировать superadmin'а (400),
+      даже если дёрнуть API напрямую.
+- **Файлы:**
+  - `backend/auth.go` — `Claims.ActorID/ActorRole/ActAs`, `ImpersonationTTL`,
+    `IssueImpersonationToken`, `withActor`, `actorIDFromCtx`, `actorRoleFromCtx`,
+    `requireNonImpersonated`, ctx-ключи `ctxKeyActorID/Role`, `authMiddleware`
+    прокидывает actor в context.
+  - `backend/auth_test.go` — `setupImpersonationEnv`, 5 тестов
+    `TestIssueImpersonationToken_*`, 6 тестов B20.2 (withActor / actorFromCtx /
+    requireNonImpersonated / интеграционный authMiddleware).
+  - `backend/impersonation.go` — endpoints `/api/impersonation/{start,stop,whoami}`,
+    типы ответов, guard target≠superadmin.
+  - `backend/impersonation_test.go` — 14 тестов (unit + integration).
+  - `backend/doctors.go`, `backend/audit.go` — `requireNonImpersonated`
+    на CRUD-докторов и audit-list.
+  - `backend/main.go` — вызов `registerImpersonationRoutes()`.
+  - `admin_doctors.html` — кнопка 👁 + функция `impersonate()`.
+  - `doctor_cabinet.html` — sticky-баннер `#impBanner` +
+    `initImpersonationBanner()` + `stopImpersonation()`.
+- **Env-переменные:** новых нет. TTL — константа в коде.
+- **UI-smoke (БД /tmp/b20.db, AUTH_ENFORCE=true):**
+  - login superadmin → whoami: `{"impersonating": false}`.
+  - start (target=DOC-001): `{ok:true, target:{DOC-001,doctor}, ttl_seconds:900}`
+    + `Set-Cookie botmax_access=<imp-token>`.
+  - whoami: `{impersonating:true, actor_id:"SUPER-001",
+    target_id:"DOC-001", target_name:"Тестовый врач", target_role:"doctor"}`.
+  - GET /api/doctors под имперс. → 403.
+  - GET /api/audit под имперс. → 403.
+  - stop → `{ok:true, restored:true}` + `Set-Cookie botmax_access=<actor-access>`.
+  - whoami → `{"impersonating": false}`; GET /api/doctors → 200.
+  - audit: `impersonation.start` + `impersonation.stop`
+    (doctor_id=SUPER-001, entity_id=DOC-001).
+- **Коммиты:**
+  - `bf6effb` feat(auth): 6.29 (B20.1) — Claims.ActorID/ActorRole/ActAs + IssueImpersonationToken
+  - `060db35` feat(auth): 6.29 (B20.2) — actor в контексте + requireNonImpersonated
+  - `708326b` feat(impersonation): 6.29 (B20.3) — endpoints /api/impersonation/{start,stop}
+  - `09948a7` feat(impersonation): 6.29 (B20.4) — whoami + requireNonImpersonated + UI (кнопка/баннер)
+  - `a4b9afa` fix(impersonation): 6.29 (B20.4.1) — guard: нельзя имперсонировать superadmin
+  - `136cfc6` test(impersonation): 6.29 (B20.5) — unit + integration тесты /start,/stop,/whoami
+- **Известные ограничения:**
+  - Имперсонировать можно только `role=doctor` (active). Admin-цель — UI
+    скрывает кнопку, backend не блокирует отдельным guard'ом (только
+    superadmin, B20.4.1).
+  - TTL фиксирован 15 минут; нет env-флага `BOTMAX_IMPERSONATION_TTL`.
+  - Нет серверной инвалидации jti при stop: старый impersonation-access
+    живёт до истечения TTL (≤15 мин), но cookie перезаписывается,
+    refresh для impersonation не выдаётся.
+  - В UI нет countdown-таймера «осталось N минут».
+  - Impersonation «протекает» между табами: если открыть doctor_cabinet.html
+    в двух табах, stop в одном не закроет баннер в другом до перезагрузки.
 
-<!-- B20_SNAPSHOT_PENDING -->
+<!-- B20_SNAPSHOT_APPLIED -->
+
+### 6.30 (B21) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** TBD. Кандидаты (продолжение B20 + бэклог §6.28):
+  1. `BOTMAX_IMPERSONATION_TTL` — env-флаг настраиваемого TTL impersonation
+     (по образцу `BOTMAX_AUDIT_RETENTION_DAYS`) + countdown в баннере.
+  2. UI-кнопка «прогнать retention сейчас» в админке
+     (§6.28, известное ограничение).
+  3. Retention для `refresh_tokens` (§6.28, известное ограничение).
+  4. Guard «нельзя имперсонировать admin'а» — сейчас UI скрывает кнопку,
+     backend разрешает (только superadmin запрещён, B20.4.1).
+  5. Закрыть «протечку» impersonation между табами
+     (BroadcastChannel / SSE).
+
+<!-- B21_SNAPSHOT_PENDING -->
 
 ---
 
