@@ -490,6 +490,9 @@ func main() {
 	// Аутентификация (Шаг 6): POST /api/auth/login
 	registerAuthRoutes()
 
+	// Impersonation (B20): /api/impersonation/{start,stop}
+	registerImpersonationRoutes()
+
 	// CRUD по докторам (B5): /api/doctors, /api/doctors/{id} — только admin/superadmin
 	registerDoctorRoutes()
 
