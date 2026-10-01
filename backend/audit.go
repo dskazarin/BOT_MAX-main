@@ -90,6 +90,7 @@ func auditActionClause(action string) (string, []any) {
 	pattern := repl.Replace(prefix) + "%"
 	return `action LIKE ? ESCAPE '\'`, []any{pattern}
 }
+
 // handleAuditList — GET /api/audit.
 // Query:
 //   - limit=N            (default 100, max 1000)
