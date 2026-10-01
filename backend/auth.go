@@ -55,6 +55,9 @@ func (r Role) Valid() bool {
 const (
 	// AccessTTL — время жизни access-токена.
 	AccessTTL = 15 * time.Minute
+	// ImpersonationTTL — время жизни access-токена в режиме impersonation
+	// (B20). Отдельная константа, чтобы можно было ужесточать независимо.
+	ImpersonationTTL = 15 * time.Minute
 	// RefreshTTL — время жизни refresh-токена.
 	RefreshTTL = 7 * 24 * time.Hour
 	// BcryptCost — стоимость bcrypt (дефолт 10).
@@ -109,10 +112,22 @@ func IsBcryptHash(s string) bool {
 // ---------------------------------------------------------------
 
 // Claims — полезная нагрузка токена.
+//
+// B20 (impersonation): при обычном логине поля ActorID/ActorRole/ActAs
+// пустые. При impersonation-токене:
+//   - DoctorID = целевой доктор (sub, "за кого" работаем)
+//   - Role     = всегда RoleDoctor (запрет эскалации на уровне токена)
+//   - ActorID  = кто выполняет impersonation (superadmin)
+//   - ActorRole= роль actor'а на момент выдачи (нужна для /stop: перевыдать
+//     actor'у его исходный access-токен)
+//   - ActAs    = дублирует целевой doctorID (явный маркер impersonation)
 type Claims struct {
-	DoctorID string `json:"sub"`
-	Role     Role   `json:"role"`
-	Type     string `json:"typ"` // "access" | "refresh"
+	DoctorID  string `json:"sub"`
+	Role      Role   `json:"role"`
+	Type      string `json:"typ"` // "access" | "refresh"
+	ActorID   string `json:"actor_id,omitempty"`
+	ActorRole Role   `json:"actor_role,omitempty"`
+	ActAs     string `json:"act_as,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -167,6 +182,65 @@ func IssueAccessToken(doctorID string, role Role) (string, error) {
 	signed, err := tok.SignedString(jwtSecret())
 	if err != nil {
 		return "", fmt.Errorf("sign access: %w", err)
+	}
+	return signed, nil
+}
+
+// IssueImpersonationToken выдаёт access-токен «глазами доктора» (B20).
+//
+// Параметры:
+//   - actorID       — кто выполняет impersonation (superadmin).
+//   - actorRole     — роль actor'а (сохраняется в claim для /stop).
+//   - targetDoctorID— кем прикидываемся.
+//
+// Возвращаемый токен:
+//   - DoctorID  = targetDoctorID (sub) → весь существующий код, использующий
+//     doctorIDFromCtx, продолжает работать без изменений.
+//   - Role      = RoleDoctor (жёстко) → requireRole(RoleAdmin/Superadmin)
+//     автоматически отсекает impersonated-сессию (запрет эскалации).
+//   - ActorID/ActorRole/ActAs — заполнены; по ним authMiddleware/requireNonImpersonated
+//     понимают, что сессия «чужая».
+//   - Type      = "access", TTL = ImpersonationTTL.
+//   - Refresh не выдаётся.
+func IssueImpersonationToken(actorID string, actorRole Role, targetDoctorID string) (string, error) {
+	if actorID == "" {
+		return "", errors.New("impersonation: empty actorID")
+	}
+	if !actorRole.Valid() {
+		return "", fmt.Errorf("impersonation: invalid actorRole %q", actorRole)
+	}
+	if targetDoctorID == "" {
+		return "", errors.New("impersonation: empty targetDoctorID")
+	}
+	if actorID == targetDoctorID {
+		return "", errors.New("impersonation: actorID == targetDoctorID")
+	}
+
+	jti, err := newJTI()
+	if err != nil {
+		return "", fmt.Errorf("jti: %w", err)
+	}
+	now := time.Now()
+	claims := Claims{
+		DoctorID:  targetDoctorID,
+		Role:      RoleDoctor,
+		Type:      "access",
+		ActorID:   actorID,
+		ActorRole: actorRole,
+		ActAs:     targetDoctorID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
+			Subject:   targetDoctorID,
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ImpersonationTTL)),
+			Issuer:    "BOT_MAX",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString(jwtSecret())
+	if err != nil {
+		return "", fmt.Errorf("sign impersonation: %w", err)
 	}
 	return signed, nil
 }
