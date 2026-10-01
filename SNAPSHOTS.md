@@ -446,15 +446,65 @@
 
 <!-- B18_SNAPSHOT_APPLIED -->
 
-### 6.28 (B19) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** TBD. Возможные кандидаты (перенесены из §6.27):
-  - интеграция `admin_doctors.html` с `doctor_cabinet.html` (переход «глазами доктора»
-    — это, по сути, impersonation: требует решить вопрос безопасности, аудита, TTL);
-  - audit retention — `auditCleanup(db, days)` в `backend/audit.go` уже есть как задел,
-    нужен флаг/крон/внешний планировщик — требует инфраструктурного решения.
+### 6.28 (B19) — ЗАКРЫТ
+- **Дата:** 2026-10-01
+- **Статус:** закрыт (коммиты 9163921 + 4a17538 + ce991fd)
+- **Цель:** audit retention — включить `auditCleanup` в рантайм без внешнего планировщика.
+  Взят кандидат №2 из §6.27 (retention); кандидат №1 (impersonation «глазами доктора»)
+  перенесён в §6.29 (B20).
+- **Файлы:**
+  - `backend/env.go` — `parseNonNegativeInt`, `parseDuration`, поля `AuditRetentionDays` + `AuditCleanupInterval`
+  - `backend/env_test.go` — `TestParseNonNegativeInt`, `TestParseDuration`, расширение `TestValidateEnv`
+  - `backend/audit.go` — `runAuditRetention(ctx, db, days, interval)`
+  - `backend/audit_test.go` — 3 теста `TestRunAuditRetention_*`
+  - `backend/main.go` — запуск runner'а в горутине + остановка перед `srv.Shutdown`
+- **Env-переменные:**
+  - `BOTMAX_AUDIT_RETENTION_DAYS` — int >= 0, default `0` (retention выключен).
+  - `BOTMAX_AUDIT_CLEANUP_INTERVAL` — Go duration > 0, default `24h`.
+- **Что сделано:**
+  - **9163921** `feat(env): 6.28 (B19.1) — BOTMAX_AUDIT_RETENTION_DAYS + BOTMAX_AUDIT_CLEANUP_INTERVAL`
+    `parseNonNegativeInt` (пусто → def; мусор/отрицательное → ошибка) и `parseDuration`
+    (пусто → def; мусор/<= 0 → ошибка). Оба — fail-fast, по образцу `parseAuthEnforce`.
+    В `Env` добавлены `AuditRetentionDays int` и `AuditCleanupInterval time.Duration`,
+    заполняются в `validateEnv()`.
+  - **4a17538** `feat(audit): 6.28 (B19.2) — фоновый runAuditRetention (ticker + первый прогон сразу)`
+    `runAuditRetention`: первый прогон сразу, затем `time.NewTicker(interval)` в select
+    с `ctx.Done()`. `days <= 0` → лог и выход; `interval <= 0` → защита 24h.
+    Best-effort: ошибки `auditCleanup` только логируются. Комментарий над `auditCleanup`
+    обновлён («B9: только в тестах; B19: вызывается из runAuditRetention»).
+  - **ce991fd** `feat(main): 6.28 (B19.3) — запуск runAuditRetention в main() с graceful shutdown`
+    `bgCtx/bgCancel/bgDone` создаются сразу после `SQLite готова`; runner — отдельной
+    горутиной. Перед `srv.Shutdown(ctx)` — `bgCancel()` + ожидание `bgDone` до 3s
+    (fallback-лог, не блокирует shutdown).
+- **UI-smoke (БД /tmp/b19.db, retention=30d, interval=2s):**
+  - `audit retention: запущен days=30 interval=2s` сразу после «SQLite готова».
+  - Первый `cleanup deleted=0` — сразу; далее — каждые 2s по тикеру.
+  - `POST /api/auth/login` (superadmin) → JWT `role=superadmin`.
+  - `GET /api/health` до/после 2+ тиков → `{"status":"ok"}`.
+  - `kill -TERM $SRV_PID` → `получен сигнал, graceful shutdown signal=terminated`
+    + `audit retention: остановлен reason=context canceled`
+    + `audit retention: goroutine остановлена`
+    + `сервер остановлен` (завершение чистое, без 3s-fallback).
+- **Коммит-сообщения:**
+  - `feat(env): 6.28 (B19.1) — BOTMAX_AUDIT_RETENTION_DAYS + BOTMAX_AUDIT_CLEANUP_INTERVAL`
+  - `feat(audit): 6.28 (B19.2) — фоновый runAuditRetention (ticker + первый прогон сразу)`
+  - `feat(main): 6.28 (B19.3) — запуск runAuditRetention в main() с graceful shutdown`
+- **Известные ограничения:**
+  - Retention работает только для `audit_log`; другие таблицы (refresh-tokens и пр.)
+    пока не чистятся — вне скоупа B19.
+  - Admin-UI кнопки «прогнать retention сейчас» нет (возможный B19.1 — не запланирован).
 
-<!-- B17_1_SNAPSHOT_APPLIED -->
+<!-- B19_SNAPSHOT_APPLIED -->
+
+### 6.29 (B20) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** TBD. Возможный кандидат (перенесён из §6.27):
+  - impersonation «глазами доктора» — переход `admin_doctors.html` → `doctor_cabinet.html`.
+    Требует решить: TTL сессии/токена, аудит (`action=impersonation.start` / `.stop`),
+    UI-индикатор «вы в режиме impersonation», права (только superadmin?), запрет
+    эскалации привилегий.
+
+<!-- B20_SNAPSHOT_PENDING -->
 
 ---
 
