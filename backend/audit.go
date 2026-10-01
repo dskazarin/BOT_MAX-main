@@ -66,7 +66,7 @@ type auditRow struct {
 // registerAuditRoutes — GET /api/audit (только admin/superadmin).
 func registerAuditRoutes() {
 	guard := requireRole(RoleAdmin, RoleSuperadmin)
-	http.Handle("/api/audit", guard(http.HandlerFunc(handleAuditList)))
+	http.Handle("/api/audit", guard(requireNonImpersonated(http.HandlerFunc(handleAuditList))))
 	slog.Info("registerAuditRoutes", "route", "/api/audit")
 }
 

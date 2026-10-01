@@ -339,6 +339,15 @@
 </head>
 <body>
 
+<!-- B20: баннер impersonation. Скрыт по умолчанию; включается скриптом
+     initImpersonationBanner() (ниже), если /api/impersonation/whoami
+     вернёт {impersonating:true}. -->
+<div id="impBanner" style="display:none; position:sticky; top:0; z-index:9999; background:linear-gradient(90deg,#f6ad55,#dd6b20); color:#1a202c; padding:10px 18px; font-weight:700; box-shadow:0 2px 10px rgba(0,0,0,0.25); display:none; align-items:center; gap:14px;">
+    <span style="font-size:1.2em;">👁</span>
+    <span>Режим impersonation: вы работаете как доктор <b id="impTargetName">—</b> (ID <span id="impTargetId" style="font-family:monospace;">—</span>).</span>
+    <button onclick="stopImpersonation()" style="margin-left:auto; background:#1a202c; color:#fff; border:0; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:700;">🚪 Выйти из режима</button>
+</div>
+
 <div class="container">
     <a href="index.html" class="back-link">⬅ На главную</a>
 
@@ -567,6 +576,52 @@
 <script>
     // Шаг 6.7: guard — без токена → login.html
     if (typeof BotMaxAuth !== 'undefined') BotMaxAuth.requireAuth();
+
+    // ================================================================
+    //  B20: impersonation banner
+    // ================================================================
+    // Access-токен — в HttpOnly-cookie, JS его не читает. Поэтому
+    // состояние impersonation получаем через /api/impersonation/whoami.
+    function initImpersonationBanner() {
+        fetch('/api/impersonation/whoami', {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (res) {
+            if (!res.ok) return null;
+            return res.json();
+        }).then(function (d) {
+            if (!d || !d.impersonating) return;
+            var banner = document.getElementById('impBanner');
+            if (!banner) return;
+            document.getElementById('impTargetName').textContent = d.target_name || '—';
+            document.getElementById('impTargetId').textContent = d.target_id || '—';
+            banner.style.display = 'flex';
+            // Дополнительный шум в консоль для отладки.
+            console.warn('👁 impersonation mode: actor=' + d.actor_id + ' (' + d.actor_role + ') target=' + d.target_id);
+        }).catch(function () {
+            // silent: не критично для работы кабинета.
+        });
+    }
+
+    function stopImpersonation() {
+        BotMaxAuth.authFetch('POST', '/api/impersonation/stop', {})
+            .then(function (res) {
+                // вне зависимости от ответа — уходим в admin_doctors.html.
+                // (Если сессия уже истекла, UI не должен залипать в чужой шкуре.)
+                window.location.href = 'admin_doctors.html';
+            })
+            .catch(function () {
+                window.location.href = 'admin_doctors.html';
+            });
+    }
+
+    // Запускаем как только DOM готов (скрипт в конце <body> — уже готов).
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initImpersonationBanner);
+    } else {
+        initImpersonationBanner();
+    }
 
     // ================================================================
     //  ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ

@@ -386,6 +386,11 @@ function renderRows(rows) {
 
         var actions = '<div class="row-actions">';
         actions += '<button class="btn btn-sm btn-warning" onclick="openEditModal(\'' + escapeHtml(r.id) + '\')">✏️</button>';
+        // B20: impersonation «глазами доктора» — только superadmin,
+        // только active-доктор, не сам себя.
+        if (iAmSuper && r.active && !isSelf && r.role === 'doctor') {
+            actions += '<button class="btn btn-sm btn-info" title="Войти как" onclick="impersonate(\'' + escapeHtml(r.id) + '\')">👁</button>';
+        }
         if (canMutate) {
             if (r.active) {
                 actions += '<button class="btn btn-sm btn-danger" onclick="toggleActive(\'' + escapeHtml(r.id) + '\', false)">🚫</button>';
@@ -645,6 +650,32 @@ document.addEventListener('keydown', function (e) {
 });
 
 // Первая загрузка
+// B20: вход «глазами доктора».
+// POST /api/impersonation/start {doctor_id}. При успехе redirect в кабинет.
+function impersonate(doctorId) {
+    if (!confirm('Войти как этот доктор? Вы получите 15 минут в его кабинете.')) return;
+    BotMaxAuth.authFetch('POST', '/api/impersonation/start', { doctor_id: doctorId })
+        .then(function (res) {
+            if (res.status === 403 || res.status === 401) {
+                alert('Недостаточно прав или сессия истекла');
+                return null;
+            }
+            if (!res.ok) {
+                return res.json().then(function (d) {
+                    alert('Ошибка: ' + (d.error || res.status));
+                }).catch(function () {
+                    alert('Ошибка: ' + res.status);
+                });
+            }
+            return res.json().then(function (d) {
+                window.location.href = 'doctor_cabinet.html';
+            });
+        })
+        .catch(function (err) {
+            alert('Ошибка сети: ' + (err.message || err));
+        });
+}
+
 loadDoctors();
 </script>
 </body>

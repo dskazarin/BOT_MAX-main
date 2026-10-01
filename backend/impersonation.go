@@ -44,6 +44,17 @@ type impersonationStopResp struct {
 	Restored bool `json:"restored"` // true — реально вышли; false — noop
 }
 
+// impersonationWhoamiResp — ответ на /whoami.
+// impersonating=false → все остальные поля пустые (кроме ttl_seconds=0).
+type impersonationWhoamiResp struct {
+	Impersonating bool   `json:"impersonating"`
+	ActorID       string `json:"actor_id,omitempty"`
+	ActorRole     string `json:"actor_role,omitempty"`
+	TargetID      string `json:"target_id,omitempty"`
+	TargetName    string `json:"target_name,omitempty"`
+	TargetRole    string `json:"target_role,omitempty"`
+}
+
 // registerImpersonationRoutes регистрирует /api/impersonation/{start,stop}.
 // Вызывается из main() рядом с registerAuthRoutes().
 func registerImpersonationRoutes() {
@@ -51,8 +62,9 @@ func registerImpersonationRoutes() {
 
 	http.Handle("/api/impersonation/start", guard(http.HandlerFunc(handleImpersonationStart)))
 	http.Handle("/api/impersonation/stop", http.HandlerFunc(handleImpersonationStop))
+	http.Handle("/api/impersonation/whoami", http.HandlerFunc(handleImpersonationWhoami))
 
-	slog.Info("registerImpersonationRoutes", "routes", "/start (superadmin), /stop (any authed)")
+	slog.Info("registerImpersonationRoutes", "routes", "/start (superadmin), /stop, /whoami")
 }
 
 // handleImpersonationStart — POST /api/impersonation/start.
@@ -186,4 +198,44 @@ func handleImpersonationStop(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(impersonationStopResp{OK: true, Restored: true})
+}
+
+// handleImpersonationWhoami — GET /api/impersonation/whoami.
+//
+// Всегда 200 для валидной сессии.
+//   - обычная сессия: {"impersonating": false}
+//   - impersonation:  {"impersonating": true, actor_id, actor_role,
+//     target_id, target_name, target_role}
+//
+// Нужен, чтобы UI в doctor_cabinet.html мог показать баннер:
+// access-токен лежит в HttpOnly-cookie, JS его не читает.
+func handleImpersonationWhoami(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	actorID, isImpersonating := actorIDFromCtx(r)
+	resp := impersonationWhoamiResp{Impersonating: false}
+	if isImpersonating {
+		actorRole, _ := actorRoleFromCtx(r)
+		targetID := doctorIDFromCtx(r)
+		resp.Impersonating = true
+		resp.ActorID = actorID
+		resp.ActorRole = string(actorRole)
+		resp.TargetID = targetID
+
+		if db != nil && targetID != "" {
+			if row, err := getDoctorRowByID(db, targetID); err == nil {
+				resp.TargetName = row.Name
+				resp.TargetRole = row.Role
+			} else {
+				slog.Warn("impersonation: whoami target lookup", "err", err, "target_id", targetID)
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }

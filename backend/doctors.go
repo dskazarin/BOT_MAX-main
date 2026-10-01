@@ -298,8 +298,8 @@ func scanDoctorRow(rows *sql.Rows) (*DoctorRow, error) {
 func registerDoctorRoutes() {
 	guard := requireRole(RoleAdmin, RoleSuperadmin)
 
-	http.Handle("/api/doctors", guard(http.HandlerFunc(handleDoctors)))
-	http.Handle("/api/doctors/", guard(http.HandlerFunc(handleDoctorByID)))
+	http.Handle("/api/doctors", guard(requireNonImpersonated(http.HandlerFunc(handleDoctors))))
+	http.Handle("/api/doctors/", guard(requireNonImpersonated(http.HandlerFunc(handleDoctorByID))))
 
 	slog.Info("registerDoctorRoutes", "routes", "/api/doctors, /api/doctors/{id}")
 }
