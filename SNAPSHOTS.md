@@ -373,15 +373,38 @@
     `?action=doctor.*` (B16) → та же запись (регрессии нет);
     `?entity=doctor.*` → `[]` (ожидаемо).
 
-### 6.26 (B17.2) — ЗАПЛАНИРОВАН
-- **Статус:** запланирован
-- **Цель:** UI-placeholder для префиксного фильтра `entity=doctor.*` в `admin_audit.html`
-  (по образцу B16.2 для `action=doctor.*`).
-- **Подпатчи:**
-  - добавить `<input id="fEntity" ...>` рядом с `fAction` (строка ~169);
-  - прокинуть значение в `params.push('entity=' + ...)` (строка ~239);
-  - smoke: `curl -s http://localhost:8082/admin_audit.html | grep -i 'fEntity\|entity\.\*'`.
-- **Коммит:** `docs(admin-ui): 6.26 (B17.2) — placeholder для префиксного фильтра entity=doctor.*`.
+### 6.26 (B17.2) — ЗАКРЫТ
+- **Статус:** закрыт (коммиты 2dcee6e + ec9d736 + 13bfbf4 + 8009782)
+- **Что сделано:** UI-фильтр `entity` в `admin_audit.html` (симметрия с `action`, B16.2).
+  - **prep 2dcee6e** `style(backend): gofmt -w backend/ (prep B17.2)` — погашен
+    предсуществующий техдолг: 10 файлов `backend/*.go` были с 4-пробельными
+    отступами, `gofmt -l backend/` репортил их в baseline. Приведены к gofmt
+    (табы + выравнивание struct-полей), семантика не менялась.
+  - **ec9d736** `feat(admin-ui): input fEntity в admin_audit.html` —
+    новый `<input id="fEntity">` после `fDoctor`.
+  - **13bfbf4** `feat(admin-ui): params.push(entity=) в buildQuery` —
+    `var e = ...fEntity...` + `if (e) params.push('entity=' + encodeURIComponent(e));`.
+  - **8009782** `feat(admin-ui): сброс fEntity в resetFilters` —
+    `document.getElementById('fEntity').value = '';`.
+- **Placeholder в UI:** `doctor, patient (точное совпадение)` —
+  сознательно **не** `doctor.* (звёздочка = префикс)`, потому что по семантике
+  B17.1 `entity=doctor.*` на однословных entity даёт `[]`; показывать
+  «префикс» в placeholder было бы вводящим в заблуждение.
+- **Smoke (полный, БД /tmp/b17.db):**
+  - `POST /api/doctors` (email/password/name) → `DOC-1790855360-8554ff68`
+    + audit `doctor.create`.
+  - `?entity=doctor` → 1 запись (`doctor.create`).
+  - `?action=doctor.*` → 1 запись (B16.2 не сломан).
+  - `?entity=doctor.*` → `[]` (семантика B17.1 подтверждена).
+  - `?action=doctor.create` (exact) → 1 запись.
+  - HTML `/admin_audit.html` содержит `fEntity` (input + buildQuery + resetFilters).
+- **Коммит-сообщения:**
+  - `feat(admin-ui): 6.26 (B17.2) — input fEntity в admin_audit.html`
+  - `feat(admin-ui): 6.26 (B17.2) — params.push(entity=) в buildQuery`
+  - `feat(admin-ui): 6.26 (B17.2) — сброс fEntity в resetFilters`
+  - `style(backend): gofmt -w backend/ (prep B17.2)`
+
+<!-- B17_2_SNAPSHOT_APPLIED -->
 
 ### 6.27 (B18) — TODO (уточнить)
 - **Статус:** запланирован
