@@ -406,12 +406,53 @@
 
 <!-- B17_2_SNAPSHOT_APPLIED -->
 
-### 6.27 (B18) — TODO (уточнить)
+### 6.27 (B18) — ЗАКРЫТ
+- **Дата:** 2026-10-01
+- **Статус:** закрыт (коммиты 7a6caab + a8d9953 + 064e6e3)
+- **Цель:** role-scoped visibility в `admin_doctors` — non-superadmin не видит
+  admin/superadmin в `GET /api/doctors`. Взят кандидат №1 из трёх возможных
+  (см. исходный TODO); кандидаты №2 («глазами доктора») и №3 (audit retention)
+  перенесены в §6.28 (B19).
+- **Файлы:**
+  - `backend/doctors.go` — фильтр в `handleDoctorsList`
+  - `backend/doctors_test.go` — `TestHandleDoctorsList_RoleFilter` (4 субтеста)
+  - `admin_doctors.html` — defense-in-depth в `renderRows`
+- **Что сделано:**
+  - **7a6caab** `fix(backend): 6.27 (B18) — admin не видит admin/superadmin в GET /api/doctors`
+    `handleDoctorsList` читает `doctorRoleFromCtx(r)` и, если актор не superadmin,
+    фильтрует список: остаются только `RoleDoctor`. Плюс — `docs == nil → []` для
+    корректного JSON (`[]`, а не `null`).
+  - **a8d9953** `test(backend): 6.27 (B18) — кейсы admin/superadmin в handleDoctorsList`
+    `TestHandleDoctorsList_RoleFilter`: 4 субтеста — admin видит только doctor;
+    superadmin видит всех (superadmin, admin, doctor); без роли в ctx — безопасный
+    дефолт (только doctor); admin + `include_inactive=1` — видит оба doctor
+    (active + soft-deleted). Подмена глобальной `db` через `saved := db; db = newTestDB(t)`;
+    тесты не параллельные — подмена безопасна.
+  - **064e6e3** `fix(admin-ui): 6.27 (B18) — defense-in-depth фильтр ролей в renderRows`
+    В `renderRows` (после `iAmSuper`) — `if (!iAmSuper) rows = rows.filter(r => r.role === 'doctor')`.
+    Backend уже фильтрует; UI дублирует от регрессий (тот же паттерн, что `blockedBySuper`
+    из B5.3).
+- **UI-smoke (полный, БД /tmp/b18.db):**
+  - `POST /api/auth/login` (superadmin) → JWT `role=superadmin`.
+  - `GET /api/doctors` (superadmin) → `['admin', 'doctor', 'superadmin']`.
+  - `POST /api/doctors` (superadmin) → `role=admin` — создан тестовый админ.
+  - `POST /api/auth/login` (новый admin) → JWT `role=admin`.
+  - `GET /api/doctors` (admin) → **`['doctor']`** — фильтр работает.
+  - `POST /api/doctors` (admin, role=superadmin) → **403** — backend-запрет B5.3 не сломан.
+- **Коммит-сообщения:**
+  - `fix(backend): 6.27 (B18) — admin не видит admin/superadmin в GET /api/doctors`
+  - `test(backend): 6.27 (B18) — кейсы admin/superadmin в handleDoctorsList`
+  - `fix(admin-ui): 6.27 (B18) — defense-in-depth фильтр ролей в renderRows`
+
+<!-- B18_SNAPSHOT_APPLIED -->
+
+### 6.28 (B19) — TODO (уточнить)
 - **Статус:** запланирован
-- **Цель:** TBD. Возможные кандидаты:
-  - роль-специфичные ограничения в admin_doctors (admin не видит admin/superadmin в списке);
-  - интеграция admin_doctors с doctor_cabinet.html (переход «глазами доктора»);
-  - audit retention (auditCleanup уже есть как задел — обвязать флагом/крон).
+- **Цель:** TBD. Возможные кандидаты (перенесены из §6.27):
+  - интеграция `admin_doctors.html` с `doctor_cabinet.html` (переход «глазами доктора»
+    — это, по сути, impersonation: требует решить вопрос безопасности, аудита, TTL);
+  - audit retention — `auditCleanup(db, days)` в `backend/audit.go` уже есть как задел,
+    нужен флаг/крон/внешний планировщик — требует инфраструктурного решения.
 
 <!-- B17_1_SNAPSHOT_APPLIED -->
 
