@@ -9,6 +9,7 @@ package main
 // Здесь — только store: auditLog + auditCleanup + прямой SELECT.
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"testing"
@@ -192,6 +193,112 @@ func TestAudit_Cleanup(t *testing.T) {
 	}
 	if _, err := auditCleanup(db, -5); err == nil {
 		t.Fatalf("auditCleanup(-5) должен вернуть ошибку")
+	}
+}
+
+// ---------------------------------------------------------------
+// 5a. runAuditRetention — фоновый прогон (B19.2)
+// ---------------------------------------------------------------
+
+// TestRunAuditRetention_ContextCancel — runner завершается по ctx.Done().
+func TestRunAuditRetention_ContextCancel(t *testing.T) {
+	db := newTestDB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		runAuditRetention(ctx, db, 30, 50*time.Millisecond)
+		close(done)
+	}()
+
+	// Дать шанс первому прогону + заходу в select.
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+		// ok
+	case <-time.After(time.Second):
+		t.Fatalf("runAuditRetention не завершился после cancel")
+	}
+}
+
+// TestRunAuditRetention_ActuallyDeletes — первый прогон сразу удаляет старые
+// записи, свежие остаются.
+func TestRunAuditRetention_ActuallyDeletes(t *testing.T) {
+	db := newTestDB(t)
+
+	// Свежая
+	auditLog(db, "D1", "auth.login", "auth", "", "1.1.1.1", nil)
+	// Старая (40 дней назад)
+	old := time.Now().UTC().AddDate(0, 0, -40).Format("2006-01-02 15:04:05")
+	if _, err := db.Exec(
+		`INSERT INTO audit_log (ts, doctor_id, action, entity, entity_id, ip, detail)
+		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+		old, "D2", "auth.logout", "auth", "", "2.2.2.2",
+	); err != nil {
+		t.Fatalf("insert old: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		// interval большой — важно только, что первый прогон сразу.
+		runAuditRetention(ctx, db, 30, time.Hour)
+		close(done)
+	}()
+
+	// Ждём, пока первый прогон выполнится. 100ms с запасом.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM audit_log`).Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("после runAuditRetention count=%d, ожидали 1 (свежая)", count)
+	}
+}
+
+// TestRunAuditRetention_DaysZero_Noop — days<=0 → мгновенный выход,
+// ничего не удаляется (в т.ч. старая запись).
+func TestRunAuditRetention_DaysZero_Noop(t *testing.T) {
+	db := newTestDB(t)
+
+	// Старая запись, которая при days>0 удалилась бы.
+	old := time.Now().UTC().AddDate(0, 0, -400).Format("2006-01-02 15:04:05")
+	if _, err := db.Exec(
+		`INSERT INTO audit_log (ts, doctor_id, action, entity, entity_id, ip, detail)
+		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+		old, "D2", "auth.logout", "auth", "", "2.2.2.2",
+	); err != nil {
+		t.Fatalf("insert old: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		runAuditRetention(ctx, db, 0, time.Hour)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// ok — мгновенный выход
+	case <-time.After(time.Second):
+		t.Fatalf("runAuditRetention(days=0) не завершился мгновенно")
+	}
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM audit_log`).Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("days=0 не должен удалять, count=%d", count)
 	}
 }
 

@@ -10,6 +10,7 @@ package main
 // от SQLite datetime('now') и легко тестируем.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -212,7 +213,10 @@ func handleAuditList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// auditCleanup — задел на retention (не вызывается в B9).
+// auditCleanup удаляет записи audit_log старше days дней.
+// Возвращает число удалённых строк. days <= 0 → ошибка.
+//
+// B9: использовалось только в тестах. B19: вызывается из runAuditRetention.
 func auditCleanup(db *sql.DB, days int) (int64, error) {
 	if days <= 0 {
 		return 0, fmt.Errorf("days must be > 0")
@@ -224,4 +228,47 @@ func auditCleanup(db *sql.DB, days int) (int64, error) {
 	}
 	n, _ := res.RowsAffected()
 	return n, nil
+}
+
+// runAuditRetention — фоновый прогон auditCleanup с периодом interval.
+//
+//   - days <= 0 → retention выключен, функция сразу логирует и выходит;
+//   - interval <= 0 → подставляется 24h (защита от нулевого ticker);
+//   - первый прогон — сразу при старте (не ждём первого tick);
+//   - выход — по ctx.Done() (graceful shutdown).
+//
+// Best-effort: ошибки cleanup только логируются, никогда не фаталят процесс.
+func runAuditRetention(ctx context.Context, db *sql.DB, days int, interval time.Duration) {
+	if days <= 0 {
+		slog.Info("audit retention: выключен (days<=0)", "days", days)
+		return
+	}
+	if interval <= 0 {
+		interval = 24 * time.Hour
+	}
+	slog.Info("audit retention: запущен", "days", days, "interval", interval.String())
+
+	runOnce := func() {
+		n, err := auditCleanup(db, days)
+		if err != nil {
+			slog.Warn("audit retention: cleanup", "err", err)
+			return
+		}
+		slog.Info("audit retention: cleanup", "deleted", n, "days", days)
+	}
+
+	// Первый прогон — сразу при старте.
+	runOnce()
+
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("audit retention: остановлен", "reason", ctx.Err().Error())
+			return
+		case <-t.C:
+			runOnce()
+		}
+	}
 }
