@@ -330,14 +330,41 @@
   - audit: doctor.create, doctor.update×2, doctor.delete — все присутствуют.
   - **Примечание:** фильтр /api/audit?action=... — точное совпадение (doctor.create ✓, doctor. ✗). Особенность B9, не баг.
 
+---
+
+### 6.25 (B16) — Префиксный фильтр /api/audit?action=doctor.*
+- **Дата:** 2026-10-01
+- **Коммиты:**
+  - 3c0a622 — префиксный фильтр action=doctor.* (backend + тесты)
+  - d2e9905 — placeholder в admin_audit.html
+- **Файлы:** backend/audit.go, backend/audit_test.go, backend/e2e_test.go, admin_audit.html
+- **Что сделано:**
+  - `auditActionClause(action)` — чистая функция, строит SQL-условие.
+    - `"doctor.create"` → `action = ?` (точное, как раньше).
+    - `"doctor.*"` → `action LIKE ? ESCAPE '\'` с prefix=`doctor.%`.
+  - Wildcards `%`, `_`, `\` в пользовательском префиксе экранируются через `strings.NewReplacer`.
+  - `handleAuditList` использует новый helper для параметра `action`.
+  - `admin_audit.html` — placeholder: «auth.login, doctor.* (звёздочка = префикс)».
+- **Тесты:**
+  - `TestAudit_ActionClause` — 6 кейсов: empty / exact / prefix / prefix2 / escape_pct / escape_us.
+  - `TestE2E_Audit_Filters` расширен: `action=doctor.*` → только doctor.*, `action=auth.login` → только auth.login.
+- **Проверки:** go vet — OK; go build -o /tmp/botmax_server ./backend — OK; go test ./backend/... — PASS.
+- **Smoke (localhost:8082, BOTMAX_ENV=dev, BOTMAX_DB_PATH=/tmp/b16_smoke.db):**
+  - POST/PATCH/DELETE доктора → в audit_log: doctor.create, doctor.update, doctor.delete.
+  - `?action=doctor.*` → count=3 (delete, update, create). ✅
+  - `?action=doctor.create` (exact) → count=1. ✅
+  - `?action=auth.login` (exact) → count=1. ✅
+  - `?action=doctor.` (без `*`, точное) → count=0. ✅ (обратная совместимость сохранена)
+
 ## Следующий
 
-### 6.25 (B16) — TODO (уточнить)
+### 6.26 (B17) — TODO (уточнить)
 - **Статус:** запланирован
-- **Цель:** TBD — по итогам B15. Возможные кандидаты:
+- **Цель:** TBD — по итогам B16. Возможные кандидаты:
+  - префиксный фильтр `entity=doctor.*` по аналогии с `action` (симметрия API);
   - роль-специфичные ограничения в admin_doctors (admin не видит admin/superadmin в списке);
-  - улучшение фильтра /api/audit до prefix/substring (сейчас — точное совпадение);
-  - интеграция admin_doctors с doctor_cabinet.html (переход «глазами доктора»).
+  - интеграция admin_doctors с doctor_cabinet.html (переход «глазами доктора»);
+  - audit retention (auditCleanup уже есть как задел — обвязать флагом/крон).
 
 ---
 
