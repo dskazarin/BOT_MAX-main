@@ -883,6 +883,225 @@
 
 ---
 
+## План развития: МИС-функциональность (B27–B42)
+
+**Добавлено:** 2026-10-02 (перед B27).
+**Статус:** зафиксирован, реализация — по волнам B27…B42.
+**Контекст:** расширение BOT_MAX от «кабинета одного врача» до
+амбулаторной МИС: несколько специальностей, общая история пациента,
+внешние врачи по PIN/QR, лаборатории, справки, рецепты, направления на ЭЛН.
+**Принципы:**
+- **Модульность** — крупные блоки (referrals, labs, certificates, ...)
+  подключаются через env-флаг `BOTMAX_MODULES`, клиника берёт только нужное.
+- **152-ФЗ** — раздельные согласия (ПД / медвмешательство / манипуляция),
+  read-логи медданных, локализация, шифрование at rest.
+- **Версионирование шаблонов** — документ хранит снимок текста шаблона;
+  редактирование — через админку, без деплоя.
+- **Опциональность prefill** — врач сам решает, что подтянуть из истории.
+
+### Обзор новых сущностей
+
+| Сущность | Назначение |
+|---|---|
+| `encounters` | Приёмы (эпизоды) — центральная сущность, timeline пациента |
+| `specialty_fields` | Редактируемая схема полей по специальностям |
+| `referrals` | Направления к врачам / на исследования / анализы |
+| `labs`, `lab_tests`, `lab_results`, `lab_result_values` | Лаборатории и результаты |
+| `templates` (encounter/prescription/certificate) | Шаблоны осмотров, назначений, справок |
+| `medications` | Справочник препаратов |
+| `icd10_codes` | Справочник МКБ-10 |
+| `prescriptions`, `prescription_items` | Выписанные рецепты (форма 107-1/у) |
+| `certificates` | Справки (садик / секция / студент / бассейн) |
+| `sick_leave_requests` | Направления на открытие листа нетрудоспособности |
+| `consents` | Согласия (ПД, медвмешательство, манипуляция) |
+| `reports` | Сгенерированные PDF/HTML/CSV с QR-верификацией |
+| `clinics`, `clinic_doctors` | Клиники как организации |
+| `password_reset_tokens` | Сброс пароля врача |
+
+### Encounters — эпизоды с prefill
+
+**Ключевая модель:**
+
+    encounters
+      id, patient_id, doctor_id, clinic_id
+      specialty          -- снимок специальности приёма
+      title              -- «Первичный осмотр ЛОР», «Повторный приём»
+      kind               -- consultation | study | procedure | lab | followup
+      started_at, finished_at, status
+      complaint, anamnesis, examination, diagnosis_text, diagnosis_icd10, recommendations
+      common_json        -- общие поля (аллергии, хронические, рост/вес/ИМТ, ...)
+      specialty_json     -- специфичные поля специальности
+
+**Разделение полей:**
+- **Общие поля** (common_json) — видны всем специальностям, копируются
+  между любыми врачами: allergies, chronic_conditions, blood_type,
+  disability, height, weight, bmi, smoking, alcohol, family_history.
+- **Специфичные поля** (specialty_json) — зависят от специальности,
+  схема в specialty_fields (редактируется через админку).
+
+**Prefill (предзаполнение нового приёма):**
+- POST /api/encounters/prefill — возвращает кандидатов:
+  - common_fields: значения из последнего завершённого encounter
+    любой специальности + источник (дата, врач);
+  - specialty_previous: предыдущий протокол той же специальности +
+    полный текст для предпросмотра.
+- POST /api/encounters принимает блок prefill:
+  {common_from_encounter_id, specialty_from_encounter_id, fields: [...]}.
+  Сервер сам копирует значения (фронт не «подсовывает» данные).
+- UI: при открытии нового приёма — кнопка «Заполнить из предыдущего»;
+  модалка с чек-боксами и предпросмотром. По умолчанию выключено.
+- Не копируются: подписи, согласия, status — у каждого эпизода свои.
+- Аудит: encounter.prefilled с detail={from_encounter_ids, fields}.
+
+### Роли
+
+- superadmin — всё;
+- admin — своя клиника (врачи, пациенты, отчёты);
+- doctor — свои приёмы + read-доступ к истории пациентов, с которыми
+  есть encounter;
+- registrar (новая, включается при активном модуле sick_leave) —
+  оформляет направления на ЭЛН, работает с СФР-системой клиники.
+
+### Модульная архитектура
+
+**Env-флаг BOTMAX_MODULES:**
+- пусто — базовый набор (auth, doctors, patients, audit, encounters);
+- all — все доступные модули;
+- referrals,labs,certificates — выборочно.
+
+**Доступные имена модулей:**
+referrals, labs, templates, prescriptions, certificates,
+sick_leave, consents.
+
+**Зависимости (fail-fast при старте):**
+- labs требует referrals;
+- prescriptions требует templates;
+- certificates требует templates.
+
+**Структура кода:**
+
+    backend/modules/
+      registry.go           -- интерфейс Module + allModules
+      referrals/
+      labs/
+      certificates/
+      sick_leave/
+      templates/
+      prescriptions/
+      consents/
+
+**Публичный endpoint:** GET /api/modules → {"enabled": [...]}.
+**UI-хелпер:** BotMaxModules.isEnabled("labs") — рендерить условно.
+Серверная проверка всё равно главная (роуты модуля не регистрируются,
+если модуль выключен).
+
+### Безопасность
+
+**Password reset (B27):**
+- POST /api/auth/password-reset/request {email} — токен 32 байта,
+  хранится hashed, TTL 1 час;
+- POST /api/auth/password-reset/confirm {token, new_password};
+- POST /api/doctors/{id}/reset-password (admin) — временный пароль,
+  флаг must_change_password;
+- POST /api/auth/change-password (self);
+- brute-force lock: 5 неудач → locked_until = now + 15m;
+- middleware: при must_change_password=true все API кроме
+  /change-password и /logout → 403.
+
+**Гостевой доступ (PIN + QR):**
+- PIN — 6 цифр (не 4!), crypto/rand, хранится hashed;
+- TTL PIN ≤ 1 час, одноразовый, rate-limit по IP;
+- после ввода PIN выдаётся HttpOnly cookie-сессия
+  (botmax_guest_session), сам PIN в URL/логах не участвует;
+- QR-сценарий — тот же invite, но token в URL (32 байта hex);
+- никогда не показывать PIN/токен повторно — только при создании;
+- «Потерял PIN» → кнопка «Создать новый invite», старая инвалидируется.
+
+**Согласия (ПЭП + 152-ФЗ):**
+- простая ЭП: подпись пальцем на canvas, сохранение текста
+  согласия + версии + sha256 + IP/UA + PDF;
+- раздельные согласия: ПД, медицинское вмешательство, конкретная
+  манипуляция — отдельно;
+- отзыв: revoked_at, документы не удаляются (доказуемость);
+- read-логи медданных (patient.read, encounter.read) — отдельно
+  от audit-log операций;
+- шифрование at rest (SQLCipher) — отложено в B41.
+
+**QR-верификация отчётов:**
+- каждая выданная справка/рецепт/PDF содержит QR на
+  /verify/report/<id>?sig=<hmac>;
+- HMAC-SHA256 по report_id|content_sha256|issued_at секретом
+  BOTMAX_REPORT_SIGNING_KEY;
+- reports хранит content_sha256 — правки не сойдутся.
+
+### Версионирование шаблонов
+
+    <entity>_templates
+      id, version, active, parent_id, body_template, created_by, created_at
+
+- Редактирование через admin_templates.html (admin/superadmin);
+- врач — только личные шаблоны, admin — клинические;
+- при использовании документа сохраняется снимок body_template
+  в самом документе + ссылка template_id + template.version_used;
+- базовые шаблоны засеиваются один раз (seed_templates.go) только
+  если таблица пуста — админ может их изменить/удалить.
+
+### Реестр модулей (план волн B27–B42)
+
+| Волна | Что | Модуль |
+|---|---|---|
+| B27 | Password reset + must_change_password + brute-force lock + роль registrar | (базовое) |
+| B28 | Encounters + clinics (минимум): title, kind, common_json, specialty_json | (базовое) |
+| B28.5 | Prefill: POST /encounters/prefill + UI-модалка + аудит | (базовое) |
+| B29 | История пациента (timeline + фильтры + права) | (базовое) |
+| B30 | Экспорт/печать: PDF + HTML + QR-верификация | (shared) |
+| B31 | Гостевой доступ: PIN + QR + cookie-сессия | (базовое) |
+| B32 | Клиники как организации (many-to-many) | (базовое) |
+| B33 | Реестр модулей + BOTMAX_MODULES + /api/modules | (инфраструктура) |
+| B34 | Модуль consents (ПЭП + 152-ФЗ) | consents |
+| B35 | Модуль referrals (направления к врачам/исследованиям) | referrals |
+| B36 | Модуль labs (лаборатории + результаты + справочник тестов) | labs |
+| B37 | Модуль templates + specialty_fields + справочники | templates |
+| B38 | Модуль prescriptions (рецепты + PDF 107-1/у) | prescriptions |
+| B39 | Модуль certificates (справки) | certificates |
+| B40 | Модуль sick_leave (направления на ЭЛН) | sick_leave |
+| B41 | 152-ФЗ: read-логи медданных, SQLCipher, 2FA админов | (базовое) |
+| B42+ | Интеграции (опционально): СФР (ЭЛН), лаборатории (API), аптеки, ЕГИСЗ | — |
+
+MVP: B27 → B28 → B29 → B30 (password reset, приёмы, история, печать).
+
+### Отложенные интеграции (B42+)
+
+- СФР / ЭЛН: интеграция через СМЭВ — отдельный проект с внешними
+  сертификациями. В BOT_MAX — только «направление на открытие листа»;
+- Лаборатории через API (Инвитро/Гемотест) — если дадут доступ;
+- ЕГИСЗ / ЕМИАС — региональные МИС;
+- Аптеки, маркировка ЛС — отдельная область.
+
+### Принятые решения (согласованы 2026-10-02)
+
+1. Справочник лабораторных тестов — свой, минимальный (~50 популярных),
+   пополняется через админку.
+2. Справочник препаратов — ручной, ~100 популярных, пополняется
+   через админку.
+3. Рецептурные формы: 107-1/у (обязательно), 107-1/у-04(л)
+   (опционально). 148-1/у-88 не делать без лицензии.
+4. СФР/ЭЛН — только «направление на открытие», без интеграции.
+5. Справки MVP: садик / секция / студент / бассейн. Остальные — позже.
+6. Шаблоны: личные (врач) + клинические (admin).
+7. Шаблоны редактируются через админку, без деплоя. Версионирование
+   с сохранением снимка текста в документе.
+8. Prefill: по умолчанию выключен (кнопка «Заполнить из
+   предыдущего»). Предпросмотр — разворачивающийся блок в модалке.
+9. Общие поля: allergies, chronic_conditions, blood_type, disability,
+   height, weight, bmi, smoking, alcohol, family_history.
+10. kind: consultation, study, procedure, lab, followup.
+11. Копирование подписей/согласий — НЕ делаем. У каждого эпизода свои.
+12. Если нет предыдущего приёма — prefill-модалка не показывается,
+    encounter создаётся пустым.
+
+---
+
 ## Правила
 - 1 подпатч = 1 коммит (или несколько — если подпатч намеренно разбит на части, как 6.10).
 - Перед завершением подпатча — запись в этом файле: что сделано + следующий номер.
