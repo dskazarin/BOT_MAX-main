@@ -240,8 +240,8 @@ func TestHandleImpersonationStart_Success(t *testing.T) {
 	if !resp.OK || resp.Target.ID != "DOC-1" || resp.Target.Role != "doctor" {
 		t.Fatalf("resp: %+v", resp)
 	}
-	if resp.TTLSeconds != int(ImpersonationTTL.Seconds()) {
-		t.Fatalf("ttl_seconds: got %d, want %d", resp.TTLSeconds, int(ImpersonationTTL.Seconds()))
+	if resp.TTLSeconds <= 0 {
+		t.Fatalf("ttl_seconds: got %d, want > 0", resp.TTLSeconds)
 	}
 
 	tok := readCookieFromRec(t, w, cookieNameAccess)

@@ -43,6 +43,9 @@ type Env struct {
 	AuditRetentionDays int
 	// AuditCleanupInterval — период между прогонами очистки (B19).
 	AuditCleanupInterval time.Duration
+	// ImpersonationTTL — время жизни access-токена в режиме impersonation
+	// (B21, было константой в auth.go). По умолчанию 15m.
+	ImpersonationTTL time.Duration
 }
 
 // devJWTSecret — fallback для dev-режима.
@@ -182,6 +185,12 @@ func validateEnv() (*Env, error) {
 		return nil, err
 	}
 
+	impersonationTTL, err := parseDuration(
+		"BOTMAX_IMPERSONATION_TTL", os.Getenv("BOTMAX_IMPERSONATION_TTL"), 15*time.Minute)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Env{
 		Name:                 name,
 		IsProd:               isProd,
@@ -191,5 +200,6 @@ func validateEnv() (*Env, error) {
 		DBPath:               dbPath,
 		AuditRetentionDays:   retentionDays,
 		AuditCleanupInterval: cleanupInterval,
+		ImpersonationTTL:     impersonationTTL,
 	}, nil
 }

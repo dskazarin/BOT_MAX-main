@@ -156,7 +156,7 @@ func handleImpersonationStart(w http.ResponseWriter, r *http.Request) {
 			Name: target.Name,
 			Role: target.Role,
 		},
-		TTLSeconds: int(ImpersonationTTL.Seconds()),
+		TTLSeconds: int(impersonationTTL().Seconds()),
 	})
 }
 

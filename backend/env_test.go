@@ -39,6 +39,7 @@ func clearEnvVars(t *testing.T) {
 	t.Setenv("BOTMAX_COOKIE_SECURE", "")
 	t.Setenv("BOTMAX_AUDIT_RETENTION_DAYS", "")
 	t.Setenv("BOTMAX_AUDIT_CLEANUP_INTERVAL", "")
+	t.Setenv("BOTMAX_IMPERSONATION_TTL", "")
 	// t.Setenv("", "") не отвязывает переменную — Go выставит её в пустую строку,
 	// что для нас эквивалентно «не задано» (normalize/parse трактуют "" как default).
 }
@@ -259,24 +260,26 @@ func TestValidateEnv(t *testing.T) {
 	shortSecret := strings.Repeat("x", 31)
 
 	cases := []struct {
-		name            string
-		envName         string
-		envSecret       string
-		envForce        string
-		envCookieSecure string
-		envDBPath       string
-		envRetention    string
-		envCleanup      string
+		name                string
+		envName             string
+		envSecret           string
+		envForce            string
+		envCookieSecure     string
+		envDBPath           string
+		envRetention        string
+		envCleanup          string
+		envImpersonationTTL string
 
-		wantName         string
-		wantIsProd       bool
-		wantSecret       string
-		wantEnforce      bool
-		wantCookieSecure bool
-		wantDBPath       string
-		wantRetention    int
-		wantCleanup      time.Duration
-		wantErrSubstr    string
+		wantName             string
+		wantIsProd           bool
+		wantSecret           string
+		wantEnforce          bool
+		wantCookieSecure     bool
+		wantDBPath           string
+		wantRetention        int
+		wantCleanup          time.Duration
+		wantImpersonationTTL time.Duration
+		wantErrSubstr        string
 	}{
 		{
 			name:       "dev-пусто",
@@ -427,6 +430,31 @@ func TestValidateEnv(t *testing.T) {
 			envCleanup:    "0s",
 			wantErrSubstr: "BOTMAX_AUDIT_CLEANUP_INTERVAL",
 		},
+		{
+			name:                 "impersonation-ttl-empty-default",
+			envName:              "dev",
+			wantName:             "dev",
+			wantImpersonationTTL: 15 * time.Minute,
+		},
+		{
+			name:                 "impersonation-ttl-30m",
+			envName:              "dev",
+			envImpersonationTTL:  "30m",
+			wantName:             "dev",
+			wantImpersonationTTL: 30 * time.Minute,
+		},
+		{
+			name:                "impersonation-ttl-junk-err",
+			envName:             "dev",
+			envImpersonationTTL: "abc",
+			wantErrSubstr:       "BOTMAX_IMPERSONATION_TTL",
+		},
+		{
+			name:                "impersonation-ttl-negative-err",
+			envName:             "dev",
+			envImpersonationTTL: "-5m",
+			wantErrSubstr:       "BOTMAX_IMPERSONATION_TTL",
+		},
 	}
 
 	for _, c := range cases {
@@ -438,6 +466,7 @@ func TestValidateEnv(t *testing.T) {
 			t.Setenv("BOTMAX_DB_PATH", c.envDBPath)
 			t.Setenv("BOTMAX_AUDIT_RETENTION_DAYS", c.envRetention)
 			t.Setenv("BOTMAX_AUDIT_CLEANUP_INTERVAL", c.envCleanup)
+			t.Setenv("BOTMAX_IMPERSONATION_TTL", c.envImpersonationTTL)
 
 			got, err := validateEnv()
 			if c.wantErrSubstr != "" {
@@ -477,6 +506,10 @@ func TestValidateEnv(t *testing.T) {
 			// (до B19.1) поле wantCleanup не задано, а validateEnv вернёт дефолт 24h.
 			if c.wantCleanup != 0 && got.AuditCleanupInterval != c.wantCleanup {
 				t.Errorf("AuditCleanupInterval = %v, ожидали %v", got.AuditCleanupInterval, c.wantCleanup)
+			}
+			// wantImpersonationTTL == 0 означает «не проверяем» (симметрия с wantCleanup).
+			if c.wantImpersonationTTL != 0 && got.ImpersonationTTL != c.wantImpersonationTTL {
+				t.Errorf("ImpersonationTTL = %v, ожидали %v", got.ImpersonationTTL, c.wantImpersonationTTL)
 			}
 		})
 	}

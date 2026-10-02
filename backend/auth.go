@@ -55,9 +55,6 @@ func (r Role) Valid() bool {
 const (
 	// AccessTTL — время жизни access-токена.
 	AccessTTL = 15 * time.Minute
-	// ImpersonationTTL — время жизни access-токена в режиме impersonation
-	// (B20). Отдельная константа, чтобы можно было ужесточать независимо.
-	ImpersonationTTL = 15 * time.Minute
 	// RefreshTTL — время жизни refresh-токена.
 	RefreshTTL = 7 * 24 * time.Hour
 	// BcryptCost — стоимость bcrypt (дефолт 10).
@@ -191,6 +188,16 @@ func IssueAccessToken(doctorID string, role Role) (string, error) {
 	return signed, nil
 }
 
+// impersonationTTL — TTL impersonation-access (B21).
+// Читается из currentEnv.ImpersonationTTL; при currentEnv == nil
+// (тесты без setupEnv) — fallback 15m.
+func impersonationTTL() time.Duration {
+	if currentEnv == nil || currentEnv.ImpersonationTTL <= 0 {
+		return 15 * time.Minute
+	}
+	return currentEnv.ImpersonationTTL
+}
+
 // IssueImpersonationToken выдаёт access-токен «глазами доктора» (B20).
 //
 // Параметры:
@@ -205,7 +212,7 @@ func IssueAccessToken(doctorID string, role Role) (string, error) {
 //     автоматически отсекает impersonated-сессию (запрет эскалации).
 //   - ActorID/ActorRole/ActAs — заполнены; по ним authMiddleware/requireNonImpersonated
 //     понимают, что сессия «чужая».
-//   - Type      = "access", TTL = ImpersonationTTL.
+//   - Type      = "access", TTL = impersonationTTL().
 //   - Refresh не выдаётся.
 func IssueImpersonationToken(actorID string, actorRole Role, targetDoctorID string) (string, error) {
 	if actorID == "" {
@@ -238,7 +245,7 @@ func IssueImpersonationToken(actorID string, actorRole Role, targetDoctorID stri
 			Subject:   targetDoctorID,
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(ImpersonationTTL)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(impersonationTTL())),
 			Issuer:    "BOT_MAX",
 		},
 	}
