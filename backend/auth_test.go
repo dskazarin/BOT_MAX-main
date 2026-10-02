@@ -294,3 +294,13 @@ func TestAuthMiddleware_PutsActorInCtx(t *testing.T) {
 func reqWithCtx(ctx context.Context) *http.Request {
 	return httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 }
+
+// TestRole_RegistrarValid — B27.1: роль registrar валидна.
+func TestRole_RegistrarValid(t *testing.T) {
+	if !RoleRegistrar.Valid() {
+		t.Fatal("RoleRegistrar.Valid() должен быть true")
+	}
+	if string(RoleRegistrar) != "registrar" {
+		t.Fatalf("RoleRegistrar = %q, want registrar", string(RoleRegistrar))
+	}
+}

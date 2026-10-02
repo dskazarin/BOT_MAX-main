@@ -134,6 +134,19 @@ func InitDB(path string) (*sql.DB, error) {
 		);`,
 
 		// === Refresh-токены (B4.1) ===
+		// === B27.1: password reset tokens ===
+		`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			token_hash TEXT NOT NULL UNIQUE,
+			doctor_id  TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			used_at    TEXT,
+			FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_prt_doctor ON password_reset_tokens(doctor_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_prt_expires ON password_reset_tokens(expires_at);`,
+
 		`CREATE TABLE IF NOT EXISTS refresh_tokens (
 			jti         TEXT PRIMARY KEY,
 			doctor_id   TEXT NOT NULL,
@@ -170,6 +183,23 @@ func InitDB(path string) (*sql.DB, error) {
 				head = head[:60]
 			}
 			return nil, fmt.Errorf("schema %q: %w", head, err)
+		}
+	}
+
+	// === B27.1: идемпотентные миграции (ALTER TABLE ADD COLUMN) ===
+	// SQLite не поддерживает "ADD COLUMN IF NOT EXISTS" — проверяем через
+	// PRAGMA table_info и добавляем только отсутствующие.
+	// ВАЖНО: выполняется ПОСЛЕ цикла schema (таблицы уже созданы).
+	migrations := []struct{ table, column, ddl string }{
+		{"doctors", "must_change_password", "INTEGER NOT NULL DEFAULT 0"},
+		{"doctors", "password_changed_at", "TEXT"},
+		{"doctors", "failed_login_count", "INTEGER NOT NULL DEFAULT 0"},
+		{"doctors", "locked_until", "TEXT"},
+	}
+	for _, m := range migrations {
+		if err := ensureColumn(db, m.table, m.column, m.ddl); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate %s.%s: %w", m.table, m.column, err)
 		}
 	}
 
@@ -641,6 +671,41 @@ func touchLastLogin(db *sql.DB, doctorID string) error {
 	)
 	if err != nil {
 		return fmt.Errorf("touch last_login: %w", err)
+	}
+	return nil
+}
+
+// ensureColumn — идемпотентно добавляет колонку в таблицу (B27.1).
+// SQLite не поддерживает "ALTER TABLE ... ADD COLUMN IF NOT EXISTS",
+// поэтому сначала проверяем PRAGMA table_info(table), и добавляем только
+// если колонки нет.
+func ensureColumn(db *sql.DB, table, column, ddl string) error {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return fmt.Errorf("pragma table_info(%s): %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notnull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("scan table_info: %w", err)
+		}
+		if name == column {
+			return nil // колонка уже есть
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("rows.Err: %w", err)
+	}
+	if _, err := db.Exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + ddl); err != nil {
+		return fmt.Errorf("alter table: %w", err)
 	}
 	return nil
 }

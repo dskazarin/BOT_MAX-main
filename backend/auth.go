@@ -37,12 +37,15 @@ const (
 	RoleSuperadmin Role = "superadmin"
 	RoleAdmin      Role = "admin"
 	RoleDoctor     Role = "doctor"
+	// RoleRegistrar — медицинский регистратор (B27).
+	// Используется модулем sick_leave для оформления направлений на ЭЛН.
+	RoleRegistrar Role = "registrar"
 )
 
 // Valid — true, если роль известна.
 func (r Role) Valid() bool {
 	switch r {
-	case RoleSuperadmin, RoleAdmin, RoleDoctor:
+	case RoleSuperadmin, RoleAdmin, RoleDoctor, RoleRegistrar:
 		return true
 	}
 	return false
