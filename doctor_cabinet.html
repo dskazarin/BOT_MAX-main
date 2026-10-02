@@ -342,10 +342,11 @@
 <!-- B20: баннер impersonation. Скрыт по умолчанию; включается скриптом
      initImpersonationBanner() (ниже), если /api/impersonation/whoami
      вернёт {impersonating:true}. -->
-<div id="impBanner" style="display:none; position:sticky; top:0; z-index:9999; background:linear-gradient(90deg,#f6ad55,#dd6b20); color:#1a202c; padding:10px 18px; font-weight:700; box-shadow:0 2px 10px rgba(0,0,0,0.25); display:none; align-items:center; gap:14px;">
+<div id="impBanner" style="display:none; position:sticky; top:0; z-index:9999; background:linear-gradient(90deg,#f6ad55,#dd6b20); color:#1a202c; padding:10px 18px; font-weight:700; box-shadow:0 2px 10px rgba(0,0,0,0.25); align-items:center; gap:14px;">
     <span style="font-size:1.2em;">👁</span>
     <span>Режим impersonation: вы работаете как доктор <b id="impTargetName">—</b> (ID <span id="impTargetId" style="font-family:monospace;">—</span>).</span>
-    <button onclick="stopImpersonation()" style="margin-left:auto; background:#1a202c; color:#fff; border:0; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:700;">🚪 Выйти из режима</button>
+    <span style="margin-left:auto; background:rgba(26,32,44,0.12); padding:6px 12px; border-radius:8px; font-family:monospace; font-weight:700;">⏱ <span id="impRemaining">—:—</span></span>
+    <button onclick="stopImpersonation()" style="background:#1a202c; color:#fff; border:0; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:700;">🚪 Выйти из режима</button>
 </div>
 
 <div class="container">
@@ -597,11 +598,48 @@
             document.getElementById('impTargetName').textContent = d.target_name || '—';
             document.getElementById('impTargetId').textContent = d.target_id || '—';
             banner.style.display = 'flex';
+            // B21.2: countdown до конца impersonation.
+            if (typeof d.expires_at_unix === 'number' && d.expires_at_unix > 0) {
+                startImpersonationCountdown(d.expires_at_unix);
+            }
             // Дополнительный шум в консоль для отладки.
             console.warn('👁 impersonation mode: actor=' + d.actor_id + ' (' + d.actor_role + ') target=' + d.target_id);
         }).catch(function () {
             // silent: не критично для работы кабинета.
         });
+    }
+
+    // B21.2: обратный отсчёт в баннере. Обновляет #impRemaining раз в секунду.
+    // По истечении — показывает «истёк» и через 2 сек перезагружает страницу
+    // (чтобы cookie-состояние и UI синхронизировались).
+    var _impCountdownTimer = null;
+
+    function startImpersonationCountdown(expUnix) {
+        if (_impCountdownTimer) {
+            clearInterval(_impCountdownTimer);
+            _impCountdownTimer = null;
+        }
+
+        function tick() {
+            var el = document.getElementById('impRemaining');
+            if (!el) return;
+            var left = Math.floor(expUnix - Date.now() / 1000);
+            if (left <= 0) {
+                el.textContent = 'истёк';
+                clearInterval(_impCountdownTimer);
+                _impCountdownTimer = null;
+                setTimeout(function () {
+                    window.location.reload();
+                }, 2000);
+                return;
+            }
+            var m = Math.floor(left / 60);
+            var s = left % 60;
+            el.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        tick();
+        _impCountdownTimer = setInterval(tick, 1000);
     }
 
     function stopImpersonation() {

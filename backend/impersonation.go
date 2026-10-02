@@ -53,6 +53,9 @@ type impersonationWhoamiResp struct {
 	TargetID      string `json:"target_id,omitempty"`
 	TargetName    string `json:"target_name,omitempty"`
 	TargetRole    string `json:"target_role,omitempty"`
+	// ExpiresAtUnix — Unix-время истечения access-токена (B21.2).
+	// Заполняется, только когда Impersonating=true.
+	ExpiresAtUnix int64 `json:"expires_at_unix,omitempty"`
 }
 
 // registerImpersonationRoutes регистрирует /api/impersonation/{start,stop}.
@@ -232,6 +235,9 @@ func handleImpersonationWhoami(w http.ResponseWriter, r *http.Request) {
 		resp.ActorID = actorID
 		resp.ActorRole = string(actorRole)
 		resp.TargetID = targetID
+		if exp, ok := tokenExpFromCtx(r); ok {
+			resp.ExpiresAtUnix = exp
+		}
 
 		if db != nil && targetID != "" {
 			if row, err := getDoctorRowByID(db, targetID); err == nil {

@@ -84,9 +84,12 @@ func TestHandleImpersonationWhoami_NotImpersonating(t *testing.T) {
 }
 
 func TestHandleImpersonationWhoami_Impersonating_NoDB(t *testing.T) {
-	// db == nil → target_name не заполняется, но actor/target_id — есть.
-	r := reqWithActorCtx(http.MethodGet, "/api/impersonation/whoami",
-		"DOC-1", RoleDoctor, "SUPER-1", RoleSuperadmin)
+	// db == nil → target_name не заполняется, но actor/target_id/exp — есть.
+	const wantExp = int64(1900000000)
+	ctx := withDoctorID(context.Background(), "DOC-1", RoleDoctor)
+	ctx = withActor(ctx, "SUPER-1", RoleSuperadmin)
+	ctx = withTokenExp(ctx, wantExp)
+	r := httptest.NewRequest(http.MethodGet, "/api/impersonation/whoami", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	handleImpersonationWhoami(w, r)
 
@@ -106,6 +109,28 @@ func TestHandleImpersonationWhoami_Impersonating_NoDB(t *testing.T) {
 	}
 	if resp.TargetName != "" {
 		t.Fatalf("target_name должен быть пустым без БД, got %q", resp.TargetName)
+	}
+	if resp.ExpiresAtUnix != wantExp {
+		t.Fatalf("expires_at_unix: got %d, want %d", resp.ExpiresAtUnix, wantExp)
+	}
+}
+
+// TestTokenExpFromCtx — round-trip withTokenExp/tokenExpFromCtx.
+func TestTokenExpFromCtx(t *testing.T) {
+	// пустой ctx
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	if v, ok := tokenExpFromCtx(r); ok || v != 0 {
+		t.Fatalf("пустой ctx: got (%d,%v), want (0,false)", v, ok)
+	}
+	// withTokenExp(0) → no-op
+	ctx := withTokenExp(context.Background(), 0)
+	if v, ok := tokenExpFromCtx(reqWithCtx(ctx)); ok || v != 0 {
+		t.Fatalf("withTokenExp(0): got (%d,%v), want (0,false)", v, ok)
+	}
+	// withTokenExp(1234)
+	ctx = withTokenExp(context.Background(), 1234)
+	if v, ok := tokenExpFromCtx(reqWithCtx(ctx)); !ok || v != 1234 {
+		t.Fatalf("withTokenExp(1234): got (%d,%v), want (1234,true)", v, ok)
 	}
 }
 

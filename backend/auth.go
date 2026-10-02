@@ -69,6 +69,9 @@ const (
 	ctxKeyActorID ctxKey = "actorID"
 	// ctxKeyActorRole — ключ роли actor'а (B20, impersonation).
 	ctxKeyActorRole ctxKey = "actorRole"
+	// ctxKeyTokenExp — Unix-время истечения access-токена (B21.2).
+	// Нужно, чтобы UI мог показать countdown до конца impersonation.
+	ctxKeyTokenExp ctxKey = "tokenExp"
 )
 
 type ctxKey string
@@ -324,6 +327,15 @@ func withDoctorID(ctx context.Context, doctorID string, role Role) context.Conte
 	return ctx
 }
 
+// withTokenExp кладёт Unix-время истечения access-токена в context (B21.2).
+// unix <= 0 — no-op (нет данных, например в тестах).
+func withTokenExp(ctx context.Context, unix int64) context.Context {
+	if unix <= 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, ctxKeyTokenExp, unix)
+}
+
 // withActor кладёт actor_id/actor_role в context (B20, impersonation).
 // no-op, если actorID == "" — чтобы не засорять обычные сессии.
 func withActor(ctx context.Context, actorID string, actorRole Role) context.Context {
@@ -367,6 +379,16 @@ func actorRoleFromCtx(r *http.Request) (Role, bool) {
 	v, ok := r.Context().Value(ctxKeyActorRole).(Role)
 	if !ok || !v.Valid() {
 		return "", false
+	}
+	return v, true
+}
+
+// tokenExpFromCtx достаёт Unix-время истечения access-токена (B21.2).
+// Возвращает (0, false), если не задано.
+func tokenExpFromCtx(r *http.Request) (int64, bool) {
+	v, ok := r.Context().Value(ctxKeyTokenExp).(int64)
+	if !ok || v <= 0 {
+		return 0, false
 	}
 	return v, true
 }
@@ -553,6 +575,10 @@ func authMiddleware(next http.Handler) http.Handler {
 		ctx := withDoctorID(r.Context(), claims.DoctorID, claims.Role)
 		// B20: если это impersonation-токен (actor_id задан) — кладём actor.
 		ctx = withActor(ctx, claims.ActorID, claims.ActorRole)
+		// B21.2: кладём exp access-токена — UI использует для countdown.
+		if claims.ExpiresAt != nil {
+			ctx = withTokenExp(ctx, claims.ExpiresAt.Unix())
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
