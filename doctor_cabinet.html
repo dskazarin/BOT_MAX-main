@@ -609,21 +609,39 @@
         });
     }
 
-    // B21.2: обратный отсчёт в баннере. Обновляет #impRemaining раз в секунду.
-    // По истечении — показывает «истёк» и через 2 сек перезагружает страницу
-    // (чтобы cookie-состояние и UI синхронизировались).
+    // B21.2 + B22.2: обратный отсчёт в баннере + auto-stop.
+    // За AUTO_STOP_LEAD_SECONDS секунд до истечения — пытаемся корректно
+    // выйти из impersonation через POST /stop (пока access ещё валиден),
+    // а не просто reload (который в enforce-режиме выкинет на login).
+    // Если stop упал — fallback на location.reload().
     var _impCountdownTimer = null;
+    var _impAutoStopFired = false;
+    var AUTO_STOP_LEAD_SECONDS = 30;
 
     function startImpersonationCountdown(expUnix) {
         if (_impCountdownTimer) {
             clearInterval(_impCountdownTimer);
             _impCountdownTimer = null;
         }
+        _impAutoStopFired = false;
 
         function tick() {
             var el = document.getElementById('impRemaining');
             if (!el) return;
             var left = Math.floor(expUnix - Date.now() / 1000);
+
+            // Auto-stop: за N секунд до истечения — тихо выходим.
+            if (left <= AUTO_STOP_LEAD_SECONDS && !_impAutoStopFired) {
+                _impAutoStopFired = true;
+                el.textContent = 'выхожу…';
+                clearInterval(_impCountdownTimer);
+                _impCountdownTimer = null;
+                autoStopImpersonation();
+                return;
+            }
+
+            // Защита: если по какой-то причине auto-stop не сработал
+            // (например, таймер в бэкграунде был throttled), добиваем на нуле.
             if (left <= 0) {
                 el.textContent = 'истёк';
                 clearInterval(_impCountdownTimer);
@@ -633,6 +651,7 @@
                 }, 2000);
                 return;
             }
+
             var m = Math.floor(left / 60);
             var s = left % 60;
             el.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
@@ -640,6 +659,27 @@
 
         tick();
         _impCountdownTimer = setInterval(tick, 1000);
+    }
+
+    // B22.2: корректный выход из impersonation при истечении TTL.
+    // Пока access-токен ещё валиден — POST /stop перевыдаст actor'у его
+    // обычный access через cookie и вернёт нас в admin_doctors.html.
+    function autoStopImpersonation() {
+        BotMaxAuth.authFetch('POST', '/api/impersonation/stop', {})
+            .then(function (res) {
+                if (!res.ok) {
+                    // /stop не сработал (например, access уже протух):
+                    // лучший из оставшихся вариантов — reload.
+                    console.warn('auto-stop: /stop вернул ' + res.status + ', fallback reload');
+                    window.location.reload();
+                    return;
+                }
+                window.location.href = 'admin_doctors.html';
+            })
+            .catch(function (err) {
+                console.warn('auto-stop: сеть, fallback reload', err);
+                window.location.reload();
+            });
     }
 
     function stopImpersonation() {
