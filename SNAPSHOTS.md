@@ -819,20 +819,67 @@
 
 <!-- B25_SNAPSHOT_APPLIED -->
 
-### 6.35 (B26) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** TBD. Активных кандидатов в бэклоге нет: §6.28 (retention),
-  §6.31 (impersonation hardening), §6.32 (retention UI), §6.33 (межтабовый
-  sync), §6.34 (retention status + UI) — все закрыты. Возможные направления
-  на будущее:
-  1. `/api/metrics` в Prometheus-формате (для prod-мониторинга).
-  2. Алерты/уведомления при `retention.healthy=false` (Slack/webhook).
-  3. Retention для `refresh_tokens.revoked_at` — сейчас чистим только по
-     `expires_at`, но revoked-записи живут до `expires_at`. Можно удалять
-     revoked раньше.
-  4. Экспорт audit-log в CSV/JSONL для SIEM.
+### 6.35 (B26) — ЗАКРЫТ
+- **Дата:** 2026-10-02
+- **Статус:** закрыт (коммит 9f3e46d)
+- **Цель:** `/api/metrics` в Prometheus-формате — prod-готовность
+  для мониторинга.
+- **Что сделано:**
+  - **9f3e46d** `feat(metrics): 6.35 (B26.1) — Prometheus-совместимый /api/metrics`
+    Новый файл `backend/metrics.go` — ручная генерация формата
+    `text/plain; version=0.0.4` (без prometheus/client_golang — не тянем
+    зависимость). Метрики:
+    - `botmax_retention_enabled` (gauge 1|0);
+    - `botmax_retention_healthy` (gauge 1|0);
+    - `botmax_retention_last_run_timestamp_seconds` (gauge, unix; 0 если не было);
+    - `botmax_retention_deleted_total{table="audit|refresh"}` (counter);
+    - `botmax_retention_last_error` (gauge 1|0).
+    Endpoint публичный (как `/api/health`): добавлен в `isAuthWhitelist`
+    в `auth.go`. Регистрация — `registerMetricsRoutes()` в `main.go` рядом
+    с `/api/health`. Тесты: `TestMetrics_{Disabled,EnabledNotRun,AfterRun,
+    Error,MethodNotAllowed,ContentType}`.
+- **Файлы:**
+  - `backend/metrics.go` (новый) — handler + ручной exposition.
+  - `backend/metrics_test.go` (новый) — 6 тестов.
+  - `backend/main.go` — вызов `registerMetricsRoutes()`.
+  - `backend/auth.go` — `/api/metrics` в whitelist.
+- **Env-переменные:** новых нет.
+- **UI-smoke (БД /tmp/b26.db, AUTH_ENFORCE=true):**
+  - без retention → все метрики с нулями: `enabled 0`, `healthy 0`, `last_run 0`.
+  - с retention (`AUDIT=30 REFRESH=1 INTERVAL=2s`) → `enabled 1`, `healthy 1`,
+    `last_run ~now`, счётчики `0/0`, `last_error 0`.
+  - `Content-Type: text/plain; version=0.0.4; charset=utf-8` (совместим с Prometheus).
+- **Коммиты:**
+  - `9f3e46d` feat(metrics): 6.35 (B26.1) — Prometheus-совместимый /api/metrics
+- **Признано ненужным (обоснование):**
+  - **Алерты при `retention.healthy=false` (Slack/webhook):** НЕ делаем. Правильный
+    путь — Alertmanager поверх `/api/metrics`, а не собственный алертер в приложении.
+    Изобретение своей системы алертов — антипаттерн; в prod обычно используют
+    внешние (Prometheus + Alertmanager, Uptime Kuma и т.п.).
+  - **Retention для `refresh_tokens.revoked_at`:** НЕ делаем сейчас. Выгода
+    маргинальная: `IsRefreshRevoked("jti")` и так возвращает `true` для
+    неизвестного jti — то есть удаление revoked-записи не меняет поведение.
+    При текущих объёмах (десятки-сотни токенов) экономия места ничтожна.
+    Вернуться, если появятся реальные объёмы.
+  - **Экспорт audit-log в CSV/JSONL для SIEM:** НЕ делаем. Для BOT_MAX
+    (маленькая клиника) неактуально — `/api/audit` с фильтрами покрывает
+    ручной анализ. Экспорт в SIEM — задача интеграции на стороне клиента,
+    а не самого приложения.
 
-<!-- B26_SNAPSHOT_PENDING -->
+<!-- B26_SNAPSHOT_APPLIED -->
+
+### 6.36 (B27) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** TBD. **Активных кандидатов в бэклоге нет.**
+  Закрыты: §6.28–§6.35 (retention, impersonation, metrics).
+  Возможные направления на будущее (не приоритетные):
+  1. Расширение `/api/metrics`: `botmax_http_requests_total{method,path,status}`,
+     `botmax_impersonation_active`, `botmax_doctors_total{role}`.
+  2. Экспорт audit-log по требованию (по диапазону дат, по action/entity) — если
+     появится реальная потребность.
+  3. Рефакторинг: разнести `main.go` (уже ~570 строк) на `routes.go` / `http.go`.
+
+<!-- B27_SNAPSHOT_PENDING -->
 
 ---
 
