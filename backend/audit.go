@@ -67,7 +67,11 @@ type auditRow struct {
 func registerAuditRoutes() {
 	guard := requireRole(RoleAdmin, RoleSuperadmin)
 	http.Handle("/api/audit", guard(requireNonImpersonated(http.HandlerFunc(handleAuditList))))
-	slog.Info("registerAuditRoutes", "route", "/api/audit")
+	// B23.2: ручной прогон retention (audit + refresh).
+	http.Handle("/api/audit/retention/run",
+		guard(requireNonImpersonated(http.HandlerFunc(handleAuditRetentionRun))))
+	slog.Info("registerAuditRoutes",
+		"routes", "/api/audit, /api/audit/retention/run")
 }
 
 // auditPrefixClause строит SQL-условие для фильтра по колонке column.
@@ -292,4 +296,93 @@ func runRetention(ctx context.Context, db *sql.DB, auditDays, refreshDays int, i
 // audit-only: refreshDays=0.
 func runAuditRetention(ctx context.Context, db *sql.DB, days int, interval time.Duration) {
 	runRetention(ctx, db, days, 0, interval)
+}
+
+// ---------------------------------------------------------------
+// B23.2 — POST /api/audit/retention/run
+// ---------------------------------------------------------------
+
+// retentionScopeResp — результат cleanup по одной таблице.
+type retentionScopeResp struct {
+	Days    int   `json:"days"`
+	Deleted int64 `json:"deleted"`
+	Skipped bool  `json:"skipped"` // true если days<=0 (флаг выключен)
+}
+
+// retentionRunResp — ответ POST /api/audit/retention/run.
+type retentionRunResp struct {
+	OK      bool               `json:"ok"`
+	Audit   retentionScopeResp `json:"audit"`
+	Refresh retentionScopeResp `json:"refresh"`
+}
+
+// handleAuditRetentionRun — POST /api/audit/retention/run.
+//
+// Ручной прогон retention'а (audit + refresh) с параметрами из env.
+// Полезно для дебага и ops — не ждать тикера.
+//
+// Ответ 200: {"ok":true, "audit":{...}, "refresh":{...}}.
+// Ответ 400: если оба *Days == 0 (retention выключен).
+func handleAuditRetentionRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if currentEnv == nil {
+		http.Error(w, `{"error":"env not initialized"}`, http.StatusInternalServerError)
+		return
+	}
+	auditDays := currentEnv.AuditRetentionDays
+	refreshDays := currentEnv.RefreshRetentionDays
+	if auditDays <= 0 && refreshDays <= 0 {
+		http.Error(w, `{"error":"retention disabled (both *_RETENTION_DAYS <= 0)"}`,
+			http.StatusBadRequest)
+		return
+	}
+	if db == nil {
+		http.Error(w, `{"error":"db not ready"}`, http.StatusInternalServerError)
+		return
+	}
+
+	resp := retentionRunResp{OK: true}
+
+	if auditDays > 0 {
+		n, err := auditCleanup(db, auditDays)
+		if err != nil {
+			slog.Error("retention: manual audit cleanup", "err", err)
+			http.Error(w, `{"error":"audit cleanup failed"}`, http.StatusInternalServerError)
+			return
+		}
+		resp.Audit = retentionScopeResp{Days: auditDays, Deleted: n}
+	} else {
+		resp.Audit = retentionScopeResp{Skipped: true}
+	}
+
+	if refreshDays > 0 {
+		n, err := refreshCleanup(db, refreshDays)
+		if err != nil {
+			slog.Error("retention: manual refresh cleanup", "err", err)
+			http.Error(w, `{"error":"refresh cleanup failed"}`, http.StatusInternalServerError)
+			return
+		}
+		resp.Refresh = retentionScopeResp{Days: refreshDays, Deleted: n}
+	} else {
+		resp.Refresh = retentionScopeResp{Skipped: true}
+	}
+
+	// Audit-запись о самом факте ручного запуска.
+	actorID := doctorIDFromCtx(r)
+	auditLog(db, actorID, "retention.run", "system", "", clientIP(r), map[string]any{
+		"audit_deleted":   resp.Audit.Deleted,
+		"refresh_deleted": resp.Refresh.Deleted,
+	})
+
+	slog.Info("retention: manual run",
+		"actor_id", actorID,
+		"audit_days", auditDays, "audit_deleted", resp.Audit.Deleted,
+		"refresh_days", refreshDays, "refresh_deleted", resp.Refresh.Deleted)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }

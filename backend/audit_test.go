@@ -11,6 +11,9 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -449,5 +452,146 @@ func TestAudit_Order(t *testing.T) {
 	}
 	if got[0] != "auth.logout" || got[1] != "doctor.create" || got[2] != "auth.login" {
 		t.Fatalf("порядок неверен: %v", got)
+	}
+}
+
+// ---------------------------------------------------------------
+// B23.2 — handleAuditRetentionRun
+// ---------------------------------------------------------------
+
+// reqRetentionRun — хелпер: POST /api/audit/retention/run с ролью superadmin.
+func reqRetentionRun(method string) *http.Request {
+	ctx := withDoctorID(context.Background(), "SUPER-1", RoleSuperadmin)
+	return httptest.NewRequest(method, "/api/audit/retention/run", nil).WithContext(ctx)
+}
+
+// withRetentionEnv — временно ставит env для тестов retention.
+func withRetentionEnv(t *testing.T, auditDays, refreshDays int) {
+	t.Helper()
+	prev := currentEnv
+	t.Cleanup(func() { currentEnv = prev })
+	currentEnv = &Env{
+		Name:                 "dev",
+		IsProd:               false,
+		JWTSecret:            "b23-test-secret-32-bytes-minimum-abcdef",
+		AuditRetentionDays:   auditDays,
+		RefreshRetentionDays: refreshDays,
+	}
+}
+
+// TestHandleAuditRetentionRun_Disabled — оба days=0 → 400.
+func TestHandleAuditRetentionRun_Disabled(t *testing.T) {
+	testDB := newTestDB(t)
+	withGlobalDB(t, testDB)
+	withRetentionEnv(t, 0, 0)
+
+	w := httptest.NewRecorder()
+	handleAuditRetentionRun(w, reqRetentionRun(http.MethodPost))
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("code: got %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "retention disabled") {
+		t.Fatalf("ожидали 'retention disabled' в теле, got %s", w.Body.String())
+	}
+}
+
+// TestHandleAuditRetentionRun_MethodNotAllowed — GET → 405.
+func TestHandleAuditRetentionRun_MethodNotAllowed(t *testing.T) {
+	withRetentionEnv(t, 30, 1)
+	w := httptest.NewRecorder()
+	handleAuditRetentionRun(w, reqRetentionRun(http.MethodGet))
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("code: got %d, want 405", w.Code)
+	}
+	if got := w.Header().Get("Allow"); got != http.MethodPost {
+		t.Fatalf("Allow: got %q, want POST", got)
+	}
+}
+
+// TestHandleAuditRetentionRun_AuditOnly — refreshDays=0 → skip, audit удаляет.
+func TestHandleAuditRetentionRun_AuditOnly(t *testing.T) {
+	testDB := newTestDB(t)
+	withGlobalDB(t, testDB)
+	withRetentionEnv(t, 30, 0)
+
+	// Старая audit-запись (60 дней назад).
+	oldTs := time.Now().AddDate(0, 0, -60).Format("2006-01-02 15:04:05")
+	_, err := testDB.Exec(
+		`INSERT INTO audit_log (ts, doctor_id, action, entity, entity_id, ip, detail) VALUES (?, 'X', 'test', '', '', '', '')`,
+		oldTs,
+	)
+	if err != nil {
+		t.Fatalf("insert old audit: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	handleAuditRetentionRun(w, reqRetentionRun(http.MethodPost))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp retentionRunResp
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.OK {
+		t.Fatalf("ok=false, resp=%+v", resp)
+	}
+	if resp.Audit.Skipped {
+		t.Fatalf("audit не должен быть skipped")
+	}
+	if resp.Audit.Deleted != 1 {
+		t.Fatalf("audit.deleted: got %d, want 1", resp.Audit.Deleted)
+	}
+	if !resp.Refresh.Skipped {
+		t.Fatalf("refresh должен быть skipped, got %+v", resp.Refresh)
+	}
+}
+
+// TestHandleAuditRetentionRun_Success_Both — оба cleanup'а удаляют свои записи.
+func TestHandleAuditRetentionRun_Success_Both(t *testing.T) {
+	testDB := newTestDB(t)
+	withGlobalDB(t, testDB)
+	withRetentionEnv(t, 30, 1)
+
+	// Старый audit.
+	oldTs := time.Now().AddDate(0, 0, -60).Format("2006-01-02 15:04:05")
+	_, _ = testDB.Exec(
+		`INSERT INTO audit_log (ts, doctor_id, action, entity, entity_id, ip, detail) VALUES (?, 'X', 'test', '', '', '', '')`,
+		oldTs,
+	)
+
+	// Старый refresh (10 дней).
+	seedDoctorForRefresh(t, testDB, "D1")
+	oldRefresh := time.Now().AddDate(0, 0, -10).UTC().Format(time.RFC3339)
+	_, err := testDB.Exec(
+		`INSERT INTO refresh_tokens (jti, doctor_id, issued_at, expires_at) VALUES (?, ?, datetime('now'), ?)`,
+		"old-jti", "D1", oldRefresh,
+	)
+	if err != nil {
+		t.Fatalf("insert old refresh: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	handleAuditRetentionRun(w, reqRetentionRun(http.MethodPost))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp retentionRunResp
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Audit.Deleted != 1 {
+		t.Fatalf("audit.deleted: got %d, want 1", resp.Audit.Deleted)
+	}
+	if resp.Refresh.Deleted != 1 {
+		t.Fatalf("refresh.deleted: got %d, want 1", resp.Refresh.Deleted)
+	}
+
+	// audit_log: должна появиться запись action="retention.run".
+	var count int
+	_ = testDB.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE action = 'retention.run'`).Scan(&count)
+	if count != 1 {
+		t.Fatalf("ожидали одну запись retention.run, got %d", count)
 	}
 }

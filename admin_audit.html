@@ -276,6 +276,30 @@ function renderRows(rows) {
     count.textContent = 'Найдено: ' + rows.length;
 }
 
+// B23.2: ручной прогон retention (audit + refresh) по env-флагам.
+// Показывает alert с результатом, затем обновляет список audit-логов
+// (там появится запись action="retention.run").
+function runRetentionNow() {
+    if (!confirm('Прогнать retention сейчас?\n\nAudit: BOTMAX_AUDIT_RETENTION_DAYS\nRefresh: BOTMAX_REFRESH_RETENTION_DAYS')) return;
+    BotMaxAuth.authFetch('POST', '/api/audit/retention/run', {})
+        .then(function (res) {
+            return res.json().then(function (d) {
+                if (!res.ok) {
+                    alert('Ошибка: ' + (d.error || res.status));
+                    return;
+                }
+                var msg = 'Retention выполнен:\n';
+                msg += '  audit: ' + (d.audit.skipped ? 'выключен' : ('удалено ' + d.audit.deleted + ' (days=' + d.audit.days + ')')) + '\n';
+                msg += '  refresh: ' + (d.refresh.skipped ? 'выключен' : ('удалено ' + d.refresh.deleted + ' (days=' + d.refresh.days + ')'));
+                alert(msg);
+                loadAudit();
+            });
+        })
+        .catch(function (err) {
+            alert('Ошибка сети: ' + (err.message || err));
+        });
+}
+
 function loadAudit() {
     var url = '/api/audit' + buildQuery();
     var tbody = document.getElementById('tbody');
