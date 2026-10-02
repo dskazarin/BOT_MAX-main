@@ -629,16 +629,59 @@
 
 <!-- B21_SNAPSHOT_APPLIED -->
 
-### 6.31 (B22) — TODO (уточнить)
+### 6.31 (B22) — ЗАКРЫТ
+- **Дата:** 2026-10-02
+- **Статус:** закрыт (коммиты 26a9f3e + 97cd63b)
+- **Цель:** доработки impersonation: guard на admin + auto-stop по истечении TTL.
+- **Что сделано:**
+  - **26a9f3e** `fix(impersonation): 6.31 (B22.1) — guard: нельзя имперсонировать admin`
+    В `handleImpersonationStart` добавлен guard `target.Role == RoleAdmin` → 400
+    `{"error":"cannot impersonate admin"}`. Симметрично B20.4.1 (superadmin).
+    UI и так скрывал кнопку 👁 для admin-целей — backend дублирует
+    (defense-in-depth). Тест `TestHandleImpersonationStart_TargetAdmin` добавлен
+    (проверяет ПОЛНУЮ фразу, чтобы не спутать с сообщением для superadmin).
+  - **97cd63b** `feat(impersonation): 6.31 (B22.2) — auto-stop за 30с до истечения TTL`
+    В `doctor_cabinet.html` countdown за `AUTO_STOP_LEAD_SECONDS = 30` секунд
+    до конца TTL вызывает `autoStopImpersonation()`:
+    `POST /api/impersonation/stop` (пока access валиден) → redirect в
+    `admin_doctors.html`. Fallback при ошибке `/stop` — `window.location.reload()`
+    (сработает refresh-fallback, см. ниже). Защита от повторного срабатывания —
+    флаг `_impAutoStopFired`.
+- **Файлы:**
+  - `backend/impersonation.go` — guard `RoleAdmin` (3 строки).
+  - `backend/impersonation_test.go` — `TestHandleImpersonationStart_TargetAdmin`.
+  - `doctor_cabinet.html` — `AUTO_STOP_LEAD_SECONDS`, `_impAutoStopFired`,
+    `autoStopImpersonation()`.
+- **UI-smoke (БД /tmp/b22.db, AUTH_ENFORCE=true):**
+  - B22.1: `start(target=ADMIN-001)` → 400 `{"error":"cannot impersonate admin"}`.
+  - B22.2: `IMPERSONATION_TTL=45s` → start → `ttl_seconds:45`,
+    `expires_at_unix ≈ now+45`; через 20с stop → `{ok:true, restored:true}`;
+    whoami → `impersonating:false`; `/api/doctors` → 200 (superadmin восстановлен).
+- **Коммиты:**
+  - `26a9f3e` fix(impersonation): 6.31 (B22.1) — guard: нельзя имперсонировать admin
+  - `97cd63b` feat(impersonation): 6.31 (B22.2) — auto-stop impersonation за 30с до истечения TTL
+- **Признано ненужным:**
+  - **Refresh-fallback для `/stop` (B22.3):** закрыт как «не нужен». Обоснование:
+    refresh-токен в cookie остаётся actor'а (в `/start` его не трогаем). Если
+    impersonation-access протухнет, `authFetch` словит 401 → `/api/auth/refresh`
+    → сервер выдаст новый access с `role=superadmin` → юзер вернётся в нормальную
+    сессию автоматически. Auto-stop за 30с до истечения покрывает UI-сценарий
+    без ожидания 401.
+- **Оставшиеся кандидаты (→ §6.32):**
+  - UI-кнопка «прогнать retention сейчас» в админке (§6.28).
+  - Retention для `refresh_tokens` (§6.28).
+  - Межтабовый sync impersonation (BroadcastChannel / SSE).
+
+<!-- B22_SNAPSHOT_APPLIED -->
+
+### 6.32 (B23) — TODO (уточнить)
 - **Статус:** запланирован
-- **Цель:** TBD. Кандидаты (продолжение impersonation + retention-бэклог §6.28):
+- **Цель:** TBD. Кандидаты (retention-бэклог §6.28 + оставшееся по impersonation):
   1. UI-кнопка «прогнать retention сейчас» в админке (§6.28).
   2. Retention для `refresh_tokens` (§6.28).
-  3. Guard «нельзя имперсонировать admin'а» — backend (сейчас только UI).
-  4. Межтабовый sync impersonation (BroadcastChannel / SSE).
-  5. Auto-stop impersonation (не только reload, но и `POST /stop`) по истечении TTL.
+  3. Межтабовый sync impersonation (BroadcastChannel / SSE).
 
-<!-- B22_SNAPSHOT_PENDING -->
+<!-- B23_SNAPSHOT_PENDING -->
 
 ---
 
