@@ -238,23 +238,38 @@ func auditCleanup(db *sql.DB, days int) (int64, error) {
 //   - выход — по ctx.Done() (graceful shutdown).
 //
 // Best-effort: ошибки cleanup только логируются, никогда не фаталят процесс.
-func runAuditRetention(ctx context.Context, db *sql.DB, days int, interval time.Duration) {
-	if days <= 0 {
-		slog.Info("audit retention: выключен (days<=0)", "days", days)
+// runRetention — общий runner retention'а (B19 + B23).
+// В одной горутине чистит audit_log и refresh_tokens.
+// Каждый из *Days-параметров независим: 0 → соответствующий cleanup пропускается.
+func runRetention(ctx context.Context, db *sql.DB, auditDays, refreshDays int, interval time.Duration) {
+	if auditDays <= 0 && refreshDays <= 0 {
+		slog.Info("retention: выключен (auditDays<=0 && refreshDays<=0)",
+			"auditDays", auditDays, "refreshDays", refreshDays)
 		return
 	}
 	if interval <= 0 {
 		interval = 24 * time.Hour
 	}
-	slog.Info("audit retention: запущен", "days", days, "interval", interval.String())
+	slog.Info("retention: запущен",
+		"auditDays", auditDays, "refreshDays", refreshDays, "interval", interval.String())
 
 	runOnce := func() {
-		n, err := auditCleanup(db, days)
-		if err != nil {
-			slog.Warn("audit retention: cleanup", "err", err)
-			return
+		if auditDays > 0 {
+			n, err := auditCleanup(db, auditDays)
+			if err != nil {
+				slog.Warn("retention: audit cleanup", "err", err)
+			} else {
+				slog.Info("retention: audit cleanup", "deleted", n, "days", auditDays)
+			}
 		}
-		slog.Info("audit retention: cleanup", "deleted", n, "days", days)
+		if refreshDays > 0 {
+			n, err := refreshCleanup(db, refreshDays)
+			if err != nil {
+				slog.Warn("retention: refresh cleanup", "err", err)
+			} else {
+				slog.Info("retention: refresh cleanup", "deleted", n, "days", refreshDays)
+			}
+		}
 	}
 
 	// Первый прогон — сразу при старте.
@@ -265,10 +280,16 @@ func runAuditRetention(ctx context.Context, db *sql.DB, days int, interval time.
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("audit retention: остановлен", "reason", ctx.Err().Error())
+			slog.Info("retention: остановлен", "reason", ctx.Err().Error())
 			return
 		case <-t.C:
 			runOnce()
 		}
 	}
+}
+
+// runAuditRetention — обёртка над runRetention для обратной совместимости (B19).
+// audit-only: refreshDays=0.
+func runAuditRetention(ctx context.Context, db *sql.DB, days int, interval time.Duration) {
+	runRetention(ctx, db, days, 0, interval)
 }

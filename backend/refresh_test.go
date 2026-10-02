@@ -223,3 +223,70 @@ func TestRefresh_SaveCleansExpired(t *testing.T) {
 		t.Fatalf("old-jti должен был быть удалён (cleanup), count=%d", count)
 	}
 }
+
+// ---------------------------------------------------------------
+// B23.1 — refreshCleanup (retention)
+// ---------------------------------------------------------------
+
+// TestRefreshCleanup_DeletesOld — удаляет записи, у которых expires_at
+// старше N дней.
+func TestRefreshCleanup_DeletesOld(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+
+	// 10 дней назад — заведомо старше 5-дневного retention'а.
+	old := time.Now().AddDate(0, 0, -10).UTC().Format(time.RFC3339)
+	_, err := db.Exec(
+		`INSERT INTO refresh_tokens (jti, doctor_id, issued_at, expires_at) VALUES (?, ?, datetime('now'), ?)`,
+		"old-jti", "D1", old,
+	)
+	if err != nil {
+		t.Fatalf("insert old: %v", err)
+	}
+
+	n, err := refreshCleanup(db, 5)
+	if err != nil {
+		t.Fatalf("refreshCleanup: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("deleted: got %d, want 1", n)
+	}
+
+	var count int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM refresh_tokens WHERE jti = 'old-jti'`).Scan(&count)
+	if count != 0 {
+		t.Fatalf("старая запись должна быть удалена, осталось %d", count)
+	}
+}
+
+// TestRefreshCleanup_KeepsFresh — свежие записи не трогает.
+func TestRefreshCleanup_KeepsFresh(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+
+	// через 1 час — свежая.
+	fresh := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	_, err := db.Exec(
+		`INSERT INTO refresh_tokens (jti, doctor_id, issued_at, expires_at) VALUES (?, ?, datetime('now'), ?)`,
+		"fresh-jti", "D1", fresh,
+	)
+	if err != nil {
+		t.Fatalf("insert fresh: %v", err)
+	}
+
+	n, err := refreshCleanup(db, 5)
+	if err != nil {
+		t.Fatalf("refreshCleanup: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("deleted: got %d, want 0", n)
+	}
+}
+
+// TestRefreshCleanup_ZeroDays_Error — days <= 0 → ошибка.
+func TestRefreshCleanup_ZeroDays_Error(t *testing.T) {
+	db := newTestDB(t)
+	if _, err := refreshCleanup(db, 0); err == nil {
+		t.Fatal("ожидали ошибку при days=0")
+	}
+}

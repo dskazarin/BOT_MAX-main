@@ -41,6 +41,26 @@ func SaveRefreshJTI(db *sql.DB, jti, doctorID string, expiresAt time.Time) error
 	return nil
 }
 
+// refreshCleanup удаляет строки refresh_tokens, у которых expires_at
+// старше N дней (B23, retention). Формат cutoff — как в auditCleanup
+// (совместим с SQLite datetime('now')).
+//
+// Логика: days <= 0 — ошибка (вызывающий должен проверять).
+// Не удаляет active-токены: cutoff гарантирует, что запись УЖЕ протухла
+// и лежит минимум `days` дней.
+func refreshCleanup(db *sql.DB, days int) (int64, error) {
+	if days <= 0 {
+		return 0, fmt.Errorf("days must be > 0")
+	}
+	cutoff := time.Now().AddDate(0, 0, -days).Format("2006-01-02 15:04:05")
+	res, err := db.Exec(`DELETE FROM refresh_tokens WHERE expires_at < ?`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("refresh cleanup: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // IsRefreshRevoked — true, если jti неизвестен ИЛИ revoked_at уже выставлен.
 func IsRefreshRevoked(db *sql.DB, jti string) (bool, error) {
 	if jti == "" {

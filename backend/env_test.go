@@ -40,6 +40,7 @@ func clearEnvVars(t *testing.T) {
 	t.Setenv("BOTMAX_AUDIT_RETENTION_DAYS", "")
 	t.Setenv("BOTMAX_AUDIT_CLEANUP_INTERVAL", "")
 	t.Setenv("BOTMAX_IMPERSONATION_TTL", "")
+	t.Setenv("BOTMAX_REFRESH_RETENTION_DAYS", "")
 	// t.Setenv("", "") не отвязывает переменную — Go выставит её в пустую строку,
 	// что для нас эквивалентно «не задано» (normalize/parse трактуют "" как default).
 }
@@ -269,6 +270,7 @@ func TestValidateEnv(t *testing.T) {
 		envRetention        string
 		envCleanup          string
 		envImpersonationTTL string
+		envRefreshRetention string
 
 		wantName             string
 		wantIsProd           bool
@@ -279,6 +281,7 @@ func TestValidateEnv(t *testing.T) {
 		wantRetention        int
 		wantCleanup          time.Duration
 		wantImpersonationTTL time.Duration
+		wantRefreshRetention int
 		wantErrSubstr        string
 	}{
 		{
@@ -455,6 +458,31 @@ func TestValidateEnv(t *testing.T) {
 			envImpersonationTTL: "-5m",
 			wantErrSubstr:       "BOTMAX_IMPERSONATION_TTL",
 		},
+		{
+			name:                 "refresh-retention-default",
+			envName:              "dev",
+			wantName:             "dev",
+			wantRefreshRetention: 0,
+		},
+		{
+			name:                 "refresh-retention-7",
+			envName:              "dev",
+			envRefreshRetention:  "7",
+			wantName:             "dev",
+			wantRefreshRetention: 7,
+		},
+		{
+			name:                "refresh-retention-junk-err",
+			envName:             "dev",
+			envRefreshRetention: "abc",
+			wantErrSubstr:       "BOTMAX_REFRESH_RETENTION_DAYS",
+		},
+		{
+			name:                "refresh-retention-negative-err",
+			envName:             "dev",
+			envRefreshRetention: "-1",
+			wantErrSubstr:       "BOTMAX_REFRESH_RETENTION_DAYS",
+		},
 	}
 
 	for _, c := range cases {
@@ -467,6 +495,7 @@ func TestValidateEnv(t *testing.T) {
 			t.Setenv("BOTMAX_AUDIT_RETENTION_DAYS", c.envRetention)
 			t.Setenv("BOTMAX_AUDIT_CLEANUP_INTERVAL", c.envCleanup)
 			t.Setenv("BOTMAX_IMPERSONATION_TTL", c.envImpersonationTTL)
+			t.Setenv("BOTMAX_REFRESH_RETENTION_DAYS", c.envRefreshRetention)
 
 			got, err := validateEnv()
 			if c.wantErrSubstr != "" {
@@ -510,6 +539,9 @@ func TestValidateEnv(t *testing.T) {
 			// wantImpersonationTTL == 0 означает «не проверяем» (симметрия с wantCleanup).
 			if c.wantImpersonationTTL != 0 && got.ImpersonationTTL != c.wantImpersonationTTL {
 				t.Errorf("ImpersonationTTL = %v, ожидали %v", got.ImpersonationTTL, c.wantImpersonationTTL)
+			}
+			if got.RefreshRetentionDays != c.wantRefreshRetention {
+				t.Errorf("RefreshRetentionDays = %d, ожидали %d", got.RefreshRetentionDays, c.wantRefreshRetention)
 			}
 		})
 	}

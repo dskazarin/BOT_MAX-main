@@ -444,7 +444,10 @@ func main() {
 	bgDone := make(chan struct{})
 	go func() {
 		defer close(bgDone)
-		runAuditRetention(bgCtx, db, currentEnv.AuditRetentionDays, currentEnv.AuditCleanupInterval)
+		runRetention(bgCtx, db,
+			currentEnv.AuditRetentionDays,
+			currentEnv.RefreshRetentionDays,
+			currentEnv.AuditCleanupInterval)
 	}()
 
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {

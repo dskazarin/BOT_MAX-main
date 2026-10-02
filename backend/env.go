@@ -41,7 +41,11 @@ type Env struct {
 	DBPath string
 	// AuditRetentionDays — сколько дней хранить audit_log. 0 → retention выключен.
 	AuditRetentionDays int
+	// RefreshRetentionDays — сколько дней хранить протухшие refresh_tokens
+	// сверх expires_at (B23). 0 → retention выключен.
+	RefreshRetentionDays int
 	// AuditCleanupInterval — период между прогонами очистки (B19).
+	// Используется ОБЩИМ тикером для audit + refresh retention.
 	AuditCleanupInterval time.Duration
 	// ImpersonationTTL — время жизни access-токена в режиме impersonation
 	// (B21, было константой в auth.go). По умолчанию 15m.
@@ -185,6 +189,12 @@ func validateEnv() (*Env, error) {
 		return nil, err
 	}
 
+	refreshRetentionDays, err := parseNonNegativeInt(
+		"BOTMAX_REFRESH_RETENTION_DAYS", os.Getenv("BOTMAX_REFRESH_RETENTION_DAYS"), 0)
+	if err != nil {
+		return nil, err
+	}
+
 	impersonationTTL, err := parseDuration(
 		"BOTMAX_IMPERSONATION_TTL", os.Getenv("BOTMAX_IMPERSONATION_TTL"), 15*time.Minute)
 	if err != nil {
@@ -199,6 +209,7 @@ func validateEnv() (*Env, error) {
 		CookieSecure:         cookieSecure,
 		DBPath:               dbPath,
 		AuditRetentionDays:   retentionDays,
+		RefreshRetentionDays: refreshRetentionDays,
 		AuditCleanupInterval: cleanupInterval,
 		ImpersonationTTL:     impersonationTTL,
 	}, nil
