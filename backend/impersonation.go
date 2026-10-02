@@ -131,6 +131,14 @@ func handleImpersonationStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"cannot impersonate superadmin"}`, http.StatusBadRequest)
 		return
 	}
+	// B22.1: запрет имперсонировать admin'а — симметрично superadmin.
+	// Impersonation-токен всегда role=doctor, но показывать «admin-сессию»
+	// без admin-прав всё равно вводит в заблуждение; UI скрывает кнопку,
+	// backend дублирует (defense-in-depth).
+	if target.Role == string(RoleAdmin) {
+		http.Error(w, `{"error":"cannot impersonate admin"}`, http.StatusBadRequest)
+		return
+	}
 
 	tok, err := IssueImpersonationToken(actorID, actorRole, target.ID)
 	if err != nil {

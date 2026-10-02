@@ -384,6 +384,29 @@ func TestHandleImpersonationStart_TargetSuperadmin(t *testing.T) {
 	}
 }
 
+func TestHandleImpersonationStart_TargetAdmin(t *testing.T) {
+	setupImpersonationEnv(t)
+	testDB := newTestDB(t)
+	withGlobalDB(t, testDB)
+	seedDoctorWithRole(t, testDB, "ADMIN-2", "admin", true)
+
+	body := strings.NewReader(`{"doctor_id":"ADMIN-2"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/impersonation/start", body).WithContext(
+		withDoctorID(context.Background(), "SUPER-1", RoleSuperadmin))
+	w := httptest.NewRecorder()
+
+	handleImpersonationStart(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	// Проверяем ПОЛНУЮ фразу, чтобы не поймать ложное срабатывание
+	// на "cannot impersonate superadmin".
+	if !strings.Contains(w.Body.String(), "cannot impersonate admin") {
+		t.Fatalf("ожидали 'cannot impersonate admin' в теле, got %s", w.Body.String())
+	}
+}
+
 func TestHandleImpersonationStart_EmptyDoctorID(t *testing.T) {
 	setupImpersonationEnv(t)
 	testDB := newTestDB(t)
