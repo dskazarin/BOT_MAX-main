@@ -674,14 +674,75 @@
 
 <!-- B22_SNAPSHOT_APPLIED -->
 
-### 6.32 (B23) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** TBD. Кандидаты (retention-бэклог §6.28 + оставшееся по impersonation):
-  1. UI-кнопка «прогнать retention сейчас» в админке (§6.28).
-  2. Retention для `refresh_tokens` (§6.28).
-  3. Межтабовый sync impersonation (BroadcastChannel / SSE).
+### 6.32 (B23) — ЗАКРЫТ
+- **Дата:** 2026-10-02
+- **Статус:** закрыт (коммиты 3c8bef6 + 98a13e3)
+- **Цель:** закрыть retention-бэклог §6.28: retention для `refresh_tokens` +
+  UI-кнопка ручного прогона в админке.
+- **Что сделано:**
+  - **3c8bef6** `feat(retention): 6.32 (B23.1) — BOTMAX_REFRESH_RETENTION_DAYS`
+    В `Env` добавлено `RefreshRetentionDays int`, заполняется через
+    `parseNonNegativeInt("BOTMAX_REFRESH_RETENTION_DAYS", …, 0)`.
+    В `refresh.go` — `refreshCleanup(db, days)` (симметрично `auditCleanup`,
+    cutoff — `time.Now().AddDate(0, 0, -days)` в формате `2006-01-02 15:04:05`).
+    В `audit.go` — общий `runRetention(ctx, db, auditDays, refreshDays, interval)`:
+    в одном тикере чистит обе таблицы; каждый cleanup независим (days<=0 → skip).
+    `runAuditRetention` оставлена обёрткой для обратной совместимости B19.
+    `main.go` — вызов `runRetention` с обоими флагами. `AuditCleanupInterval`
+    теперь общий для audit + refresh.
+    Тесты: `TestRefreshCleanup_DeletesOld`, `TestRefreshCleanup_KeepsFresh`, `TestRefreshCleanup_ZeroDays_Error`;
+    `TestValidateEnv` — 4 кейса `refresh-retention-*`; `clearEnvVars` сбрасывает флаг.
+  - **98a13e3** `feat(retention): 6.32 (B23.2) — POST /api/audit/retention/run`
+    Новый handler `handleAuditRetentionRun`: POST, admin/superadmin +
+    `requireNonImpersonated`, запускает auditCleanup + refreshCleanup **сразу**
+    (по параметрам из env). 400, если оба дня == 0. Пишет audit-запись
+    `action="retention.run", entity="system", detail={audit_deleted, refresh_deleted}`.
+    UI: кнопка «🧹 Прогнать retention» в `admin_audit.html` + функция
+    `runRetentionNow()` (confirm → POST → alert с результатом → reloadAudit).
+    Тесты: `TestHandleAuditRetentionRun_Disabled`, `_MethodNotAllowed`, `_AuditOnly`, `_Success_Both`.
+- **Файлы:**
+  - `backend/env.go` — `Env.RefreshRetentionDays`.
+  - `backend/env_test.go` — 4 кейса + сброс в `clearEnvVars`.
+  - `backend/refresh.go` — `refreshCleanup`.
+  - `backend/refresh_test.go` — 3 теста `TestRefreshCleanup_*`.
+  - `backend/audit.go` — `runRetention` + обёртка + `handleAuditRetentionRun` +
+    типы `retentionScopeResp`/`retentionRunResp`.
+  - `backend/audit_test.go` — 4 теста `TestHandleAuditRetentionRun_*`.
+  - `backend/main.go` — вызов `runRetention`.
+  - `admin_audit.html` — кнопка + `runRetentionNow()`.
+- **Env-переменные:**
+  - `BOTMAX_REFRESH_RETENTION_DAYS` — int >= 0, default `0` (retention выключен).
+  - `BOTMAX_AUDIT_CLEANUP_INTERVAL` теперь общий тикер для audit + refresh.
+- **UI-smoke (БД /tmp/b23.db, AUTH_ENFORCE=true):**
+  - B23.1: `AUDIT=30 REFRESH=1 INTERVAL=2s` → в логе `retention: запущен`,
+    первый cleanup сразу, затем по тикеру; `old` (10 дней) удалён, `fresh`
+    (1 час) сохранён.
+  - B23.2: `POST /api/audit/retention/run` →
+    `{ok:true, audit:{days:30,deleted:1}, refresh:{days:1,deleted:1}}`;
+    audit: `retention.run, entity=system, detail={audit_deleted:1, refresh_deleted:1}`.
+- **Коммиты:**
+  - `3c8bef6` feat(retention): 6.32 (B23.1) — BOTMAX_REFRESH_RETENTION_DAYS + общий runRetention (audit + refresh)
+  - `98a13e3` feat(retention): 6.32 (B23.2) — POST /api/audit/retention/run + кнопка в admin_audit.html
+- **Известные ограничения:**
+  - `SaveRefreshJTI` продолжает делать lazy-cleanup `< datetime('now')` —
+    он жёстче retention'а (удаляет всё протухшее при сохранении).
+    Retention нужен для cold-path: если логинов нет, lazy-cleanup не сработает.
+  - Кнопка «Прогнать retention» синхронная — при больших объёмах запрос
+    может висеть. Для текущих объёмов не проблема.
+- **Оставшиеся кандидаты (→ §6.33):**
+  - Межтабовый sync impersonation (BroadcastChannel / SSE).
 
-<!-- B23_SNAPSHOT_PENDING -->
+<!-- B23_SNAPSHOT_APPLIED -->
+
+### 6.33 (B24) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** TBD. Кандидаты (оставшееся из §6.31):
+  1. Межтабовый sync impersonation (BroadcastChannel / SSE) — если stop/reload
+     в одном табе должен закрыть баннер в других.
+  2. Мелкая гигиена бэклога: удалить `backend/*.bak.*` файлы (не участвуют в
+     сборке, но захламляют grep), `.gitignore` для `*.bak.*`.
+
+<!-- B24_SNAPSHOT_PENDING -->
 
 ---
 
