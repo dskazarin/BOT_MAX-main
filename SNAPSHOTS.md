@@ -574,20 +574,71 @@
 
 <!-- B20_SNAPSHOT_APPLIED -->
 
-### 6.30 (B21) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** TBD. Кандидаты (продолжение B20 + бэклог §6.28):
-  1. `BOTMAX_IMPERSONATION_TTL` — env-флаг настраиваемого TTL impersonation
-     (по образцу `BOTMAX_AUDIT_RETENTION_DAYS`) + countdown в баннере.
-  2. UI-кнопка «прогнать retention сейчас» в админке
-     (§6.28, известное ограничение).
-  3. Retention для `refresh_tokens` (§6.28, известное ограничение).
-  4. Guard «нельзя имперсонировать admin'а» — сейчас UI скрывает кнопку,
-     backend разрешает (только superadmin запрещён, B20.4.1).
-  5. Закрыть «протечку» impersonation между табами
-     (BroadcastChannel / SSE).
+### 6.30 (B21) — ЗАКРЫТ
+- **Дата:** 2026-10-02
+- **Статус:** закрыт (коммиты 5e54c7d + d4a48d8)
+- **Цель:** `BOTMAX_IMPERSONATION_TTL` (env-флаг TTL impersonation) + countdown
+  до конца impersonation в баннере `doctor_cabinet.html`.
+- **Что сделано:**
+  - **5e54c7d** `feat(env): 6.30 (B21.1) — BOTMAX_IMPERSONATION_TTL`
+    В `Env` добавлено `ImpersonationTTL time.Duration`, заполняется через
+    `parseDuration("BOTMAX_IMPERSONATION_TTL", …, 15m)`. В `auth.go` константа
+    `ImpersonationTTL` убрана, добавлена функция `impersonationTTL()`
+    (читает `currentEnv.ImpersonationTTL`, fallback 15m при `currentEnv == nil`
+    для тестов). `IssueImpersonationToken` и `handleImpersonationStart` используют
+    её. Тесты `TestValidateEnv` расширены 4 кейсами
+    (empty-default / 30m / junk-err / negative-err). `clearEnvVars` сбрасывает
+    новый флаг.
+  - **d4a48d8** `feat(impersonation): 6.30 (B21.2) — countdown`
+    Backend: `ctxKeyTokenExp` + `withTokenExp`/`tokenExpFromCtx` в `auth.go`;
+    `authMiddleware` прокидывает `claims.ExpiresAt.Unix()` в context;
+    `impersonationWhoamiResp.ExpiresAtUnix` заполняется в `/whoami`.
+    Frontend: в баннер добавлен `<span id="impRemaining">` (⏱ mm:ss),
+    `startImpersonationCountdown(expUnix)` — `setInterval(1000)`, при `left<=0`
+    показывает «истёк» и через 2с делает `location.reload()`. Заодно почищен
+    дубль `display:none` в inline-стиле баннера.
+- **Файлы:**
+  - `backend/env.go` — `Env.ImpersonationTTL` + `parseDuration(...)` в `validateEnv`.
+  - `backend/env_test.go` — 4 кейса `impersonation-ttl-*` + `clearEnvVars`.
+  - `backend/auth.go` — `impersonationTTL()` вместо константы; `ctxKeyTokenExp` +
+    `withTokenExp`/`tokenExpFromCtx`; `authMiddleware` кладёт exp в context.
+  - `backend/impersonation.go` — `ExpiresAtUnix` в `whoami`-ответе.
+  - `backend/impersonation_test.go` — `TestTokenExpFromCtx` + расширенный
+    `TestHandleImpersonationWhoami_Impersonating_NoDB` (проверка `ExpiresAtUnix`).
+  - `doctor_cabinet.html` — `#impRemaining` в баннере +
+    `startImpersonationCountdown`.
+- **Env-переменные:**
+  - `BOTMAX_IMPERSONATION_TTL` — Go duration > 0, default `15m`
+    (по образцу `BOTMAX_AUDIT_CLEANUP_INTERVAL`).
+- **UI-smoke (БД /tmp/b21.db, AUTH_ENFORCE=true, IMPERSONATION_TTL=2m):**
+  - login superadmin → start(target=DOC-001) → `"ttl_seconds": 120`.
+  - whoami → `{impersonating:true, actor_id:"SUPER-001", target_id:"DOC-001",
+    target_name:"Тестовый врач", target_role:"doctor", expires_at_unix:1790924463}`.
+  - `diff = exp - now = 120` — env-флаг и countdown синхронны.
+- **Коммиты:**
+  - `5e54c7d` feat(env): 6.30 (B21.1) — BOTMAX_IMPERSONATION_TTL (env-флаг TTL impersonation)
+  - `d4a48d8` feat(impersonation): 6.30 (B21.2) — countdown до конца impersonation в баннере
+- **Известные ограничения:**
+  - Countdown в баннере показывает остаток корректно, но при истечении TTL
+    страница делает `location.reload()` через 2с — это UX-компромисс (лучше
+    иметь auto-stop, но авто-stop требовал бы держать таймер даже в фоне).
+  - Impersonation не синхронизирован между табами: если открыть doctor_cabinet.html
+    в двух табах, stop/reload в одном не закроет баннер в другом.
+  - Запрет имперсонировать admin'а всё ещё на UI-уровне (backend-гвард только
+    для superadmin, B20.4.1).
 
-<!-- B21_SNAPSHOT_PENDING -->
+<!-- B21_SNAPSHOT_APPLIED -->
+
+### 6.31 (B22) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** TBD. Кандидаты (продолжение impersonation + retention-бэклог §6.28):
+  1. UI-кнопка «прогнать retention сейчас» в админке (§6.28).
+  2. Retention для `refresh_tokens` (§6.28).
+  3. Guard «нельзя имперсонировать admin'а» — backend (сейчас только UI).
+  4. Межтабовый sync impersonation (BroadcastChannel / SSE).
+  5. Auto-stop impersonation (не только reload, но и `POST /stop`) по истечении TTL.
+
+<!-- B22_SNAPSHOT_PENDING -->
 
 ---
 
