@@ -734,15 +734,47 @@
 
 <!-- B23_SNAPSHOT_APPLIED -->
 
-### 6.33 (B24) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** TBD. Кандидаты (оставшееся из §6.31):
-  1. Межтабовый sync impersonation (BroadcastChannel / SSE) — если stop/reload
-     в одном табе должен закрыть баннер в других.
-  2. Мелкая гигиена бэклога: удалить `backend/*.bak.*` файлы (не участвуют в
-     сборке, но захламляют grep), `.gitignore` для `*.bak.*`.
+### 6.33 (B24) — ЗАКРЫТ
+- **Дата:** 2026-10-02
+- **Статус:** закрыт (коммит 9b8ff4a)
+- **Цель:** межтабовый sync impersonation через BroadcastChannel.
+- **Что сделано:**
+  - **9b8ff4a** `feat(impersonation): 6.33 (B24.1) — межтабовый sync через BroadcastChannel`
+    В `doctor_cabinet.html` — канал `botmax-impersonation` (BroadcastChannel
+    без fallback, но с проверкой `typeof BroadcastChannel !== 'undefined'`).
+    `stopImpersonation` / `autoStopImpersonation` при выходе (в `then` и `catch`)
+    отправляют `{type:'stopped'}`. `onmessage` в других табах: если баннер
+    виден — делает `window.location.reload()` (после reload `/whoami` вернёт
+    `impersonating:false`, либо refresh превратит сессию в actor'а).
+    В `admin_doctors.html` при успешном `/start` — broadcast
+    `{type:'started', target_id}` (для будущего; сейчас никто не слушает).
+- **Файлы:**
+  - `doctor_cabinet.html` — `_impChannel`, `_impBroadcastStopped()`, `onmessage`.
+  - `admin_doctors.html` — broadcast `started` при успешном `/start`.
+- **UI-smoke (ручной, БД /tmp/b24.db, AUTH_ENFORCE=true):**
+  - Регрессия B20–B23 через curl: login → start → whoami → stop — все ответы
+    корректные (`ttl_seconds:900`, `impersonating:true`, `restored:true`).
+  - Межтабовый sync — ручная проверка в браузере: два таба `doctor_cabinet.html`,
+    stop в одном → reload во втором; в консоли `impersonation: stop в другом табе, reload`.
+- **Коммиты:**
+  - `9b8ff4a` feat(impersonation): 6.33 (B24.1) — межтабовый sync через BroadcastChannel
+- **Признано сделанным ранее (вне скоупа B24):**
+  - `.gitignore` уже содержит `*.bak` и `*.bak.*` (секция «Мусор»).
+  - 92 файла `.bak.*` на диске, но **не tracked** (`git ls-files | grep .bak.` = 0).
+  - `git rm --cached` не требуется.
 
-<!-- B24_SNAPSHOT_PENDING -->
+<!-- B24_SNAPSHOT_APPLIED -->
+
+### 6.34 (B25) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** TBD. Активных кандидатов в бэклоге нет: §6.28 (retention),
+  §6.31 (impersonation hardening), §6.32 (retention UI), §6.33 (межтабовый
+  sync) — все закрыты. Кандидаты на будущее:
+  1. UI: показ счётчика протухших refresh_tokens (status-endpoint).
+  2. Расширение retention на другие таблицы (`patients`? — обсудить).
+  3. Мониторинг / healthcheck для retention (last_run_ts).
+
+<!-- B25_SNAPSHOT_PENDING -->
 
 ---
 
