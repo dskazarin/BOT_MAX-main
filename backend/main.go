@@ -452,6 +452,9 @@ func main() {
 
 	http.HandleFunc("/api/health", handleHealth)
 
+	// B26.1: Prometheus-совместимый /api/metrics.
+	registerMetricsRoutes()
+
 	http.HandleFunc("/api/specialties", func(w http.ResponseWriter, r *http.Request) {
 		specs := make(map[string][]string)
 		for _, g := range guidelines {

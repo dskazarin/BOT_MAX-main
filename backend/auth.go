@@ -678,7 +678,7 @@ func extractAccessToken(r *http.Request) string {
 // не открыть /api/auth/loginXXX. Статика (не /api/*) — открыта.
 func isAuthWhitelist(path string) bool {
 	switch path {
-	case "/api/health", "/api/auth/login", "/api/auth/refresh":
+	case "/api/health", "/api/metrics", "/api/auth/login", "/api/auth/refresh":
 		return true
 	}
 	if !strings.HasPrefix(path, "/api/") {
