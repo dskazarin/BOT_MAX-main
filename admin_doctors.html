@@ -668,6 +668,15 @@ function impersonate(doctorId) {
                 });
             }
             return res.json().then(function (d) {
+                // B24.1: оповещаем другие табы о старте impersonation.
+                // (Сейчас никто не слушает, но полезно для будущего.)
+                if (typeof BroadcastChannel !== 'undefined') {
+                    try {
+                        var ch = new BroadcastChannel('botmax-impersonation');
+                        ch.postMessage({ type: 'started', target_id: d.target && d.target.id });
+                        ch.close();
+                    } catch (e) { /* silent */ }
+                }
                 window.location.href = 'doctor_cabinet.html';
             });
         })

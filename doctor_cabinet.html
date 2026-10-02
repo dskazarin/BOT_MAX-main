@@ -618,6 +618,34 @@
     var _impAutoStopFired = false;
     var AUTO_STOP_LEAD_SECONDS = 30;
 
+    // B24.1: межтабовый sync impersonation через BroadcastChannel.
+    // Если stop произошёл в одном табе — остальные табы закрывают баннер
+    // через reload (после reload /whoami вернёт impersonating:false,
+    // либо refresh превратит сессию в actor'а).
+    var _impChannel = (typeof BroadcastChannel !== 'undefined')
+        ? new BroadcastChannel('botmax-impersonation')
+        : null;
+
+    if (_impChannel) {
+        _impChannel.onmessage = function (event) {
+            if (!event || !event.data) return;
+            if (event.data.type === 'stopped') {
+                var banner = document.getElementById('impBanner');
+                // Реагируем, только если баннер сейчас виден (мы в impersonation).
+                if (banner && banner.style.display !== 'none') {
+                    console.info('impersonation: stop в другом табе, reload');
+                    window.location.reload();
+                }
+            }
+        };
+    }
+
+    function _impBroadcastStopped() {
+        if (_impChannel) {
+            try { _impChannel.postMessage({ type: 'stopped' }); } catch (e) {}
+        }
+    }
+
     function startImpersonationCountdown(expUnix) {
         if (_impCountdownTimer) {
             clearInterval(_impCountdownTimer);
@@ -667,6 +695,8 @@
     function autoStopImpersonation() {
         BotMaxAuth.authFetch('POST', '/api/impersonation/stop', {})
             .then(function (res) {
+                // B24.1: оповещаем другие табы о выходе из impersonation.
+                _impBroadcastStopped();
                 if (!res.ok) {
                     // /stop не сработал (например, access уже протух):
                     // лучший из оставшихся вариантов — reload.
@@ -677,6 +707,9 @@
                 window.location.href = 'admin_doctors.html';
             })
             .catch(function (err) {
+                // Ошибка сети — всё равно оповещаем (stop де-факто произойдёт
+                // через refresh на других табах / следующем запросе).
+                _impBroadcastStopped();
                 console.warn('auto-stop: сеть, fallback reload', err);
                 window.location.reload();
             });
@@ -685,11 +718,14 @@
     function stopImpersonation() {
         BotMaxAuth.authFetch('POST', '/api/impersonation/stop', {})
             .then(function (res) {
+                // B24.1: оповещаем другие табы о выходе.
+                _impBroadcastStopped();
                 // вне зависимости от ответа — уходим в admin_doctors.html.
                 // (Если сессия уже истекла, UI не должен залипать в чужой шкуре.)
                 window.location.href = 'admin_doctors.html';
             })
             .catch(function () {
+                _impBroadcastStopped();
                 window.location.href = 'admin_doctors.html';
             });
     }
