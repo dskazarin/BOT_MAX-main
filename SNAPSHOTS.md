@@ -765,16 +765,74 @@
 
 <!-- B24_SNAPSHOT_APPLIED -->
 
-### 6.34 (B25) — TODO (уточнить)
+### 6.34 (B25) — ЗАКРЫТ
+- **Дата:** 2026-10-02
+- **Статус:** закрыт (коммиты 6b6f694 + e43c5c5)
+- **Цель:** retention status + UI-счётчик (для ops-мониторинга).
+- **Что сделано:**
+  - **6b6f694** `feat(retention): 6.34 (B25.1) — retention status + расширение /api/health`
+    Новый файл `backend/retention.go` (перенос `runRetention`/`runAuditRetention`
+    из `audit.go`):
+    - `RetentionStatus{LastRunAt, LastError, AuditDeleted, RefreshDeleted, HasRun}`
+      + mutex-guarded глобал `retentionStatusVal`;
+    - `updateRetentionStatusSuccess`, `updateRetentionStatusError` (last_error
+      сбрасывается при успехе);
+    - `retentionHealthy(auditDays, refreshDays, interval)` — false при
+      `!HasRun`, `LastError != ""`, `last_run_at > interval*2`; true при
+      выключенной фиче;
+    - `runRetention.runOnce` обновляет статус после каждого прогона.
+    `/api/health` вынесен в `handleHealth` в `main.go`: если retention
+    включён — добавляется секция `retention` c `enabled/healthy/last_run_at/
+    seconds_since_last_run/audit_deleted/refresh_deleted/last_error/audit_days/
+    refresh_days`. При выключенной фиче секции нет.
+    Тесты: `TestRetentionStatus_Empty`, `_Disabled`, `_UpdatedOnRun`,
+    `_UnhealthyAfterInterval`, `_ErrorClearedOnSuccess`,
+    `TestHealth_NoRetentionSection`, `TestHealth_RetentionSection`.
+  - **e43c5c5** `feat(retention): 6.34 (B25.2) — UI-статус retention в admin_audit.html`
+    В `admin_audit.html` рядом с кнопкой 🧹 добавлен `<span id="retentionStatus">`
+    с компактным статусом: `🧹 retention: 15s назад · audit 0 / refresh 5 · ✅`.
+    `formatRelativeTime(iso)` — s/m/h/d; `refreshRetentionStatus()` читает
+    `/api/health`, span скрывается при выключенной фиче; цвет краснеет при
+    `healthy=false`, в `title` — текст ошибки. Обновление: при загрузке,
+    после ручного прогона, каждые 30с (`setInterval`).
+- **Файлы:**
+  - `backend/retention.go` (новый) — статус + перенос runner'а.
+  - `backend/retention_test.go` (новый) — 7 тестов.
+  - `backend/audit.go` — `runRetention`/`runAuditRetention` удалены (перенос).
+  - `backend/main.go` — `handleHealth` (секция retention), /api/health вызывает её.
+  - `admin_audit.html` — span + `refreshRetentionStatus()` + `formatRelativeTime()`.
+- **Env-переменные:** новых нет.
+- **UI-smoke (БД /tmp/b25.db, AUTH_ENFORCE=true):**
+  - без retention (`BOTMAX_AUDIT_RETENTION_DAYS` не задан) → `/api/health` = `{"status":"ok"}`; span скрыт.
+  - с retention (`AUDIT=30 REFRESH=1 INTERVAL=2s`) → `/api/health` содержит
+    секцию `retention` с `healthy:true`, `last_run_at` обновляется каждые 2с.
+- **Коммиты:**
+  - `6b6f694` feat(retention): 6.34 (B25.1) — retention status + расширение /api/health
+  - `e43c5c5` feat(retention): 6.34 (B25.2) — UI-статус retention в admin_audit.html
+- **Признано ненужным (обоснование):**
+  - **Retention для `patients`:** НЕ делаем. `patients` — бизнес-данные клиники
+    (медкарты), retention здесь опасен: молчаливое удаление через N дней
+    несовместимо с требованиями хранения медкарт (152-ФЗ/приказы Минздрава).
+    Если когда-нибудь понадобится «чистить архивных пациентов» — это должна
+    быть отдельная явная операция (soft-delete + ручная админ-кнопка с
+    подтверждением), а не фоновой runner.
+
+<!-- B25_SNAPSHOT_APPLIED -->
+
+### 6.35 (B26) — TODO (уточнить)
 - **Статус:** запланирован
 - **Цель:** TBD. Активных кандидатов в бэклоге нет: §6.28 (retention),
   §6.31 (impersonation hardening), §6.32 (retention UI), §6.33 (межтабовый
-  sync) — все закрыты. Кандидаты на будущее:
-  1. UI: показ счётчика протухших refresh_tokens (status-endpoint).
-  2. Расширение retention на другие таблицы (`patients`? — обсудить).
-  3. Мониторинг / healthcheck для retention (last_run_ts).
+  sync), §6.34 (retention status + UI) — все закрыты. Возможные направления
+  на будущее:
+  1. `/api/metrics` в Prometheus-формате (для prod-мониторинга).
+  2. Алерты/уведомления при `retention.healthy=false` (Slack/webhook).
+  3. Retention для `refresh_tokens.revoked_at` — сейчас чистим только по
+     `expires_at`, но revoked-записи живут до `expires_at`. Можно удалять
+     revoked раньше.
+  4. Экспорт audit-log в CSV/JSONL для SIEM.
 
-<!-- B25_SNAPSHOT_PENDING -->
+<!-- B26_SNAPSHOT_PENDING -->
 
 ---
 
