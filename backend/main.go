@@ -450,10 +450,7 @@ func main() {
 			currentEnv.AuditCleanupInterval)
 	}()
 
-	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-	})
+	http.HandleFunc("/api/health", handleHealth)
 
 	http.HandleFunc("/api/specialties", func(w http.ResponseWriter, r *http.Request) {
 		specs := make(map[string][]string)
@@ -553,4 +550,42 @@ func main() {
 	} else {
 		slog.Info("сервер остановлен")
 	}
+}
+
+// handleHealth — GET /api/health (B25.1).
+// Базовая часть: {"status":"ok"}.
+// Если retention включён (audit_days>0 || refresh_days>0) — добавляется
+// секция retention с last_run_at, счётчиками и healthy-флагом.
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	resp := map[string]any{"status": "ok"}
+
+	if currentEnv != nil &&
+		(currentEnv.AuditRetentionDays > 0 || currentEnv.RefreshRetentionDays > 0) {
+		st := getRetentionStatus()
+		healthy := retentionHealthy(
+			currentEnv.AuditRetentionDays,
+			currentEnv.RefreshRetentionDays,
+			currentEnv.AuditCleanupInterval,
+		)
+		sec := map[string]any{
+			"enabled":         true,
+			"healthy":         healthy,
+			"audit_days":      currentEnv.AuditRetentionDays,
+			"refresh_days":    currentEnv.RefreshRetentionDays,
+			"audit_deleted":   st.AuditDeleted,
+			"refresh_deleted": st.RefreshDeleted,
+		}
+		if !st.LastRunAt.IsZero() {
+			sec["last_run_at"] = st.LastRunAt.UTC().Format(time.RFC3339)
+			sec["seconds_since_last_run"] = int64(time.Since(st.LastRunAt).Seconds())
+		}
+		if st.LastError != "" {
+			sec["last_error"] = st.LastError
+		}
+		resp["retention"] = sec
+	}
+
+	_ = json.NewEncoder(w).Encode(resp)
 }
