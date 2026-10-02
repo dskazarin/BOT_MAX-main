@@ -159,6 +159,8 @@
         </div>
         <div>
             <button class="btn btn-info" onclick="loadAudit()">🔄 Обновить</button>
+            <button class="btn btn-warning" onclick="runRetentionNow()" title="Ручной прогон retention (audit + refresh)">🧹 Прогнать retention</button>
+            <span id="retentionStatus" style="display:none; margin-left:12px; font-size:0.85em; color:#a0aec0; font-family:monospace; vertical-align:middle;"></span>
             <a href="admin_panel.html" class="btn btn-secondary">↩ В панель</a>
         </div>
     </div>
@@ -292,11 +294,61 @@ function runRetentionNow() {
                 msg += '  audit: ' + (d.audit.skipped ? 'выключен' : ('удалено ' + d.audit.deleted + ' (days=' + d.audit.days + ')')) + '\n';
                 msg += '  refresh: ' + (d.refresh.skipped ? 'выключен' : ('удалено ' + d.refresh.deleted + ' (days=' + d.refresh.days + ')'));
                 alert(msg);
+                refreshRetentionStatus();
                 loadAudit();
             });
         })
         .catch(function (err) {
             alert('Ошибка сети: ' + (err.message || err));
+        });
+}
+
+// ---------------------------------------------------------------
+// B25.2: статус retention в шапке (из /api/health)
+// ---------------------------------------------------------------
+
+// formatRelativeTime — «15s» / «5m» / «2h» / «3d» из ISO-строки.
+function formatRelativeTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    var s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 0) s = 0;
+    if (s < 60)   return s + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm';
+    if (s < 86400) return Math.floor(s / 3600) + 'h';
+    return Math.floor(s / 86400) + 'd';
+}
+
+// refreshRetentionStatus — читает /api/health, обновляет span #retentionStatus.
+// Если retention выключен (секции нет в ответе) — span скрывается.
+function refreshRetentionStatus() {
+    var span = document.getElementById('retentionStatus');
+    if (!span) return;
+    fetch('/api/health', { credentials: 'include' })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (d) {
+            if (!d || !d.retention) {
+                span.style.display = 'none';
+                return;
+            }
+            var r = d.retention;
+            var icon = r.healthy ? '✅' : '⚠️';
+            var parts = [];
+            parts.push('🧹 retention:');
+            if (r.last_run_at) {
+                parts.push(formatRelativeTime(r.last_run_at) + ' назад');
+            } else {
+                parts.push('ещё не запускался');
+            }
+            parts.push('· audit ' + (r.audit_deleted || 0) + ' / refresh ' + (r.refresh_deleted || 0));
+            parts.push('· ' + icon);
+            span.textContent = parts.join(' ');
+            span.title = (r.last_error ? ('Ошибка: ' + r.last_error) : 'retention OK');
+            span.style.color = r.healthy ? '#a0aec0' : '#fc8181';
+            span.style.display = 'inline';
+        })
+        .catch(function () {
+            span.style.display = 'none';
         });
 }
 
@@ -327,6 +379,10 @@ function resetFilters() {
 
 // Первая загрузка
 loadAudit();
+
+// B25.2: статус retention — при загрузке и каждые 30с.
+refreshRetentionStatus();
+setInterval(refreshRetentionStatus, 30000);
 </script>
 </body>
 </html>
