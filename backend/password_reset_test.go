@@ -7,7 +7,11 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -264,5 +268,197 @@ func TestIsDoctorLocked_Expired(t *testing.T) {
 	}
 	if locked {
 		t.Fatalf("протухшая блокировка не должна считаться активной")
+	}
+}
+
+// ---------------------------------------------------------------
+// B27.3a — HTTP API password reset (request + confirm)
+// ---------------------------------------------------------------
+
+// withDevEnv — временно ставит currentEnv в dev (для тестов).
+func withDevEnv(t *testing.T) {
+	t.Helper()
+	prev := currentEnv
+	t.Cleanup(func() { currentEnv = prev })
+	currentEnv = &Env{
+		Name:      "dev",
+		IsProd:    false,
+		JWTSecret: "b27-3a-test-secret-32-bytes-minimum-abc",
+	}
+}
+
+// TestPasswordResetRequest_Success — есть активный доктор.
+func TestPasswordResetRequest_Success(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+	withDevEnv(t)
+
+	body := strings.NewReader(`{"email":"d1@test.local"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/request", body)
+	w := httptest.NewRecorder()
+
+	handlePasswordResetRequest(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp["ok"] != true {
+		t.Fatalf("ok != true: %v", resp)
+	}
+	tok, ok := resp["token"].(string)
+	if !ok || tok == "" {
+		t.Fatalf("в dev ожидали token в ответе, got %v", resp)
+	}
+
+	var count int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM password_reset_tokens WHERE doctor_id='D1'`).Scan(&count)
+	if count != 1 {
+		t.Fatalf("токен не сохранён, count=%d", count)
+	}
+}
+
+// TestPasswordResetRequest_NotFound — email не найден, всё равно 200.
+func TestPasswordResetRequest_NotFound(t *testing.T) {
+	db := newTestDB(t)
+	withGlobalDB(t, db)
+	withDevEnv(t)
+
+	body := strings.NewReader(`{"email":"nobody@test.local"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/request", body)
+	w := httptest.NewRecorder()
+
+	handlePasswordResetRequest(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp["ok"] != true {
+		t.Fatalf("ok != true: %v", resp)
+	}
+	if _, hasTok := resp["token"]; hasTok {
+		t.Fatalf("токен не должен возвращаться, если email не найден")
+	}
+}
+
+// TestPasswordResetConfirm_Success — полный happy-path.
+func TestPasswordResetConfirm_Success(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+	withDevEnv(t)
+
+	body := strings.NewReader(`{"email":"d1@test.local"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/request", body)
+	w := httptest.NewRecorder()
+	handlePasswordResetRequest(w, r)
+
+	var resp map[string]any
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	tok, _ := resp["token"].(string)
+	if tok == "" {
+		t.Fatalf("токен пустой")
+	}
+
+	body2 := strings.NewReader(`{"token":"` + tok + `","new_password":"new-password-123"}`)
+	r2 := httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/confirm", body2)
+	w2 := httptest.NewRecorder()
+	handlePasswordResetConfirm(w2, r2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("confirm code: got %d, body=%s", w2.Code, w2.Body.String())
+	}
+
+	doc, err := getDoctorByEmail(db, "d1@test.local")
+	if err != nil {
+		t.Fatalf("getDoctorByEmail: %v", err)
+	}
+	if err := CheckPassword(doc.PasswordHash, "new-password-123"); err != nil {
+		t.Fatalf("новый пароль не работает: %v", err)
+	}
+
+	var usedAt sql.NullString
+	_ = db.QueryRow(`SELECT used_at FROM password_reset_tokens WHERE doctor_id='D1'`).Scan(&usedAt)
+	if !usedAt.Valid {
+		t.Fatalf("used_at должен быть установлен")
+	}
+}
+
+// TestPasswordResetConfirm_InvalidToken — неверный токен.
+func TestPasswordResetConfirm_InvalidToken(t *testing.T) {
+	db := newTestDB(t)
+	withGlobalDB(t, db)
+	withDevEnv(t)
+
+	body := strings.NewReader(`{"token":"deadbeef","new_password":"valid-password-123"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/confirm", body)
+	w := httptest.NewRecorder()
+	handlePasswordResetConfirm(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("code: got %d, want 400", w.Code)
+	}
+}
+
+// TestPasswordResetConfirm_WeakPassword — пароль < minPasswordLen.
+func TestPasswordResetConfirm_WeakPassword(t *testing.T) {
+	db := newTestDB(t)
+	withGlobalDB(t, db)
+	withDevEnv(t)
+
+	body := strings.NewReader(`{"token":"abc","new_password":"123"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/confirm", body)
+	w := httptest.NewRecorder()
+	handlePasswordResetConfirm(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("code: got %d, want 400", w.Code)
+	}
+}
+
+// TestPasswordResetConfirm_RevokesRefresh — при смене пароля отзываем refresh.
+func TestPasswordResetConfirm_RevokesRefresh(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+	withDevEnv(t)
+
+	if err := SaveRefreshJTI(db, "jti-1", "D1", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("SaveRefreshJTI: %v", err)
+	}
+
+	body := strings.NewReader(`{"email":"d1@test.local"}`)
+	w := httptest.NewRecorder()
+	handlePasswordResetRequest(w, httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/request", body))
+	var resp map[string]any
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	tok, _ := resp["token"].(string)
+
+	body2 := strings.NewReader(`{"token":"` + tok + `","new_password":"new-password-456"}`)
+	w2 := httptest.NewRecorder()
+	handlePasswordResetConfirm(w2, httptest.NewRequest(http.MethodPost, "/api/auth/password-reset/confirm", body2))
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("confirm code: got %d, body=%s", w2.Code, w2.Body.String())
+	}
+
+	var revokedAt sql.NullString
+	_ = db.QueryRow(`SELECT revoked_at FROM refresh_tokens WHERE jti='jti-1'`).Scan(&revokedAt)
+	if !revokedAt.Valid {
+		t.Fatalf("refresh-токен должен быть отозван после reset")
+	}
+}
+
+// TestPasswordResetRequest_MethodNotAllowed — GET → 405.
+func TestPasswordResetRequest_MethodNotAllowed(t *testing.T) {
+	withDevEnv(t)
+	w := httptest.NewRecorder()
+	handlePasswordResetRequest(w, httptest.NewRequest(http.MethodGet, "/api/auth/password-reset/request", nil))
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("code: got %d, want 405", w.Code)
 	}
 }

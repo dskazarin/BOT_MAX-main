@@ -633,7 +633,7 @@ func getDoctorByEmail(db *sql.DB, email string) (*Doctor, error) {
 	const q = `
 		SELECT id, email, password_hash, name, role, active
 		FROM doctors
-		WHERE email = ?
+		WHERE LOWER(email) = LOWER(?)
 	`
 	var d Doctor
 	err := db.QueryRow(q, email).Scan(

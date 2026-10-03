@@ -11,7 +11,10 @@ package main
 // сравнивает с datetime('now').
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -280,4 +283,44 @@ func IsDoctorLocked(db *sql.DB, doctorID string) (bool, time.Time, error) {
 		return false, time.Time{}, nil
 	}
 	return true, until, nil
+}
+
+// ---------------------------------------------------------------
+// Хелперы (B27.3a)
+// ---------------------------------------------------------------
+
+// GenerateResetToken — генерирует случайный токен 32 байта (hex).
+// Возвращает (plainToken, tokenHash). В БД сохраняем ТОЛЬКО hash.
+func GenerateResetToken() (plain, hash string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", fmt.Errorf("rand.Read: %w", err)
+	}
+	plain = hex.EncodeToString(b)
+	hash = hashResetToken(plain)
+	return plain, hash, nil
+}
+
+// hashResetToken — sha256 hex от plain-токена.
+func hashResetToken(plain string) string {
+	sum := sha256.Sum256([]byte(plain))
+	return hex.EncodeToString(sum[:])
+}
+
+// RevokeAllRefreshForDoctor — отзывает все активные refresh-токены доктора.
+// Используется при смене пароля (пароль reset = «разлогинить везде»).
+func RevokeAllRefreshForDoctor(db *sql.DB, doctorID string) (int64, error) {
+	if doctorID == "" {
+		return 0, fmt.Errorf("empty doctorID")
+	}
+	res, err := db.Exec(
+		`UPDATE refresh_tokens SET revoked_at = ?
+		 WHERE doctor_id = ? AND revoked_at IS NULL`,
+		time.Now().UTC().Format(time.RFC3339), doctorID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("revoke all refresh: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }

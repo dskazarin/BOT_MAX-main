@@ -407,8 +407,12 @@ func registerAuthRoutes() {
 	http.HandleFunc("/api/auth/login", handleAuthLogin)
 	http.HandleFunc("/api/auth/refresh", handleAuthRefresh)
 	http.HandleFunc("/api/auth/logout", handleAuthLogout)
+	// B27.3a: password reset.
+	http.HandleFunc("/api/auth/password-reset/request", handlePasswordResetRequest)
+	http.HandleFunc("/api/auth/password-reset/confirm", handlePasswordResetConfirm)
 
-	slog.Info("registerAuthRoutes", "routes", "/login, /refresh, /logout")
+	slog.Info("registerAuthRoutes",
+		"routes", "/login, /refresh, /logout, /password-reset/request, /password-reset/confirm")
 }
 
 // ---------------------------------------------------------------
@@ -534,6 +538,154 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------
 // Шаг 6.4 — authMiddleware (soft-mode через BOTMAX_AUTH_ENFORCE)
 // ---------------------------------------------------------------
+
+// ---------------------------------------------------------------
+// B27.3a — password reset (request + confirm)
+// ---------------------------------------------------------------
+
+// passwordResetRequestReq — тело POST /api/auth/password-reset/request.
+type passwordResetRequestReq struct {
+	Email string `json:"email"`
+}
+
+// passwordResetConfirmReq — тело POST /api/auth/password-reset/confirm.
+type passwordResetConfirmReq struct {
+	Token       string `json:"token"`
+	NewPassword string `json:"new_password"`
+}
+
+// minPasswordLen — минимальная длина пароля (B27.3a).
+const minPasswordLen = 8
+
+// handlePasswordResetRequest — POST /api/auth/password-reset/request.
+//
+// Всегда возвращает 200, независимо от того, найден ли email
+// (защита от user enumeration).
+//
+// В prod — токен уходит через email (в будущем).
+// В dev (currentEnv.IsProd=false) — токен возвращается в JSON.
+func handlePasswordResetRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var req passwordResetRequestReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	if req.Email == "" {
+		http.Error(w, `{"error":"email required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if ok, retry := loginLimiterPerEmail.Allow("reset:" + req.Email); !ok {
+		writeTooManyRequests(w, retry)
+		return
+	}
+
+	resp := map[string]any{"ok": true}
+
+	doc, err := getDoctorByEmail(db, req.Email)
+	switch {
+	case err == nil && doc != nil && doc.Active:
+		plain, hash, err := GenerateResetToken()
+		if err != nil {
+			slog.Error("password-reset: GenerateResetToken", "err", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		if err := CreatePasswordResetToken(db, doc.ID, hash); err != nil {
+			slog.Error("password-reset: CreatePasswordResetToken", "id", doc.ID, "err", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		auditLog(db, doc.ID, "auth.password.reset_requested", "auth", "",
+			clientIP(r), map[string]string{"email": doc.Email})
+		slog.Info("password-reset: токен выпущен (dev-логирование)",
+			"doctor_id", doc.ID, "email", doc.Email,
+			"token_prefix", plain[:8])
+		if currentEnv != nil && !currentEnv.IsProd {
+			resp["token"] = plain
+			resp["dev_note"] = "токен возвращён, потому что IsProd=false"
+		}
+
+	case errors.Is(err, sql.ErrNoRows):
+		auditLog(db, "", "auth.password.reset_requested", "auth", "",
+			clientIP(r), map[string]string{"email": req.Email, "found": "false"})
+		slog.Info("password-reset: email не найден", "email", req.Email)
+
+	default:
+		slog.Warn("password-reset: getDoctorByEmail", "email", req.Email, "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// handlePasswordResetConfirm — POST /api/auth/password-reset/confirm.
+func handlePasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var req passwordResetConfirmReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Token == "" || req.NewPassword == "" {
+		http.Error(w, `{"error":"token and new_password required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.NewPassword) < minPasswordLen {
+		http.Error(w, `{"error":"password too short"}`, http.StatusBadRequest)
+		return
+	}
+
+	hash := hashResetToken(req.Token)
+	row, err := GetPasswordResetToken(db, hash)
+	if err != nil {
+		if errors.Is(err, ErrPasswordResetTokenInvalid) {
+			http.Error(w, `{"error":"invalid or expired token"}`, http.StatusBadRequest)
+			return
+		}
+		slog.Error("password-reset: GetPasswordResetToken", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	newHash, err := HashPassword(req.NewPassword)
+	if err != nil {
+		slog.Error("password-reset: HashPassword", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := UpdatePasswordHash(db, row.DoctorID, newHash); err != nil {
+		slog.Error("password-reset: UpdatePasswordHash", "id", row.DoctorID, "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := ConsumePasswordResetToken(db, hash); err != nil {
+		slog.Warn("password-reset: ConsumePasswordResetToken", "err", err)
+	}
+
+	if n, err := RevokeAllRefreshForDoctor(db, row.DoctorID); err != nil {
+		slog.Warn("password-reset: RevokeAllRefreshForDoctor", "err", err)
+	} else {
+		slog.Info("password-reset: refresh-токены отозваны", "doctor_id", row.DoctorID, "revoked", n)
+	}
+
+	auditLog(db, row.DoctorID, "auth.password.reset_completed", "auth", "",
+		clientIP(r), nil)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
 
 // authMiddleware — Шаг 6.4.
 // Soft-mode (default): пропускает всех, но логирует запросы без токена.
@@ -681,7 +833,8 @@ func extractAccessToken(r *http.Request) string {
 // не открыть /api/auth/loginXXX. Статика (не /api/*) — открыта.
 func isAuthWhitelist(path string) bool {
 	switch path {
-	case "/api/health", "/api/metrics", "/api/auth/login", "/api/auth/refresh":
+	case "/api/health", "/api/metrics", "/api/auth/login", "/api/auth/refresh",
+		"/api/auth/password-reset/request", "/api/auth/password-reset/confirm":
 		return true
 	}
 	if !strings.HasPrefix(path, "/api/") {
