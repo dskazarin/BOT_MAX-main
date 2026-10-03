@@ -502,6 +502,9 @@ func main() {
 	// Audit-log (B9): /api/audit — только admin/superadmin
 	registerAuditRoutes()
 
+	// Encounters (B28): /api/encounters — doctor/admin/superadmin
+	registerEncounterRoutes()
+
 	http.Handle("/", http.FileServer(http.Dir(rootDir)))
 
 	listener, err := net.Listen("tcp", ":8082")

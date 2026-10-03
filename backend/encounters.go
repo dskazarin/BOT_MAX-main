@@ -12,6 +12,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -57,38 +60,38 @@ type Encounter struct {
 
 // CreateEncounterInput — вход для createEncounter.
 type CreateEncounterInput struct {
-	PatientID       string
-	DoctorID        string
-	ClinicID        string
-	Specialty       string
-	Title           string
-	Kind            string
-	StartedAt       string
-	Complaint       string
-	Anamnesis       string
-	Examination     string
-	DiagnosisText   string
-	DiagnosisICD10  string
-	Recommendations string
-	CommonJSON      string
-	SpecialtyJSON   string
+	PatientID       string `json:"patient_id"`
+	DoctorID        string `json:"doctor_id"`
+	ClinicID        string `json:"clinic_id"`
+	Specialty       string `json:"specialty"`
+	Title           string `json:"title"`
+	Kind            string `json:"kind"`
+	StartedAt       string `json:"started_at"`
+	Complaint       string `json:"complaint"`
+	Anamnesis       string `json:"anamnesis"`
+	Examination     string `json:"examination"`
+	DiagnosisText   string `json:"diagnosis_text"`
+	DiagnosisICD10  string `json:"diagnosis_icd10"`
+	Recommendations string `json:"recommendations"`
+	CommonJSON      string `json:"common_json"`
+	SpecialtyJSON   string `json:"specialty_json"`
 }
 
 // UpdateEncounterInput — вход для updateEncounter (partial).
 type UpdateEncounterInput struct {
-	Specialty       *string
-	Title           *string
-	Kind            *string
-	Status          *string
-	FinishedAt      *string
-	Complaint       *string
-	Anamnesis       *string
-	Examination     *string
-	DiagnosisText   *string
-	DiagnosisICD10  *string
-	Recommendations *string
-	CommonJSON      *string
-	SpecialtyJSON   *string
+	Specialty       *string `json:"specialty"`
+	Title           *string `json:"title"`
+	Kind            *string `json:"kind"`
+	Status          *string `json:"status"`
+	FinishedAt      *string `json:"finished_at"`
+	Complaint       *string `json:"complaint"`
+	Anamnesis       *string `json:"anamnesis"`
+	Examination     *string `json:"examination"`
+	DiagnosisText   *string `json:"diagnosis_text"`
+	DiagnosisICD10  *string `json:"diagnosis_icd10"`
+	Recommendations *string `json:"recommendations"`
+	CommonJSON      *string `json:"common_json"`
+	SpecialtyJSON   *string `json:"specialty_json"`
 }
 
 // validateEncounterKind — проверка допустимого kind.
@@ -391,4 +394,389 @@ func UnmarshalJSONValue(s string) (map[string]any, error) {
 		return nil, fmt.Errorf("unmarshal json: %w", err)
 	}
 	return m, nil
+}
+
+// ---------------------------------------------------------------
+// B28.3 — HTTP-слой
+// ---------------------------------------------------------------
+
+// registerEncounterRoutes — регистрирует /api/encounters.
+// Все роуты доступны doctor/admin/superadmin.
+func registerEncounterRoutes() {
+	guard := requireRole(RoleDoctor, RoleAdmin, RoleSuperadmin)
+	http.Handle("/api/encounters", guard(http.HandlerFunc(handleEncounters)))
+	http.Handle("/api/encounters/", guard(http.HandlerFunc(handleEncounterByID)))
+
+	slog.Info("registerEncounterRoutes", "routes",
+		"/api/encounters (GET, POST), /api/encounters/{id} (GET, PATCH, DELETE, /finish)")
+}
+
+// handleEncounters — /api/encounters (без id).
+func handleEncounters(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleEncountersList(w, r)
+	case http.MethodPost:
+		handleEncounterCreate(w, r)
+	default:
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// handleEncounterByID — /api/encounters/{id} и подпути.
+func handleEncounterByID(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/encounters/")
+	if path == "" {
+		http.Error(w, `{"error":"id required"}`, http.StatusBadRequest)
+		return
+	}
+	parts := strings.Split(path, "/")
+	id := parts[0]
+
+	// /{id}/finish
+	if len(parts) == 2 && parts[1] == "finish" {
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		handleEncounterFinish(w, r, id)
+		return
+	}
+	if len(parts) > 1 {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		handleEncounterGet(w, r, id)
+	case http.MethodPatch:
+		handleEncounterUpdate(w, r, id)
+	case http.MethodDelete:
+		handleEncounterDelete(w, r, id)
+	default:
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// canReadEncounter — проверка: имеет ли право актор читать encounter.
+//
+//	doctor     — если encounter.doctor_id == he, ИЛИ у него есть encounter
+//	             с тем же пациентом (см. §6.37);
+//	admin      — если encounter.clinic_id == его clinic_id;
+//	superadmin — всегда.
+func canReadEncounter(r *http.Request, enc *Encounter) bool {
+	role, ok := doctorRoleFromCtx(r)
+	if !ok {
+		return false
+	}
+	me := doctorIDFromCtx(r)
+
+	switch role {
+	case RoleSuperadmin:
+		return true
+	case RoleAdmin:
+		// Сверяем clinic_id admin'а и encounter'а.
+		adminDoc, err := getDoctorRowByID(db, me)
+		if err != nil {
+			return false
+		}
+		return enc.ClinicID != "" && enc.ClinicID == adminDoc.ClinicID
+	case RoleDoctor:
+		if enc.DoctorID == me {
+			return true
+		}
+		// Врач видит историю пациентов, с которыми есть encounter.
+		ok, err := encounterExistsForDoctorAndPatient(db, me, enc.PatientID)
+		if err != nil {
+			slog.Warn("canReadEncounter: exists check", "err", err)
+			return false
+		}
+		return ok
+	}
+	return false
+}
+
+// canMutateEncounter — true, если актор может менять encounter.
+//
+//	doctor     — только свои;
+//	admin      — НЕ может (медицинские данные);
+//	superadmin — может.
+func canMutateEncounter(r *http.Request, enc *Encounter) bool {
+	role, _ := doctorRoleFromCtx(r)
+	me := doctorIDFromCtx(r)
+	switch role {
+	case RoleSuperadmin:
+		return true
+	case RoleDoctor:
+		return enc.DoctorID == me
+	}
+	return false
+}
+
+// handleEncounterCreate — POST /api/encounters.
+func handleEncounterCreate(w http.ResponseWriter, r *http.Request) {
+	var req CreateEncounterInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.PatientID == "" {
+		http.Error(w, `{"error":"patient_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// DoctorID: врач — принудительно свой; admin/superadmin — могут задать,
+	// по умолчанию берём из ctx.
+	me := doctorIDFromCtx(r)
+	role, _ := doctorRoleFromCtx(r)
+	if role == RoleDoctor {
+		req.DoctorID = me
+	} else if req.DoctorID == "" {
+		req.DoctorID = me
+	}
+	if req.DoctorID == "" {
+		http.Error(w, `{"error":"doctor_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Проверка, что patient существует.
+	if _, err := getPatientByID(db, req.PatientID); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, `{"error":"patient not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	enc, err := createEncounter(db, req)
+	if err != nil {
+		slog.Warn("encounter.create", "err", err)
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	auditLog(db, me, "encounter.created", "encounter", enc.ID, clientIP(r),
+		map[string]string{"patient_id": enc.PatientID, "kind": enc.Kind})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(enc)
+}
+
+// handleEncountersList — GET /api/encounters.
+// Обязательно: ?patient_id= или ?doctor_id= (иначе 400).
+// Для admin/superadmin: можно ?clinic_id=.
+func handleEncountersList(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	patientID := strings.TrimSpace(q.Get("patient_id"))
+	doctorID := strings.TrimSpace(q.Get("doctor_id"))
+	clinicID := strings.TrimSpace(q.Get("clinic_id"))
+
+	limit := 100
+	offset := 0
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1000 {
+			limit = n
+		}
+	}
+	if v := q.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	role, _ := doctorRoleFromCtx(r)
+	me := doctorIDFromCtx(r)
+
+	// Права на list:
+	//   doctor  — только свои (doctor_id=me) или по пациенту, с которым есть encounter;
+	//   admin   — только своя клиника;
+	//   superadmin — любые фильтры.
+	var (
+		list []*Encounter
+		err  error
+	)
+	switch {
+	case patientID != "":
+		// Врачу — только если у него есть encounter с этим пациентом.
+		if role == RoleDoctor {
+			ok, e := encounterExistsForDoctorAndPatient(db, me, patientID)
+			if e != nil {
+				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+				return
+			}
+			if !ok {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+		}
+		if role == RoleAdmin {
+			// Проверим, что patient в его клинике (через encounters).
+			// Упрощённо: если clinicID не задан — запретим.
+			if clinicID == "" {
+				adminDoc, _ := getDoctorRowByID(db, me)
+				if adminDoc != nil {
+					clinicID = adminDoc.ClinicID
+				}
+			}
+			list, err = listEncounters(db,
+				`WHERE patient_id = ? AND clinic_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?`,
+				patientID, clinicID, limit, offset)
+		} else {
+			list, err = listEncountersByPatient(db, patientID, limit, offset)
+		}
+	case doctorID != "":
+		// Врачу — только свой doctor_id.
+		if role == RoleDoctor && doctorID != me {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+		list, err = listEncountersByDoctor(db, doctorID, limit, offset)
+	case clinicID != "" && (role == RoleAdmin || role == RoleSuperadmin):
+		list, err = listEncounters(db,
+			`WHERE clinic_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?`,
+			clinicID, limit, offset)
+	default:
+		http.Error(w, `{"error":"patient_id or doctor_id or clinic_id required"}`,
+			http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		slog.Warn("encounters.list", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Считаем count для пагинации (упрощённо — len от limit).
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"items":  list,
+		"limit":  limit,
+		"offset": offset,
+		"count":  len(list),
+	})
+}
+
+// handleEncounterGet — GET /api/encounters/{id}.
+func handleEncounterGet(w http.ResponseWriter, r *http.Request, id string) {
+	enc, err := getEncounterByID(db, id)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		slog.Warn("encounter.get", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if !canReadEncounter(r, enc) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(enc)
+}
+
+// handleEncounterUpdate — PATCH /api/encounters/{id}.
+func handleEncounterUpdate(w http.ResponseWriter, r *http.Request, id string) {
+	enc, err := getEncounterByID(db, id)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if !canMutateEncounter(r, enc) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	// Завершённый encounter менять нельзя (медицинская неизменяемость).
+	if enc.Status == "finished" {
+		http.Error(w, `{"error":"encounter is finished; use amendment (not implemented)"}`,
+			http.StatusForbidden)
+		return
+	}
+
+	var req UpdateEncounterInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if err := updateEncounter(db, id, req); err != nil {
+		slog.Warn("encounter.update", "err", err, "id", id)
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+
+	auditLog(db, doctorIDFromCtx(r), "encounter.updated", "encounter", id, clientIP(r), nil)
+
+	// Вернём обновлённый.
+	updated, _ := getEncounterByID(db, id)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+}
+
+// handleEncounterFinish — POST /api/encounters/{id}/finish.
+func handleEncounterFinish(w http.ResponseWriter, r *http.Request, id string) {
+	enc, err := getEncounterByID(db, id)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if !canMutateEncounter(r, enc) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	if enc.Status == "finished" {
+		http.Error(w, `{"error":"already finished"}`, http.StatusBadRequest)
+		return
+	}
+	if err := finishEncounter(db, id); err != nil {
+		slog.Warn("encounter.finish", "err", err, "id", id)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	auditLog(db, doctorIDFromCtx(r), "encounter.finished", "encounter", id, clientIP(r), nil)
+	updated, _ := getEncounterByID(db, id)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(updated)
+}
+
+// handleEncounterDelete — DELETE /api/encounters/{id}.
+// Разрешено только для status='draft' (медицинская неизменяемость).
+func handleEncounterDelete(w http.ResponseWriter, r *http.Request, id string) {
+	enc, err := getEncounterByID(db, id)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if !canMutateEncounter(r, enc) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	if enc.Status != "draft" {
+		http.Error(w, `{"error":"only draft encounters can be deleted"}`,
+			http.StatusForbidden)
+		return
+	}
+	if err := deleteEncounter(db, id); err != nil {
+		slog.Warn("encounter.delete", "err", err, "id", id)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	auditLog(db, doctorIDFromCtx(r), "encounter.deleted", "encounter", id, clientIP(r),
+		map[string]string{"patient_id": enc.PatientID})
+	w.WriteHeader(http.StatusNoContent)
 }
