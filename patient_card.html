@@ -1534,10 +1534,49 @@
         for (var j = 0; j < rows.length; j++) {
             rows[j].addEventListener('click', function(){
                 var id = this.getAttribute('data-id');
-                // TODO B28.4.2: открыть encounter по id
-                console.log('open encounter', id);
+                openViewEncounterModal(id);
             });
         }
+    }
+
+    // ---------- B28.4.3: просмотр приёма (read-only) ----------
+    function openViewEncounterModal(id) {
+        BotMaxAuth.authFetch('GET', '/api/encounters/' + encodeURIComponent(id))
+            .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function(e){
+                if (!e) { alert('Приём не найден'); return; }
+                var body = document.getElementById('viewEncounterBody');
+                if (!body) return;
+                var finished = (e.status === 'finished');
+                var badge = finished
+                    ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">finished</span>'
+                    : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">draft</span>';
+                var html = '';
+                html += '<div style="margin-bottom:10px;"><strong>' + escapeHtml(e.title || '(без названия)') + '</strong> ' + badge + '</div>';
+                html += '<div style="color:#a0aec0;font-size:0.85em;margin-bottom:15px;">'
+                     +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(e.kind || '—')
+                     +  (e.specialty ? ' · ' + escapeHtml(e.specialty) : '')
+                     +  '</div>';
+                function row(label, val) {
+                    if (!val) return '';
+                    return '<div style="margin-bottom:10px;"><div style="font-size:0.75em;color:#a0aec0;text-transform:uppercase;margin-bottom:3px;">' + label + '</div><div style="white-space:pre-wrap;">' + escapeHtml(val) + '</div></div>';
+                }
+                html += row('Жалобы', e.complaint);
+                html += row('Анамнез', e.anamnesis);
+                html += row('Осмотр', e.examination);
+                html += row('Диагноз', e.diagnosis_text);
+                html += row('МКБ-10', e.diagnosis_icd10);
+                html += row('Рекомендации', e.recommendations);
+                body.innerHTML = html;
+                var m = document.getElementById('viewEncounterModal');
+                if (m) { m.classList.add('active'); m.style.display = 'flex'; }
+            })
+            .catch(function(err){ alert('Ошибка загрузки приёма: ' + err.message); });
+    }
+
+    function closeViewEncounterModal() {
+        var m = document.getElementById('viewEncounterModal');
+        if (m) { m.classList.remove('active'); m.style.display = 'none'; }
     }
 
     function renderPatientHeader() {
@@ -2969,6 +3008,17 @@
 </div>
 
 <!-- Модальное окно диаграммы -->
+<!-- B28.4.3: просмотр приёма -->
+<div class="chart-modal" id="viewEncounterModal" style="display:none;">
+    <div class="chart-modal-content" style="max-width:700px;max-height:80vh;overflow-y:auto;">
+        <h3 style="color:#9f7aea;margin-bottom:20px;">🩺 Приём</h3>
+        <div id="viewEncounterBody" style="color:#e2e8f0;">Загрузка…</div>
+        <div class="chart-modal-buttons">
+            <button class="btn btn-danger" onclick="closeViewEncounterModal()">Закрыть</button>
+        </div>
+    </div>
+</div>
+
 <div class="chart-modal" id="chartModal">
     <div class="chart-modal-content">
         <h3 id="chartTitle">📊 Диаграмма показателей</h3>

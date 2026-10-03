@@ -560,6 +560,67 @@
     </div>
 </div>
 
+<div id="editEncounterModal" class="modal">
+    <div class="modal-content" style="max-width:800px;">
+        <h3 style="color: #9f7aea; margin-bottom: 20px;">✏️ Редактировать приём</h3>
+        <input type="hidden" id="editEncounterId">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Пациент</label>
+                <div id="editEncounterPatient" style="padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#a0aec0;">—</div>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Специальность</label>
+                <input type="text" id="editEncounterSpecialty" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Тип</label>
+                <select id="editEncounterKind" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                    <option value="consultation">consultation</option>
+                    <option value="study">study</option>
+                    <option value="procedure">procedure</option>
+                    <option value="lab">lab</option>
+                    <option value="followup">followup</option>
+                </select>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Название</label>
+                <input type="text" id="editEncounterTitle" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Жалобы</label>
+                <textarea id="editEncounterComplaint" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Анамнез</label>
+                <textarea id="editEncounterAnamnesis" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Осмотр</label>
+                <textarea id="editEncounterExamination" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Диагноз (текст)</label>
+                <textarea id="editEncounterDiagnosisText" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">МКБ-10</label>
+                <input type="text" id="editEncounterDiagnosisICD10" placeholder="J06.9" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Рекомендации</label>
+                <textarea id="editEncounterRecommendations" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+        </div>
+
+        <div class="modal-buttons">
+            <button class="btn btn-danger" onclick="closeEditEncounterModal()">❌ Отмена</button>
+            <button class="btn btn-success" onclick="submitEditEncounter()">✅ Сохранить</button>
+        </div>
+    </div>
+</div>
+
 <div id="newEncounterModal" class="modal">
     <div class="modal-content">
         <h3 style="color: #9f7aea; margin-bottom: 20px;">➕ Новый приём</h3>
@@ -1950,6 +2011,66 @@
         container.innerHTML = html;
     }
 
+    // ---------- B28.4.3: редактирование / завершение / удаление ----------
+    function openEditEncounterModal(id) {
+        apiRequest('GET', '/api/encounters/' + encodeURIComponent(id))
+            .then(function(e){
+                if (!e) { alert('Приём не найден'); return; }
+                document.getElementById('editEncounterId').value = e.id || '';
+                document.getElementById('editEncounterPatient').textContent = e.patient_id || '—';
+                document.getElementById('editEncounterTitle').value = e.title || '';
+                document.getElementById('editEncounterSpecialty').value = e.specialty || '';
+                document.getElementById('editEncounterKind').value = e.kind || 'consultation';
+                document.getElementById('editEncounterComplaint').value = e.complaint || '';
+                document.getElementById('editEncounterAnamnesis').value = e.anamnesis || '';
+                document.getElementById('editEncounterExamination').value = e.examination || '';
+                document.getElementById('editEncounterDiagnosisText').value = e.diagnosis_text || '';
+                document.getElementById('editEncounterDiagnosisICD10').value = e.diagnosis_icd10 || '';
+                document.getElementById('editEncounterRecommendations').value = e.recommendations || '';
+                var m = document.getElementById('editEncounterModal');
+                if (m) { m.classList.add('active'); m.style.display = 'flex'; }
+            })
+            .catch(function(err){ alert('Ошибка загрузки приёма: ' + (err && err.message ? err.message : 'unknown')); });
+    }
+
+    function closeEditEncounterModal() {
+        var m = document.getElementById('editEncounterModal');
+        if (m) { m.classList.remove('active'); m.style.display = 'none'; }
+    }
+
+    function submitEditEncounter() {
+        var id = (document.getElementById('editEncounterId') || {}).value || '';
+        if (!id) { alert('Нет id приёма'); return; }
+        var body = {
+            title:         ((document.getElementById('editEncounterTitle') || {}).value || '').trim(),
+            specialty:     ((document.getElementById('editEncounterSpecialty') || {}).value || '').trim(),
+            kind:          ((document.getElementById('editEncounterKind') || {}).value || 'consultation'),
+            complaint:     ((document.getElementById('editEncounterComplaint') || {}).value || '').trim(),
+            anamnesis:     ((document.getElementById('editEncounterAnamnesis') || {}).value || '').trim(),
+            examination:   ((document.getElementById('editEncounterExamination') || {}).value || '').trim(),
+            diagnosis_text:((document.getElementById('editEncounterDiagnosisText') || {}).value || '').trim(),
+            diagnosis_icd10:((document.getElementById('editEncounterDiagnosisICD10') || {}).value || '').trim(),
+            recommendations:((document.getElementById('editEncounterRecommendations') || {}).value || '').trim()
+        };
+        apiRequest('PATCH', '/api/encounters/' + encodeURIComponent(id), body)
+            .then(function(){ closeEditEncounterModal(); return loadMyEncounters(); })
+            .catch(function(err){ alert('Ошибка сохранения: ' + (err && err.message ? err.message : 'unknown')); });
+    }
+
+    function finishEncounter(id) {
+        if (!confirm('Завершить приём? После завершения редактирование и удаление будут недоступны.')) return;
+        apiRequest('POST', '/api/encounters/' + encodeURIComponent(id) + '/finish')
+            .then(function(){ return loadMyEncounters(); })
+            .catch(function(err){ alert('Ошибка завершения: ' + (err && err.message ? err.message : 'unknown')); });
+    }
+
+    function deleteEncounter(id) {
+        if (!confirm('Удалить приём? Это действие необратимо.')) return;
+        apiRequest('DELETE', '/api/encounters/' + encodeURIComponent(id))
+            .then(function(){ return loadMyEncounters(); })
+            .catch(function(err){ alert('Ошибка удаления: ' + (err && err.message ? err.message : 'unknown')); });
+    }
+
     // ---------- B28.4.2: раздел «Приёмы» ----------
     function loadMyEncounters() {
         if (typeof currentDoctorId === 'undefined' || !currentDoctorId) return;
@@ -1983,8 +2104,10 @@
                  +  '<td style="padding:10px;">' + (e.title || '—') + '</td>'
                  +  '<td style="padding:10px;">' + (e.kind || '—') + '</td>'
                  +  '<td style="padding:10px;">' + badge + '</td>'
-                 +  '<td style="padding:10px;">'
+                 +  '<td style="padding:10px;white-space:nowrap;">'
                  +  '<button class="btn btn-sm btn-info" onclick="openEncounterFromTable(\'' + e.id + '\')">Открыть</button>'
+                 +  (finished ? '' : ' <button class="btn btn-sm btn-primary" onclick="finishEncounter(\'' + e.id + '\')">Завершить</button>')
+                 +  (finished ? '' : ' <button class="btn btn-sm btn-danger" onclick="deleteEncounter(\'' + e.id + '\')">Удалить</button>')
                  +  '</td>'
                  +  '</tr>';
         }
@@ -1992,8 +2115,7 @@
     }
 
     function openEncounterFromTable(id) {
-        // TODO B28.4.3: открыть encounter по id
-        console.log('open encounter', id);
+        openEditEncounterModal(id);
     }
 
     function openNewEncounterModal() {
