@@ -90,6 +90,36 @@ func InitDB(path string) (*sql.DB, error) {
 		`CREATE INDEX IF NOT EXISTS idx_patients_doctor ON patients(doctor_id, status);`,
 		`CREATE INDEX IF NOT EXISTS idx_patients_clinic ON patients(clinic_id, status);`,
 
+		// === B28.1: Encounters (эпизоды приёмов) ===
+		`CREATE TABLE IF NOT EXISTS encounters (
+			id              TEXT PRIMARY KEY,
+			patient_id      TEXT NOT NULL,
+			doctor_id       TEXT NOT NULL,
+			clinic_id       TEXT,
+			specialty       TEXT NOT NULL DEFAULT '',
+			title           TEXT NOT NULL DEFAULT '',
+			kind            TEXT NOT NULL DEFAULT 'consultation',
+			started_at      TEXT NOT NULL,
+			finished_at     TEXT,
+			status          TEXT NOT NULL DEFAULT 'draft',
+			complaint       TEXT NOT NULL DEFAULT '',
+			anamnesis       TEXT NOT NULL DEFAULT '',
+			examination     TEXT NOT NULL DEFAULT '',
+			diagnosis_text  TEXT NOT NULL DEFAULT '',
+			diagnosis_icd10 TEXT NOT NULL DEFAULT '',
+			recommendations TEXT NOT NULL DEFAULT '',
+			common_json     TEXT NOT NULL DEFAULT '{}',
+			specialty_json  TEXT NOT NULL DEFAULT '{}',
+			created_at      TEXT NOT NULL,
+			updated_at      TEXT NOT NULL,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(doctor_id)  REFERENCES doctors(id)  ON DELETE RESTRICT,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_enc_patient ON encounters(patient_id, started_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_enc_doctor  ON encounters(doctor_id, started_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_enc_clinic  ON encounters(clinic_id, started_at DESC);`,
+
 		// === Витальные (текущие) ===
 		`CREATE TABLE IF NOT EXISTS vitals (
 			patient_id TEXT PRIMARY KEY,

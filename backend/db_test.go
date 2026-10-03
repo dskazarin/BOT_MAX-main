@@ -119,3 +119,56 @@ func TestEnsureColumn_Idempotent(t *testing.T) {
 		t.Fatalf("колонка test_col_b27 должна быть одна, got %d", count)
 	}
 }
+
+// TestInitDB_Encounters — B28.1: таблица encounters + 3 индекса.
+func TestInitDB_Encounters(t *testing.T) {
+	db := newTestDB(t)
+
+	var name string
+	err := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type='table' AND name='encounters'`,
+	).Scan(&name)
+	if err != nil {
+		t.Fatalf("encounters не найдена: %v", err)
+	}
+
+	rows, err := db.Query(
+		`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='encounters'`,
+	)
+	if err != nil {
+		t.Fatalf("query индексов: %v", err)
+	}
+	defer rows.Close()
+	got := map[string]bool{}
+	for rows.Next() {
+		var idx string
+		_ = rows.Scan(&idx)
+		got[idx] = true
+	}
+	for _, want := range []string{"idx_enc_patient", "idx_enc_doctor", "idx_enc_clinic"} {
+		if !got[want] {
+			t.Errorf("индекс %s не найден; got=%v", want, got)
+		}
+	}
+}
+
+// TestNewID — B28.1: генератор ID.
+func TestNewID(t *testing.T) {
+	id1, err := newID("ENC")
+	if err != nil {
+		t.Fatalf("newID: %v", err)
+	}
+	id2, err := newID("ENC")
+	if err != nil {
+		t.Fatalf("newID: %v", err)
+	}
+	if id1 == id2 {
+		t.Fatalf("ID не уникальны: %q == %q", id1, id2)
+	}
+	if len(id1) < 10 {
+		t.Fatalf("ID слишком короткий: %q", id1)
+	}
+	if id1[:4] != "ENC-" {
+		t.Fatalf("ID не начинается с ENC-: %q", id1)
+	}
+}
