@@ -1450,6 +1450,7 @@
                     patientData = p;
                     console.log('🌐 Загружено с сервера:', patientId);
                     renderPatientHeader();
+                    loadPatientEncounters();
                     loadCardData();
                     loadVitals();
                     maybeMigratePatientData();   // B5: одноразовая миграция localStorage → сервер
@@ -1475,8 +1476,68 @@
             console.log('📦 Загружено из localStorage:', patientId);
         }
         renderPatientHeader();
+        loadPatientEncounters();
         loadCardData();
         loadVitals();
+    }
+
+    // ---------- B28.4.1: История приёмов (timeline) ----------
+    function loadPatientEncounters() {
+        var params = new URLSearchParams(location.search);
+        var patientId = params.get('patient_id') || params.get('id');
+        var box = document.getElementById('encountersTimeline');
+        if (!box) return;
+        if (!patientId) {
+            box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">patient_id не задан</div>';
+            return;
+        }
+        BotMaxAuth.authFetch('GET', '/api/encounters?patient_id=' + encodeURIComponent(patientId))
+            .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function(data){ renderEncountersTimeline(data.items || []); })
+            .catch(function(err){
+                var b = document.getElementById('encountersTimeline');
+                if (b) b.innerHTML = '<div style="color:#f56565;padding:20px;text-align:center;">Ошибка загрузки: ' + escapeHtml(err.message) + '</div>';
+            });
+    }
+
+    function renderEncountersTimeline(items) {
+        var box = document.getElementById('encountersTimeline');
+        var label = document.getElementById('encountersCountLabel');
+        if (!box) return;
+        if (label) label.textContent = items.length + ' записей';
+        if (!items.length) {
+            box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">Приёмов пока нет</div>';
+            return;
+        }
+        items.sort(function(a, b){ return String(b.started_at || '').localeCompare(String(a.started_at || '')); });
+        var html = '';
+        for (var i = 0; i < items.length; i++) {
+            var e = items[i];
+            var finished = (e.status === 'finished');
+            var badge = finished
+                ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">finished</span>'
+                : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">draft</span>';
+            var border = finished ? '#48bb78' : '#ed8936';
+            html += '<div class="encounter-row" data-id="' + escapeHtml(e.id || '') + '" '
+                 +  'style="border-left:3px solid ' + border + ';padding:10px 15px;margin:8px 0;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;">'
+                 +  '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">'
+                 +  '<div><strong>' + escapeHtml(e.title || '(без названия)') + '</strong> '
+                 +  '<span style="color:#a0aec0;font-size:0.85em;">' + escapeHtml(e.specialty || '') + '</span></div>'
+                 +  '<div>' + badge + '</div></div>'
+                 +  '<div style="color:#a0aec0;font-size:0.8em;margin-top:4px;">'
+                 +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(e.kind || '—')
+                 +  (e.complaint ? ' · ' + escapeHtml(e.complaint) : '')
+                 +  '</div></div>';
+        }
+        box.innerHTML = html;
+        var rows = box.querySelectorAll('.encounter-row');
+        for (var j = 0; j < rows.length; j++) {
+            rows[j].addEventListener('click', function(){
+                var id = this.getAttribute('data-id');
+                // TODO B28.4.2: открыть encounter по id
+                console.log('open encounter', id);
+            });
+        }
     }
 
     function renderPatientHeader() {
@@ -2893,6 +2954,17 @@
         <div class="chart-menu-buttons">
             <button class="btn btn-danger" onclick="closeChartMenu()">❌ Отмена</button>
         </div>
+    </div>
+</div>
+
+<!-- B28.4.1: История приёмов (timeline) -->
+<div class="card" id="encountersCard" style="margin-top:20px;">
+    <div class="card-header">
+        <h2>🩺 История приёмов</h2>
+        <span style="color:#a0aec0;font-size:0.8em;" id="encountersCountLabel">—</span>
+    </div>
+    <div id="encountersTimeline" style="padding:10px 0;">
+        <div style="color:#a0aec0;padding:20px;text-align:center;">Загрузка…</div>
     </div>
 </div>
 
