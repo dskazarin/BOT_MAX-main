@@ -462,3 +462,185 @@ func TestPasswordResetRequest_MethodNotAllowed(t *testing.T) {
 		t.Fatalf("code: got %d, want 405", w.Code)
 	}
 }
+
+// ---------------------------------------------------------------
+// B27.4 — change-password + admin reset + middleware
+// ---------------------------------------------------------------
+
+// TestChangePassword_Success — happy path.
+func TestChangePassword_Success(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+
+	// Проставим реальный bcrypt-хеш (seedDoctorForRefresh ставит 'x').
+	oldHash, _ := HashPassword("old-password-1")
+	_, _ = db.Exec(`UPDATE doctors SET password_hash = ? WHERE id='D1'`, oldHash)
+
+	body := strings.NewReader(`{"old_password":"old-password-1","new_password":"new-password-2"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", body)
+	ctx := withDoctorID(r.Context(), "D1", RoleDoctor)
+	r = r.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handleChangePassword(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	// Проверим, что новый пароль работает.
+	var h string
+	_ = db.QueryRow(`SELECT password_hash FROM doctors WHERE id='D1'`).Scan(&h)
+	if err := CheckPassword(h, "new-password-2"); err != nil {
+		t.Fatalf("новый пароль не работает: %v", err)
+	}
+}
+
+// TestChangePassword_WrongOld — неверный старый пароль.
+func TestChangePassword_WrongOld(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+
+	oldHash, _ := HashPassword("old-password-1")
+	_, _ = db.Exec(`UPDATE doctors SET password_hash = ? WHERE id='D1'`, oldHash)
+
+	body := strings.NewReader(`{"old_password":"WRONG","new_password":"new-password-2"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", body)
+	r = r.WithContext(withDoctorID(r.Context(), "D1", RoleDoctor))
+	w := httptest.NewRecorder()
+
+	handleChangePassword(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("code: got %d, want 401", w.Code)
+	}
+}
+
+// TestChangePassword_ClearsMustChange — флаг снимается.
+func TestChangePassword_ClearsMustChange(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+
+	oldHash, _ := HashPassword("old-password-1")
+	_, _ = db.Exec(`UPDATE doctors SET password_hash = ?, must_change_password = 1 WHERE id='D1'`, oldHash)
+
+	body := strings.NewReader(`{"old_password":"old-password-1","new_password":"new-password-3"}`)
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", body)
+	r = r.WithContext(withDoctorID(r.Context(), "D1", RoleDoctor))
+	w := httptest.NewRecorder()
+
+	handleChangePassword(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	var v int
+	_ = db.QueryRow(`SELECT must_change_password FROM doctors WHERE id='D1'`).Scan(&v)
+	if v != 0 {
+		t.Fatalf("must_change_password должен быть снят, got %d", v)
+	}
+}
+
+// TestMiddleware_BlocksWhenMustChange — 403 с флагом.
+func TestMiddleware_BlocksWhenMustChange(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+	_, _ = db.Exec(`UPDATE doctors SET must_change_password = 1 WHERE id='D1'`)
+
+	called := false
+	h := requirePasswordChanged(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	r := httptest.NewRequest(http.MethodGet, "/api/patients", nil)
+	r = r.WithContext(withDoctorID(r.Context(), "D1", RoleDoctor))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if called {
+		t.Fatalf("next не должен вызываться при must_change_password=1")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("code: got %d, want 403", w.Code)
+	}
+}
+
+// TestMiddleware_AllowsChangePassword — whitelist пропускает.
+func TestMiddleware_AllowsChangePassword(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+	_, _ = db.Exec(`UPDATE doctors SET must_change_password = 1 WHERE id='D1'`)
+
+	called := false
+	h := requirePasswordChanged(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/change-password", nil)
+	r = r.WithContext(withDoctorID(r.Context(), "D1", RoleDoctor))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if !called {
+		t.Fatalf("next должен вызываться для /api/auth/change-password")
+	}
+}
+
+// TestAdminResetPassword_Success — temp password + флаг.
+func TestAdminResetPassword_Success(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	withGlobalDB(t, db)
+
+	body := strings.NewReader(``)
+	r := httptest.NewRequest(http.MethodPost, "/api/doctors/D1/reset-password", body)
+	r = r.WithContext(withDoctorID(r.Context(), "ADMIN-1", RoleAdmin))
+	w := httptest.NewRecorder()
+
+	handleDoctorResetPassword(w, r, "D1")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code: got %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	tmp, _ := resp["temporary_password"].(string)
+	if tmp == "" {
+		t.Fatalf("temporary_password пустой: %v", resp)
+	}
+
+	// Проверим, что пароль работает + флаг установлен.
+	var h string
+	var mustChange int
+	_ = db.QueryRow(`SELECT password_hash, must_change_password FROM doctors WHERE id='D1'`).Scan(&h, &mustChange)
+	if err := CheckPassword(h, tmp); err != nil {
+		t.Fatalf("temp пароль не работает: %v", err)
+	}
+	if mustChange != 1 {
+		t.Fatalf("must_change_password должен быть =1")
+	}
+}
+
+// TestAdminResetPassword_CannotResetSuperadmin — admin не может сбросить superadmin.
+func TestAdminResetPassword_CannotResetSuperadmin(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	// Создадим superadmin'а.
+	_, _ = db.Exec(
+		`INSERT INTO doctors (id, clinic_id, email, password_hash, name, specialty, role, created, active)
+		 VALUES ('SUPER-1', NULL, 'super@test.local', 'x', 'Super', 'lor', 'superadmin', datetime('now'), 1)`,
+	)
+	withGlobalDB(t, db)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/doctors/SUPER-1/reset-password", nil)
+	r = r.WithContext(withDoctorID(r.Context(), "ADMIN-1", RoleAdmin))
+
+	handleDoctorResetPassword(w, r, "SUPER-1")
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("code: got %d, want 403", w.Code)
+	}
+}

@@ -410,9 +410,11 @@ func registerAuthRoutes() {
 	// B27.3a: password reset.
 	http.HandleFunc("/api/auth/password-reset/request", handlePasswordResetRequest)
 	http.HandleFunc("/api/auth/password-reset/confirm", handlePasswordResetConfirm)
+	// B27.4: change-password (self).
+	http.HandleFunc("/api/auth/change-password", handleChangePassword)
 
 	slog.Info("registerAuthRoutes",
-		"routes", "/login, /refresh, /logout, /password-reset/request, /password-reset/confirm")
+		"routes", "/login, /refresh, /logout, /password-reset/*, /change-password")
 }
 
 // ---------------------------------------------------------------
@@ -687,6 +689,83 @@ func handlePasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
+// ---------------------------------------------------------------
+// B27.4 — change-password (self)
+// ---------------------------------------------------------------
+
+// changePasswordReq — тело POST /api/auth/change-password.
+type changePasswordReq struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
+// handleChangePassword — POST /api/auth/change-password.
+//
+// Требует авторизованного доктора. Проверяет old_password,
+// обновляет хеш, снимает must_change_password.
+// Refresh-токены НЕ отзываются (это плановая смена, не reset).
+func handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	doctorID := doctorIDFromCtx(r)
+	if doctorID == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req changePasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		http.Error(w, `{"error":"old_password and new_password required"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.NewPassword) < minPasswordLen {
+		http.Error(w, `{"error":"password too short"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Читаем текущий хеш.
+	var storedHash string
+	err := db.QueryRow(
+		`SELECT password_hash FROM doctors WHERE id = ?`, doctorID,
+	).Scan(&storedHash)
+	if err != nil {
+		slog.Warn("change-password: select password_hash", "id", doctorID, "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := CheckPassword(storedHash, req.OldPassword); err != nil {
+		auditLog(db, doctorID, "auth.password.change_failed", "auth", "",
+			clientIP(r), map[string]string{"reason": "wrong_old_password"})
+		http.Error(w, `{"error":"invalid old password"}`, http.StatusUnauthorized)
+		return
+	}
+
+	newHash, err := HashPassword(req.NewPassword)
+	if err != nil {
+		slog.Error("change-password: HashPassword", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := UpdatePasswordHash(db, doctorID, newHash); err != nil {
+		slog.Error("change-password: UpdatePasswordHash", "id", doctorID, "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	auditLog(db, doctorID, "auth.password.changed", "auth", "", clientIP(r), nil)
+	slog.Info("change-password: успешно", "doctor_id", doctorID)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
 // authMiddleware — Шаг 6.4.
 // Soft-mode (default): пропускает всех, но логирует запросы без токена.
 // Enforce-mode (BOTMAX_AUTH_ENFORCE=true|1|yes|on): без валидного
@@ -826,6 +905,70 @@ func extractAccessToken(r *http.Request) string {
 		return c.Value
 	}
 	return ""
+}
+
+// ---------------------------------------------------------------
+// B27.4 — middleware: must_change_password
+// ---------------------------------------------------------------
+
+// isPasswordChangeWhitelist — пути, доступные даже когда
+// must_change_password=1 (иначе врач не сможет сменить пароль).
+func isPasswordChangeWhitelist(path string) bool {
+	switch path {
+	case "/api/auth/change-password", "/api/auth/logout",
+		"/api/auth/password-reset/request", "/api/auth/password-reset/confirm":
+		return true
+	}
+	return false
+}
+
+// requirePasswordChanged — 403 если у доктора must_change_password=1,
+// кроме whitelist-путей (change-password, logout, password-reset).
+//
+// Выполняется ПОСЛЕ authMiddleware (в ctx уже есть doctorID).
+// Читает флаг из БД на каждый запрос — приемлемо для клиник (10–100 врачей).
+func requirePasswordChanged(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Whitelist — пропускаем без проверки.
+		if isPasswordChangeWhitelist(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if isAuthWhitelist(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		doctorID := doctorIDFromCtx(r)
+		if doctorID == "" {
+			// soft-mode или impersonation без actor — не наша забота.
+			next.ServeHTTP(w, r)
+			return
+		}
+		if db == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		var mustChange int
+		err := db.QueryRow(
+			`SELECT must_change_password FROM doctors WHERE id = ?`, doctorID,
+		).Scan(&mustChange)
+		if err != nil {
+			// Не блокируем при ошибке БД (best-effort), только логируем.
+			slog.Warn("requirePasswordChanged: select", "doctor_id", doctorID, "err", err)
+			next.ServeHTTP(w, r)
+			return
+		}
+		if mustChange == 1 {
+			slog.Info("requirePasswordChanged: 403 must_change_password",
+				"doctor_id", doctorID, "path", r.URL.Path)
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"must_change_password"}`, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // isAuthWhitelist — пути, не требующие авторизации.

@@ -15,7 +15,9 @@ package main
 // заводим DoctorRow — НЕ трогая базовый Doctor (чтобы не сломать auth).
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -435,6 +437,15 @@ func handleDoctorByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// B27.4: POST /api/doctors/{id}/reset-password — спец-путь.
+	if r.Method == http.MethodPost &&
+		strings.HasSuffix(r.URL.Path, "/reset-password") {
+		// id — это doctorID, но URL вида /api/doctors/{id}/reset-password.
+		id = strings.TrimSuffix(id, "/reset-password")
+		handleDoctorResetPassword(w, r, id)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		handleDoctorGet(w, r, id)
@@ -591,4 +602,91 @@ func jsonEscape(s string) string {
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	s = strings.ReplaceAll(s, "\n", `\n`)
 	return s
+}
+
+// ---------------------------------------------------------------
+// B27.4 — POST /api/doctors/{id}/reset-password (admin/superadmin)
+// ---------------------------------------------------------------
+
+// GenerateTempPassword — генерит временный пароль (16 символов base32).
+// Формат удобен для диктовки: только заглавные буквы и цифры 2-7.
+func GenerateTempPassword() (string, error) {
+	b := make([]byte, 10) // 10 байт → 16 символов base32
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("rand.Read: %w", err)
+	}
+	enc := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b)
+	return enc, nil
+}
+
+// handleDoctorResetPassword — POST /api/doctors/{id}/reset-password.
+//
+// Доступно admin/superadmin (проверяется в registerDoctorRoutes).
+// Генерирует временный пароль, ставит must_change_password=1.
+// Возвращает пароль в JSON ОДИН РАЗ — админ диктует его врачу.
+func handleDoctorResetPassword(w http.ResponseWriter, r *http.Request, doctorID string) {
+	if doctorID == "" {
+		http.Error(w, `{"error":"missing id"}`, http.StatusBadRequest)
+		return
+	}
+
+	actorID := doctorIDFromCtx(r)
+	actorRole, _ := doctorRoleFromCtx(r)
+
+	// Защита: admin не может сбросить пароль superadmin'у.
+	target, err := getDoctorRowByID(db, doctorID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, `{"error":"doctor not found"}`, http.StatusNotFound)
+			return
+		}
+		slog.Warn("doctor-reset-password: getDoctorRowByID", "id", doctorID, "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if target.Role == string(RoleSuperadmin) && actorRole != RoleSuperadmin {
+		http.Error(w, `{"error":"cannot reset superadmin password"}`, http.StatusForbidden)
+		return
+	}
+
+	tmpPassword, err := GenerateTempPassword()
+	if err != nil {
+		slog.Error("doctor-reset-password: GenerateTempPassword", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	newHash, err := HashPassword(tmpPassword)
+	if err != nil {
+		slog.Error("doctor-reset-password: HashPassword", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := UpdatePasswordHash(db, doctorID, newHash); err != nil {
+		slog.Error("doctor-reset-password: UpdatePasswordHash", "id", doctorID, "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := SetMustChangePassword(db, doctorID, true); err != nil {
+		slog.Error("doctor-reset-password: SetMustChangePassword", "id", doctorID, "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if n, err := RevokeAllRefreshForDoctor(db, doctorID); err != nil {
+		slog.Warn("doctor-reset-password: RevokeAllRefreshForDoctor", "err", err)
+	} else {
+		slog.Info("doctor-reset-password: refresh отозваны", "target", doctorID, "count", n)
+	}
+
+	auditLog(db, actorID, "doctor.password.reset_by_admin", "doctor", doctorID,
+		clientIP(r), map[string]string{"actor_role": string(actorRole)})
+
+	slog.Info("doctor-reset-password: успешно",
+		"actor", actorID, "target", doctorID, "role", target.Role)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":                 true,
+		"temporary_password": tmpPassword,
+		"note":               "пароль возвращён один раз; передайте врачу; при первом входе потребуется сменить",
+	})
 }
