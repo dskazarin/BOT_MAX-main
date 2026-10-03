@@ -1118,6 +1118,17 @@
         }
 
         return BotMaxAuth.authFetch(method, API_BASE + path, body, _extraHeaders).then(function(res) {
+            // B27.5: если сервер требует смену пароля — редирект.
+            if (res.status === 403) {
+                return res.clone().json().then(function(d) {
+                    if (d && d.error === 'must_change_password') {
+                        window.location.replace('change_password.html');
+                    }
+                    return res;
+                }).catch(function() {
+                    return res;
+                });
+            }
             if (!res.ok) {
                 return res.text().then(function(t) {
                     var err = new Error(method + ' ' + path + ' HTTP ' + res.status + ': ' + t);

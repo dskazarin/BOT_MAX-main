@@ -386,6 +386,11 @@ function renderRows(rows) {
 
         var actions = '<div class="row-actions">';
         actions += '<button class="btn btn-sm btn-warning" onclick="openEditModal(\'' + escapeHtml(r.id) + '\')">✏️</button>';
+        // B27.5: сброс пароля (только для не-self и не-superadmin-цели, если actor не superadmin).
+        var canResetPwd = !isSelf && (!isSuperTarget || iAmSuper);
+        if (canResetPwd) {
+            actions += '<button class="btn btn-sm btn-secondary" title="Сбросить пароль" onclick="resetDoctorPassword(\'' + escapeHtml(r.id) + '\', \'' + escapeHtml(r.email) + '\')">🔑</button>';
+        }
         // B20: impersonation «глазами доктора» — только superadmin,
         // только active-доктор, не сам себя.
         if (iAmSuper && r.active && !isSelf && r.role === 'doctor') {
@@ -650,6 +655,38 @@ document.addEventListener('keydown', function (e) {
 });
 
 // Первая загрузка
+// B27.5: сброс пароля доктору (admin/superadmin).
+// Возвращает временный пароль ОДИН РАЗ — показать в модалке.
+function resetDoctorPassword(doctorId, email) {
+    if (!confirm('Сбросить пароль для ' + email + '?\n\nБудет сгенерирован временный пароль.\nПри первом входе врач должен будет его сменить.')) return;
+    BotMaxAuth.authFetch('POST', '/api/doctors/' + encodeURIComponent(doctorId) + '/reset-password', {})
+        .then(function (res) {
+            return res.json().then(function (d) { return { ok: res.ok, data: d }; });
+        })
+        .then(function (r) {
+            if (!r.ok) {
+                alert('Ошибка: ' + ((r.data && r.data.error) || 'unknown'));
+                return;
+            }
+            var tmp = (r.data && r.data.temporary_password) || '';
+            // Показываем temp-пароль с возможностью скопировать.
+            var copy = confirm(
+                'Временный пароль для ' + email + ':\n\n' + tmp +
+                '\n\nСкопировать в буфер обмена?'
+            );
+            if (copy && navigator.clipboard) {
+                navigator.clipboard.writeText(tmp).then(function () {
+                    alert('Скопировано. Передайте пароль врачу.');
+                }).catch(function () {
+                    alert('Не удалось скопировать, скопируйте вручную.');
+                });
+            }
+        })
+        .catch(function (err) {
+            alert('Ошибка сети: ' + (err.message || err));
+        });
+}
+
 // B20: вход «глазами доктора».
 // POST /api/impersonation/start {doctor_id}. При успехе redirect в кабинет.
 function impersonate(doctorId) {
