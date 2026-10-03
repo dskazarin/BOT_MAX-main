@@ -1098,6 +1098,480 @@ MVP: B27 → B28 → B29 → B30 (password reset, приёмы, история, 
 10. kind: consultation, study, procedure, lab, followup.
 11. Копирование подписей/согласий — НЕ делаем. У каждого эпизода свои.
 12. Если нет предыдущего приёма — prefill-модалка не показывается,
+
+---
+
+## Дополнение §6.37: модули коммуникаций, ЛКП, монетизация
+
+**Добавлено:** 2026-10-03.
+**Контекст:** расширение плана — внутренние коммуникации (почта,
+звонки), личный кабинет пациента, оповещения, монетизация.
+
+### Модуль messages — внутренняя почта (врач↔врач)
+
+**Назначение:** асинхронные сообщения между врачами одной клиники +
+системные уведомления от других модулей.
+
+**Модель данных:**
+
+    messages
+      id, thread_id, sender_id, sender_kind, subject, body, kind,
+      priority, created_at, edited_at, deleted_at,
+      ref_entity, ref_entity_id
+
+    message_threads
+      id, subject, created_at, updated_at, last_message_id,
+      is_system, clinic_id
+
+    message_recipients
+      id, message_id, recipient_id, read_at, archived_at, folder
+
+    message_templates
+      id, doctor_id, clinic_id, name, subject_template,
+      body_template, created_at, updated_at
+
+**Правила доступа:**
+- врач — любому врачу своей клиники;
+- admin — любому врачу своей клиники;
+- superadmin — любому врачу;
+- гостевой врач (PIN) — НЕ может писать;
+- admin/superadmin НЕ видят содержимое личных сообщений
+  (только метаданные в audit: кто, кому, когда).
+
+**Системные уведомления:** единый API
+
+    messages.SendSystem(toDoctorIDs, subject, body,
+                        refKind, refID, priority)
+
+- если модуль messages выключен — no-op (без падения других модулей);
+- источник: `botmax/referrals`, `botmax/labs`, `botmax/guest`, ...
+
+**API:**
+
+    GET    /api/messages                     inbox, пагинация, фильтры
+    GET    /api/messages/threads
+    GET    /api/messages/threads/{id}
+    POST   /api/messages                     создать
+    PATCH  /api/messages/{id}                редактировать (TTL 15м)
+    DELETE /api/messages/{id}                soft delete
+    POST   /api/messages/{id}/read
+    POST   /api/messages/{id}/archive
+    GET    /api/messages/unread-count        {total, urgent}
+    GET    /api/message-templates
+    POST   /api/message-templates
+
+**UI:**
+- `inbox.html` — список тредов, фильтры, поиск;
+- badge ✉️ N в шапке `doctor_cabinet.html`;
+- композер с autocomplete врачей клиники + шаблоны;
+- привязка к entity (encounter, referral, lab_result) — «Открыть» открывает контекст.
+
+**Realtime (эволюция):**
+- MVP: polling `/api/messages/unread-count` каждые 60с;
+- далее: SSE `GET /api/messages/stream`.
+
+**Env:**
+- `BOTMAX_MESSAGE_RETENTION_DAYS` (default 365).
+
+**Волна:** B33.5.
+
+### Модуль patient_portal — личный кабинет пациента
+
+**Назначение:** защищённый доступ пациента к своим данным (read-only),
+к переписке с врачом, к онлайн-записи и уведомлениям.
+
+**Ключевой принцип:** `patients` (медкарта) ≠ `patient_accounts` (аккаунт).
+Не у каждого пациента есть аккаунт (дети, пожилые, недееспособные).
+Аккаунт — 1:1 к пациенту, опционально.
+
+**Модель данных:**
+
+    patient_accounts
+      patient_id PK, login_email NULL, login_phone NULL,
+      password_hash NULL, must_change_password,
+      failed_login_count, locked_until,
+      created_at, last_login, email_verified, phone_verified, active
+
+    patient_magic_links
+      id, token_hash UNIQUE, patient_id, created_at, expires_at,
+      used_at, purpose
+
+    patient_consents
+      id, patient_id, kind, version, text_sha256, signed_at,
+      signature_blob, context_ip, context_ua, revoked_at
+
+**Вход (гибрид):**
+- magic-link на email/SMS — основной способ;
+- опциональный пароль — для частого использования;
+- 2FA (SMS/TOTP) — опционально;
+- сессия в HttpOnly cookie, TTL 30 мин бездействия;
+- уведомление о новом входе с устройства.
+
+**Права пациента:**
+- read-only: приёмы (timeline), анализы, документы (PDF);
+- write: своё сообщение врачу, запись на приём, отзывы;
+- свои согласия (даёт/отзывает);
+- свой журнал доступа («кто смотрел мою карту»).
+
+**Волна:** B42.
+
+### Модуль messages_patient — переписка врач↔пациент
+
+**Назначение:** асинхронная переписка между пациентом и врачом
+через защищённый ЛКП.
+
+**Ключевой принцип:** один тред на пару (врач, пациент) — приватность.
+Врач B не видит тред врача A с тем же пациентом.
+
+**Модель данных:**
+
+    patient_threads
+      id, patient_id, doctor_id, created_at, updated_at,
+      last_message_id, archived_by_patient, archived_by_doctor
+
+    patient_messages
+      id, thread_id, sender_kind, sender_patient_id, sender_doctor_id,
+      body, kind, priority, created_at, read_at, deleted_at
+
+    patient_message_attachments
+      id, message_id, filename, mime_type, size, file_path, sha256
+
+**Правила:**
+- врач видит тред только если есть encounter с пациентом;
+- admin клиники НЕ видит содержимое (только метаданные);
+- аудит: `patient_message.sent`, `.read` — без содержимого;
+- медсодержание — только в защищённом канале (не в SMS/email).
+
+**API (врач):**
+
+    GET    /api/patient-messages/threads
+    GET    /api/patient-messages/threads/{id}
+    POST   /api/patient-messages/threads/{id}/messages
+    POST   /api/patient-messages/messages/{id}/read
+
+**API (пациент):**
+
+    GET    /api/patient/threads
+    GET    /api/patient/threads/{id}
+    POST   /api/patient/threads/{id}/messages
+
+**Волна:** B43.
+
+### Модуль notifications — оповещения пациентов
+
+**Назначение:** единый слой событий → каналов → получателей.
+НЕ отдельные интеграции SMS/email/push, а один orchestrator.
+
+**Ключевой принцип:** если `medical_content=true` — только in-app
+(пациент сам заходит в защищённый кабинет). В SMS/email/push —
+только нейтральные («есть новое сообщение», «результат готов» + ссылка).
+
+**Каналы:**
+
+| Канал | Провайдеры | Default |
+|---|---|---|
+| in-app | `patient_messages` | включён |
+| Web Push | VAPID (браузер) | включён |
+| Email | SMTP / SendGrid / Yandex | опционально |
+| SMS | SMS.ru / SMSC / Mango | опционально |
+| MAX | MAX Bot API (max.ru) | опционально, РФ |
+| VK | VK Bot API | опционально, РФ |
+
+**Мессенджеры WhatsApp/Telegram** — не используем (152-ФЗ: юрисдикция
+вне РФ, данные уходят третьим лицам). MAX / VK — допустимы (юрисдикция
+РФ, но требуется договор поручения на обработку ПД).
+
+**Модель данных:**
+
+    notification_events
+      id, code UNIQUE, title_template, body_template, sms_template,
+      default_priority, default_channels_csv, medical_content,
+      active, editable_by_admin, created_at, updated_at
+
+    patient_notification_prefs
+      patient_id PK, sms_enabled, email_enabled, push_enabled,
+      preferred_channel, quiet_hours_from, quiet_hours_to, updated_at
+
+    notification_queue
+      id, event_code, recipient_kind, recipient_id, channel,
+      payload_json, scheduled_at, attempt_count, max_attempts,
+      status, last_error, created_at, updated_at, sent_at,
+      provider_msg_id
+
+    notification_log
+      id, queue_id, event_code, recipient_kind, recipient_id,
+      channel, provider, status, provider_msg_id, error, occurred_at
+
+    webpush_subscriptions
+      id, patient_id, endpoint, p256dh, auth, user_agent,
+      created_at, last_used_at, revoked_at
+
+**Приоритеты и каналы (примеры):**
+
+| Код события | Приоритет | Каналы | Мед-контент |
+|---|---|---|---|
+| appointment_reminder_24h | high | sms, in-app | нет |
+| appointment_reminder_2h | critical | sms | нет |
+| new_message_from_doctor | normal | push, in-app | нет |
+| lab_result_ready | high | sms, in-app | нет |
+| document_issued | normal | email, in-app | нет |
+| portal_invite | critical | sms, email | нет |
+| password_reset_patient | critical | sms, email | нет |
+| diagnosis_discussion | high | in-app only | да |
+
+**Провайдер-интерфейс:**
+
+    type Provider interface {
+        Name() string
+        Channel() string
+        Send(ctx, recipient, msg) (DeliveryResult, error)
+        Health(ctx) error
+    }
+
+Реализации: providers/sms/smsru.go, smsc.go, mango.go;
+providers/email/smtp.go, sendgrid.go, yandex.go;
+providers/webpush/webpush.go; providers/inapp/inapp.go;
+providers/max/max.go; providers/vk/vk.go.
+
+**Очередь (worker):**
+- отдельная goroutine, batch 50;
+- backoff: 1м, 5м, 30м (3 попытки);
+- scheduled_at — для отложенных (reminders);
+- при отмене приёма — задачи → cancelled;
+- дедупликация по hash(recipient, event_code, entity_id, day);
+- rate-limit: 3 SMS/сутки на пациента + 60 SMS/мин глобально.
+
+**API модуля (внутреннее, для других модулей):**
+
+    notifications.Send(ctx, SendRequest{
+        EventCode, RecipientKind, RecipientID,
+        Payload, EntityKind, EntityID,
+        ScheduledAt, Priority, Channels,
+    })
+
+Если notifications выключен — no-op, логирует.
+
+**Retention:**
+- `notification_log` — 365 дней;
+- `notification_queue` — sent/failed старше 30 дней удаляются.
+
+**Env:**
+- BOTMAX_SMS_PROVIDER=none|smsru|smsc|mango
+- BOTMAX_EMAIL_PROVIDER=none|smtp|sendgrid|yandex
+- BOTMAX_MAX_BOT_TOKEN=...
+- BOTMAX_VK_BOT_TOKEN=...
+- BOTMAX_WEBPUSH_VAPID_PUBLIC/PRIVATE/SUBJECT
+- BOTMAX_NOTIFICATION_RATE_LIMIT_SMS_PER_DAY=3
+- BOTMAX_NOTIFICATION_LOG_RETENTION_DAYS=365
+
+**Волна:** B43.5.
+
+### Модуль calls — внутренние звонки
+
+**Назначение:** аудио-звонки 1-на-1 между врачами, врач↔пациент.
+
+**Технология:** WebRTC (DTLS-SRTP шифрование), signaling — на нашем
+Go-бэкенде через WebSocket, TURN — self-hosted coturn.
+
+**Модель данных:**
+
+    calls
+      id, initiator_doctor_id, initiator_patient_id,
+      callee_doctor_id, callee_patient_id,
+      kind, status, started_at, accepted_at, ended_at,
+      duration_seconds, end_reason,
+      recording_url, recording_consent_at
+
+**Signaling-протокол (WebSocket /api/calls/signal):**
+
+Клиент → сервер:
+- call_initiate, call_accept, call_decline, call_hangup
+- sdp_offer, sdp_answer, ice_candidate
+
+Сервер → клиент:
+- incoming_call, call_accepted, call_ended
+- sdp_offer, ice_candidate
+
+**Логика сервера:**
+- map[doctorID]*Conn — активные WS-соединения;
+- call_initiate → проверка онлайн → incoming_call;
+- таймаут 30 сек → status=missed.
+
+**Окружение:**
+- BOTMAX_STUN_URLS (default: stun:stun.l.google.com:19302 — ТОЛЬКО dev);
+- BOTMAX_TURN_URLS + BOTMAX_TURN_SECRET — обязательны для prod;
+- BOTMAX_CALL_RING_TIMEOUT_SECONDS=30.
+
+**Опциональные подмодули:**
+
+| Модуль | Что | Default |
+|---|---|---|
+| calls | WebRTC audio 1-на-1 | off |
+| calls_video | + видео | off |
+| calls_recording | + запись (с согласия обеих сторон) | off |
+| telephony | SIP/Asterisk — звонки на телефоны | off |
+
+**UI:**
+- иконка 📞 в inbox и в списке врачей;
+- модалка входящего звонка;
+- панель активного звонка в правом нижнем углу;
+- вкладка «Звонки» в inbox (история).
+
+**Волна:** B44.
+
+### Монетизация и лицензирование
+
+**Модель: Open Core + Enterprise-модули по лицензии.**
+
+**Community Edition (бесплатно):**
+- базовый набор: auth, doctors, patients, encounters, audit,
+  health, metrics;
+- 1 клиника, ограниченное число врачей;
+- без SMS/email-провайдеров (только in-app);
+- community support.
+
+**Enterprise Edition (платно):**
+- все модули по подписке;
+- multi-clinic;
+- SLA + приоритетная поддержка;
+- приоритет обновлений;
+- интеграции (СФР, ЛИС, ЕГИСЗ) — опционально.
+
+**Пакеты модулей:**
+
+| Пакет | Модули |
+|---|---|
+| Клинический | referrals, labs, prescriptions, certificates, sick_leave |
+| Коммуникации | messages, notifications (+ SMS/email/MAX/VK) |
+| Пациентский портал | patient_portal, messages_patient |
+| Звонки | calls, calls_video, calls_recording |
+| Телефония | telephony (SIP/Asterisk) |
+| Аналитика | reports_analytics |
+| Коммерция | scheduling, billing, inventory, pharmacy |
+
+**Лицензирование:**
+- **JWT-ключ** с подписью (offline, без online-проверки);
+- содержит: список модулей, лимиты (врачи, клиники), срок;
+- env: `BOTMAX_LICENSE_FILE=/etc/botmax/license.jwt`;
+- endpoint `GET /api/license` — что доступно (для UI);
+- при старте: пересечение `BOTMAX_MODULES` и `license.Modules`;
+- fail-fast при истёкшей/неполной лицензии.
+
+**Прайсинг-гипотеза (Enterprise, self-hosted):**
+- до 5 врачей: 60 тыс ₽/год;
+- до 20 врачей: 180 тыс ₽/год;
+- до 50 врачей: 400 тыс ₽/год;
+- 50+: индивидуально.
+
+**Дополнительные источники:**
+- внедрение под ключ: 50–200 тыс ₽;
+- интеграции под заказ: 100–500 тыс ₽/проект;
+- SLA 99.9% + реакция ≤4ч: +20% к лицензии/год;
+- white-label для сетей: от 1 млн ₽/год;
+- обучение: 5–15 тыс ₽/чел.
+
+**Техзакладки (сделать в B33):**
+- `BOTMAX_LICENSE_FILE`, `/api/license`;
+- `modules.LicensedModules()` — пересечение;
+- телеметрия (opt-in, анонимная) — что используется, что продавать.
+
+### Расширенный ЛКП — волны B43.6–B55
+
+Помимо базового ЛКП (B42) и переписки (B43):
+
+| Волна | Что |
+|---|---|
+| B43.6 | Медицинский профиль пациента (аллергии, хронические, лекарства) + верификация врачом |
+| B43.7 | Timeline здоровья — единая хронология всех событий |
+| B43.8 | Семейный доступ (родитель→дети, опекун с документом) |
+| B43.9 | Журнал доступа пациента к своей карте (read-аудит, «кто смотрел») |
+| B43.10 | Экспорт всех данных (PDF + JSON + CSV) по 152-ФЗ |
+| B45 | scheduling — расписание и онлайн-запись из ЛКП |
+| B46 | patient_vitals — домашние измерения (АД, вес, глюкоза) |
+| B47 | feedback_patient — отзывы и оценки |
+| B48 | billing_patient — онлайн-оплата, чеки (54-ФЗ) |
+| B49 | pre_visit — анкеты и чек-листы до приёма |
+| B50 | patient_reminders — расширенные напоминания (лекарства, скрининги) |
+| B51 | vaccination_certificates — прививочный сертификат с QR |
+| B52 | pharmacy — заказ лекарств в аптеке-партнёре |
+| B53 | ai_patient_assist — AI-объяснение анализов (с модерацией врачом) |
+| B54 | PWA (offline + install) |
+| B55 | mobile_app — мобильное приложение (RN/Flutter) |
+
+**Принципы UX ЛКП:**
+- mobile-first, крупный шрифт (16px+), WCAG AA;
+- главный экран — «Сейчас»: ближайший приём, непрочитанные, напоминания;
+- явный выход, сессия 30 мин, 2FA опционально;
+- «Позвонить в клинику» всегда в шапке;
+- журнал входов (устройство, IP, время).
+
+**Что НЕ делать:**
+- соцсеть, лайки, комментарии;
+- wellness-дневник;
+- AI-диагнозы (юридическая катастрофа);
+- Google Analytics / Yandex Metrica (данные пациентов);
+- реклама.
+
+### Полный список модулей BOTMAX_MODULES
+
+**Коммуникации:**
+messages, notifications, calls, calls_video, calls_recording, telephony
+
+**Клинические:**
+referrals, labs, templates, prescriptions, certificates, sick_leave,
+vaccinations, inventory
+
+**Пациентские:**
+patient_portal, messages_patient, scheduling, patient_vitals,
+feedback_patient, billing_patient, pre_visit, patient_reminders,
+vaccination_certificates, pharmacy, ai_patient_assist
+
+**Административные:**
+reports_analytics, billing, multi_clinic, queue_management
+
+**Интеграции (опционально, отдельные проекты):**
+integrations_lis, integrations_ehr, integrations_sfr, integrations_egisz
+
+**Базовые (всегда включены, не в BOTMAX_MODULES):**
+auth, doctors, patients, encounters, audit, health, metrics, settings
+
+### Дополнительные модули (фаза 2/3)
+
+| Код | Цель | Приоритет |
+|---|---|---|
+| scheduling | расписание, онлайн-запись | высокий |
+| billing | касса, услуги, чеки, эквайринг | высокий |
+| reports_analytics | отчёты, дашборды для владельца | высокий |
+| inventory | склад медикаментов, срок годности | высокий |
+| vaccinations | прививочный календарь РФ | высокий |
+| integrations_lis | Инвитро/Гемотест/Хеликс API | средний |
+| integrations_ehr | HL7 FHIR, ЕГИСЗ | средний |
+| ai_assist | ассистент врача (диагнозы, суммаризация) | средний |
+| pharmacy | связь с аптеками, МДЛП | средний |
+| dms | ДМС-интеграция, счета, реестры | средний |
+| queue_management | электронная очередь, табло | средний |
+| feedback | отзывы, NPS | средний |
+| referral_network | сеть клиник-партнёров | низкий |
+| school_medical | медкабинеты в школах/садах | низкий |
+| insurance_reports | отчёты для страховых | низкий |
+| regulatory_reports | формы 12, 30, 14 (Минздрав) | низкий |
+| mobile_app | мобильное приложение | средний |
+| i18n | международный рынок (KZ, BY, AM) | низкий |
+
+### Обновлённые волны (сводка)
+
+**Фаза 1 (MVP, B27–B44):** password reset, encounters, история,
+экспорт, guest, clinics, modules, messages, consents, referrals,
+labs, templates, prescriptions, certificates, sick_leave,
+patient_portal, notifications, calls.
+
+**Фаза 2 (Commercial, B45–B55):** scheduling, billing,
+reports_analytics, inventory, vaccinations, ЛКП-расширения,
+лицензирование, multi-clinic.
+
+**Фаза 3 (Advanced, B56+):** ai_assist, integrations_lis,
+integrations_ehr, telephony, pharmacy, dms, mobile_app, i18n,
+regulatory_reports.
     encounter создаётся пустым.
 
 ---
