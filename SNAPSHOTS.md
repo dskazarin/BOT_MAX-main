@@ -868,18 +868,111 @@
 
 <!-- B26_SNAPSHOT_APPLIED -->
 
-### 6.36 (B27) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** TBD. **Активных кандидатов в бэклоге нет.**
-  Закрыты: §6.28–§6.35 (retention, impersonation, metrics).
-  Возможные направления на будущее (не приоритетные):
-  1. Расширение `/api/metrics`: `botmax_http_requests_total{method,path,status}`,
-     `botmax_impersonation_active`, `botmax_doctors_total{role}`.
-  2. Экспорт audit-log по требованию (по диапазону дат, по action/entity) — если
-     появится реальная потребность.
-  3. Рефакторинг: разнести `main.go` (уже ~570 строк) на `routes.go` / `http.go`.
+### 6.36 (B27) — ЗАКРЫТ
+- **Дата:** 2026-10-03
+- **Статус:** закрыт (коммиты d690449 + f6c75db + 944fc45 + b7b5834 + 6fadac0)
+- **Цель:** password reset + must_change_password + brute-force lock +
+  роль registrar (первая волна МИС-плана §6.37).
+- **Что сделано:**
+  - **d690449** `feat(auth): 6.36 (B27.1) — schema password_reset_tokens + поля doctors + роль registrar`
+    Схема: таблица `password_reset_tokens` (id, token_hash, doctor_id,
+    created_at, expires_at, used_at) + 2 индекса. Миграции через
+    `ensureColumn(db, ...)` (PRAGMA table_info + ALTER TABLE — идемпотентно):
+    doctors.must_change_password, password_changed_at, failed_login_count,
+    locked_until. Роль `RoleRegistrar = "registrar"` в enum.
+  - **f6c75db** `feat(auth): 6.36 (B27.2) — store password reset + brute-force lock`
+    Store-функции (password_reset.go): CreatePasswordResetToken,
+    GetPasswordResetToken, ConsumePasswordResetToken, DeleteExpired,
+    UpdatePasswordHash, SetMustChangePassword, IncrementFailedLogin,
+    LockDoctor, ResetFailedLogin, IsDoctorLocked.
+    Константы: PasswordResetTokenTTL=1h, MaxFailedLogins=5, DoctorLockDuration=15m.
+  - **944fc45** `feat(auth): 6.36 (B27.3a) — API password-reset request/confirm + fix: getDoctorByEmail case-insensitive`
+    Endpoints: POST /api/auth/password-reset/request (всегда 200 —
+    anti-enumeration; dev возвращает token в JSON), POST
+    /api/auth/password-reset/confirm (token+new_password, min 8).
+    При успехе — revoke всех refresh-токенов доктора.
+    Хелперы: GenerateResetToken (32 байта hex), hashResetToken (sha256),
+    RevokeAllRefreshForDoctor. **Fix:** getDoctorByEmail теперь
+    `WHERE LOWER(email) = LOWER(?)`.
+  - **b7b5834** `feat(auth): 6.36 (B27.4) — middleware must_change_password + change-password + admin reset`
+    Middleware `requirePasswordChanged` — 403 при must_change_password=1,
+    кроме whitelist (change-password, logout, password-reset/*, isAuthWhitelist).
+    POST /api/auth/change-password (self) — old+new, снимает флаг,
+    НЕ отзывает refresh. POST /api/doctors/{id}/reset-password
+    (admin/superadmin) — GenerateTempPassword (base32, 16 символов),
+    ставит must_change_password=1, revoke refresh, защита от сброса
+    superadmin'а admin'ом. Middleware chain:
+    `recover(auth(requirePasswordChanged(mux)))`.
+  - **6fadac0** `feat(auth): 6.36 (B27.5) — UI password reset: forgot/reset/change + кнопка 🔑 в админке`
+    Новые страницы: `forgot_password.html` (запрос reset-ссылки),
+    `reset_password.html?token=...` (установка нового пароля),
+    `change_password.html` (принудительная смена при must_change_password).
+    `login.html` — ссылка «Забыли пароль?».
+    `admin_doctors.html` — кнопка 🔑 + `resetDoctorPassword()`
+    (показ temp с копированием в буфер).
+    `doctor_cabinet.html` — перехват 403 must_change_password → редирект
+    на change_password.html.
+- **Файлы:**
+  - `backend/db.go` — password_reset_tokens + ensureColumn + миграции.
+  - `backend/db_test.go` (новый) — 3 теста схемы.
+  - `backend/auth.go` — RoleRegistrar, handlePasswordResetRequest,
+    handlePasswordResetConfirm, handleChangePassword,
+    requirePasswordChanged, isPasswordChangeWhitelist.
+  - `backend/auth_test.go` — TestRole_RegistrarValid.
+  - `backend/password_reset.go` (новый) — store + helpers.
+  - `backend/password_reset_test.go` (новый) — 18 тестов.
+  - `backend/doctors.go` — handleDoctorResetPassword + GenerateTempPassword.
+  - `backend/main.go` — middleware chain.
+  - `forgot_password.html`, `reset_password.html`, `change_password.html` (новые).
+  - `login.html`, `admin_doctors.html`, `doctor_cabinet.html` — правки.
+- **Env-переменные:** новых нет.
+- **UI-smoke (БД /tmp/b27.db, AUTH_ENFORCE=true):**
+  - POST /api/auth/password-reset/request → {ok:true, token:"..."} (dev).
+  - POST /api/auth/password-reset/confirm → {ok:true}.
+  - login superadmin с новым паролем → JWT.
+  - admin reset DOC-001 → {ok:true, temporary_password:"..."}.
+  - login DOC-001 с temp → JWT → /api/patients = 403 must_change_password.
+  - change-password → {ok:true} → /api/patients = 200.
+  - Статика: forgot/reset/change_password.html → 200.
+- **Коммиты:**
+  - `d690449` feat(auth): 6.36 (B27.1) — schema password_reset_tokens + поля doctors + роль registrar
+  - `f6c75db` feat(auth): 6.36 (B27.2) — store password reset + brute-force lock
+  - `944fc45` feat(auth): 6.36 (B27.3a) — API password-reset request/confirm + fix: getDoctorByEmail case-insensitive
+  - `b7b5834` feat(auth): 6.36 (B27.4) — middleware must_change_password + change-password + admin reset
+  - `6fadac0` feat(auth): 6.36 (B27.5) — UI password reset: forgot/reset/change + кнопка 🔑 в админке
+- **Известные ограничения:**
+  - SMTP не подключён: в prod reset-ссылка не отправляется (только лог/audit).
+    В dev токен возвращается в JSON для отладки.
+  - Brute-force lock: счётчик `failed_login_count` пока НЕ увеличивается
+    в `handleAuthLogin` — store-функции готовы, но интеграция в login
+    запланирована отдельным подпатчем (B27.4.1).
+  - Роль `registrar` объявлена, но пока не используется (ждёт модуля
+    sick_leave, B40).
 
-<!-- B27_SNAPSHOT_PENDING -->
+<!-- B27_SNAPSHOT_APPLIED -->
+
+### 6.38 (B28) — TODO (уточнить)
+- **Статус:** запланирован
+- **Цель:** Encounters + clinics (минимум) — центральная сущность МИС
+  (см. §6.37 «План развития»).
+- **Скоуп по плану:**
+  - Схема `encounters` (id, patient_id, doctor_id, clinic_id, specialty,
+    title, kind, started_at, finished_at, status, complaint, anamnesis,
+    examination, diagnosis_text, diagnosis_icd10, recommendations,
+    common_json, specialty_json).
+  - Поля `title`, `kind` (consultation | study | procedure | lab | followup).
+  - Общие поля (common_json) + специфичные (specialty_json).
+  - Минимальная схема `clinics` (для FK) — если её ещё нет.
+  - Store: createEncounter, getEncounterByID, listEncountersByPatient,
+    listEncountersByDoctor, updateEncounter, finishEncounter.
+  - API: POST/GET/PATCH /api/encounters, GET /api/patients/{id}/encounters.
+  - UI: раздел «Приёмы» в `doctor_cabinet.html` + timeline в
+    `patient_card.html`.
+- **Зависимости:** только базовые (auth, doctors, patients).
+- **Следующие подпатчи (B28.x):** B28.5 — prefill
+  (`POST /api/encounters/prefill` + UI-модалка).
+
+<!-- B28_SNAPSHOT_PENDING -->
 
 ---
 
@@ -887,6 +980,8 @@
 
 **Добавлено:** 2026-10-02 (перед B27).
 **Статус:** зафиксирован, реализация — по волнам B27…B42.
+**B27 (password reset) — ЗАКРЫТ 2026-10-03** (см. §6.36).
+Следующая волна — B28 (encounters + clinics).
 **Контекст:** расширение BOT_MAX от «кабинета одного врача» до
 амбулаторной МИС: несколько специальностей, общая история пациента,
 внешние врачи по PIN/QR, лаборатории, справки, рецепты, направления на ЭЛН.
