@@ -486,6 +486,31 @@
         </div>
     </div>
 
+    <div class="card" id="encountersCard">
+        <div class="card-header">
+            <h2>🩺 Приёмы</h2>
+            <button class="btn btn-sm btn-primary" onclick="openNewEncounterModal()">➕ Новый приём</button>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Дата</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Пациент</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Специальность</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Название</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Тип</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Статус</th>
+                        <th style="padding:10px;text-align:left;color:#a0aec0;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="encountersTableBody">
+                    <tr><td colspan="7" style="text-align:center;padding:40px;color:#a0aec0;">Загрузка…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-header">
             <h2>📁 Управление клиническими рекомендациями</h2>
@@ -531,6 +556,46 @@
         <div class="modal-buttons">
             <button class="btn btn-danger" onclick="closeAddPatientModal()">❌ Отмена</button>
             <button class="btn btn-success" onclick="saveNewPatient()">✅ Добавить</button>
+        </div>
+    </div>
+</div>
+
+<div id="newEncounterModal" class="modal">
+    <div class="modal-content">
+        <h3 style="color: #9f7aea; margin-bottom: 20px;">➕ Новый приём</h3>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Пациент *</label>
+                <select id="newEncounterPatientId" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;"></select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Специальность</label>
+                <input type="text" id="newEncounterSpecialty" placeholder="ЛОР" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Тип</label>
+                <select id="newEncounterKind" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                    <option value="consultation">consultation</option>
+                    <option value="study">study</option>
+                    <option value="procedure">procedure</option>
+                    <option value="lab">lab</option>
+                    <option value="followup">followup</option>
+                </select>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Название *</label>
+                <input type="text" id="newEncounterTitle" placeholder="Первичный осмотр" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Жалобы</label>
+                <textarea id="newEncounterComplaint" rows="3" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+        </div>
+
+        <div class="modal-buttons">
+            <button class="btn btn-danger" onclick="closeNewEncounterModal()">❌ Отмена</button>
+            <button class="btn btn-success" onclick="submitNewEncounter()">✅ Создать</button>
         </div>
     </div>
 </div>
@@ -802,6 +867,7 @@
         if (sel) sel.value = STORAGE_MODE;
         restorePatientFilterUI();
         loadPatientsFromStorage();
+        loadMyEncounters();
         renderSymptomGrid();
         updateStats();
         loadGuidelines();
@@ -1882,6 +1948,88 @@
             html += '</div></div>';
         }
         container.innerHTML = html;
+    }
+
+    // ---------- B28.4.2: раздел «Приёмы» ----------
+    function loadMyEncounters() {
+        if (typeof currentDoctorId === 'undefined' || !currentDoctorId) return;
+        return apiRequest('GET', '/api/encounters?doctor_id=' + encodeURIComponent(currentDoctorId))
+            .then(function(data){ renderEncountersTable((data && data.items) || []); })
+            .catch(function(err){
+                var tbody = document.getElementById('encountersTableBody');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#f56565;">Ошибка загрузки: ' + (err && err.message ? err.message : 'unknown') + '</td></tr>';
+            });
+    }
+
+    function renderEncountersTable(items) {
+        var tbody = document.getElementById('encountersTableBody');
+        if (!tbody) return;
+        if (!items || !items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#a0aec0;">Приёмов пока нет</td></tr>';
+            return;
+        }
+        items.sort(function(a, b){ return String(b.started_at || '').localeCompare(String(a.started_at || '')); });
+        var html = '';
+        for (var i = 0; i < items.length; i++) {
+            var e = items[i];
+            var finished = (e.status === 'finished');
+            var badge = finished
+                ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">finished</span>'
+                : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">draft</span>';
+            html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">'
+                 +  '<td style="padding:10px;">' + (e.started_at || '—') + '</td>'
+                 +  '<td style="padding:10px;">' + (e.patient_id || '—') + '</td>'
+                 +  '<td style="padding:10px;">' + (e.specialty || '—') + '</td>'
+                 +  '<td style="padding:10px;">' + (e.title || '—') + '</td>'
+                 +  '<td style="padding:10px;">' + (e.kind || '—') + '</td>'
+                 +  '<td style="padding:10px;">' + badge + '</td>'
+                 +  '<td style="padding:10px;">'
+                 +  '<button class="btn btn-sm btn-info" onclick="openEncounterFromTable(\'' + e.id + '\')">Открыть</button>'
+                 +  '</td>'
+                 +  '</tr>';
+        }
+        tbody.innerHTML = html;
+    }
+
+    function openEncounterFromTable(id) {
+        // TODO B28.4.3: открыть encounter по id
+        console.log('open encounter', id);
+    }
+
+    function openNewEncounterModal() {
+        var sel = document.getElementById('newEncounterPatientId');
+        if (sel) {
+            var opts = '<option value="">— выберите пациента —</option>';
+            for (var i = 0; i < patients.length; i++) {
+                var p = patients[i];
+                opts += '<option value="' + p.id + '">' + (p.name || p.id) + '</option>';
+            }
+            sel.innerHTML = opts;
+        }
+        var m = document.getElementById('newEncounterModal');
+        if (m) { m.classList.add('active'); m.style.display = 'flex'; }
+    }
+
+    function closeNewEncounterModal() {
+        var m = document.getElementById('newEncounterModal');
+        if (m) { m.classList.remove('active'); m.style.display = 'none'; }
+    }
+
+    function submitNewEncounter() {
+        var patientId = (document.getElementById('newEncounterPatientId') || {}).value || '';
+        var title = ((document.getElementById('newEncounterTitle') || {}).value || '').trim();
+        if (!patientId) { alert('Выберите пациента'); return; }
+        if (!title) { alert('Укажите название'); return; }
+        var body = {
+            patient_id: patientId,
+            title: title,
+            specialty: ((document.getElementById('newEncounterSpecialty') || {}).value || '').trim(),
+            kind: ((document.getElementById('newEncounterKind') || {}).value || 'consultation'),
+            complaint: ((document.getElementById('newEncounterComplaint') || {}).value || '').trim()
+        };
+        apiRequest('POST', '/api/encounters', body)
+            .then(function(){ closeNewEncounterModal(); return loadMyEncounters(); })
+            .catch(function(err){ alert('Ошибка создания: ' + (err && err.message ? err.message : 'unknown')); });
     }
 
     function renderPatientsTable() {
