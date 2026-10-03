@@ -976,34 +976,43 @@
 
 ### 6.38 (B28) — В РАБОТЕ (checkpoint 2026-10-03)
 
-**Статус:** в работе, 2 из 6 подпатчей закрыты.
+**Статус:** в работе, 3 из 6 подпатчей закрыты.
 
 **Закрыто:**
 - **B28.1** (`7d8de0e`) — схема `encounters` + `newID` helper.
 - **B28.2** (`57d3069`) — store-слой (CRUD + list + finish), 17 тестов.
+- **B28.3** (`d53c49d`) — HTTP API `/api/encounters/*` + json-теги + права
+  + аудит. Smoke end-to-end: create → patch → finish → 403 → list.
 
 **Осталось:**
-- **B28.3** — API endpoints (`/api/encounters/*`) + права + аудит.
 - **B28.4** — UI: раздел «Приёмы» в `doctor_cabinet.html` + timeline
   в `patient_card.html`.
 - **B28.5** — prefill (`POST /api/encounters/prefill` + UI-модалка).
 - **B28.6** — финальный снапшот §6.38.
 
-**Решения по B28.3 (приняты 2026-10-03):**
-1. DELETE encounter — только `status='draft'`, иначе 403.
-2. `GET /api/encounters` требует `?patient_id=` или `?doctor_id=` (иначе 400);
-   для admin/superadmin — `?clinic_id=`.
-3. Врач видит все encounters пациента, с которым у него есть хотя бы
-   один encounter (см. §6.37).
-4. Аудит: `encounter.created` / `.updated` / `.finished` / `.deleted`.
-5. Endpoints:
-   - `POST   /api/encounters`
-   - `GET    /api/encounters?patient_id=|doctor_id=|clinic_id=`
-   - `GET    /api/encounters/{id}`
-   - `PATCH  /api/encounters/{id}`
-   - `POST   /api/encounters/{id}/finish`
-   - `DELETE /api/encounters/{id}`
-   - `GET    /api/patients/{id}/encounters`
+**Решения по B28.4 (UI) — для следующей сессии:**
+1. **`patient_card.html`** — timeline приёмов (read-only, из `?patient_id=`),
+   клик по строке → открытие encounter.
+2. **`doctor_cabinet.html`** — раздел «Приёмы»:
+   - список своих encounters (`?doctor_id=me`);
+   - кнопка «Новый приём» (форма: patient, specialty, title, kind, complaint);
+   - открытие/редактирование/завершение;
+   - DELETE только для draft (скрывать на finished).
+3. **Решить:** встроенный раздел в `doctor_cabinet.html` или отдельная
+   страница `encounters.html`. **Рекомендация:** встроенный раздел + timeline
+   в `patient_card.html` (не плодить файлы).
+4. **UI-индикация статуса:** badge `draft` / `finished`.
+5. **Разбивка B28.4:**
+   - B28.4.1 — timeline в `patient_card.html` (read-only).
+   - B28.4.2 — раздел «Приёмы» в `doctor_cabinet.html` + создание.
+   - B28.4.3 — редактирование, завершение, удаление.
+
+**Разведка для B28.4 (что нужно уточнить):**
+- `patient_card.html`: где рендерится список/карточка пациента, есть ли
+  уже блок истории.
+- `doctor_cabinet.html`: где раздел пациентов, как рендерится список,
+  где добавить «Приёмы».
+- `auth.js`: `BotMaxAuth.authFetch` — уже используется, переиспользуем.
 
 **Файлы B28.1–B28.2:**
 - `backend/db.go` — схема `encounters` (20 колонок + 3 индекса).
@@ -1020,13 +1029,7 @@
     `UnmarshalJSONValue`.
 - `backend/encounters_test.go` — 17 тестов.
 
-**Разведка для B28.3 (что уже известно):**
-- `registerPatientRoutes` / `handlePatients` / `handlePatientCreate` —
-  образцы стиля handlers.
-- `resolveDoctorID` / `doctorIDFromCtx` / `doctorRoleFromCtx` — для прав.
-- `requireRole` / `requireNonImpersonated` — middleware.
-
-**Следующая сессия:** продолжить с **B28.3**.
+**Следующая сессия:** продолжить с **B28.4 (UI)**.
 Первая команда: `cd /workspaces/BOT_MAX-main && git log --oneline -5 && git status --short`.
 Проверки: `gofmt -l backend/ && go vet ./... && go build -o /tmp/botmax_server ./backend && go test -count=1 ./backend/...`.
 
