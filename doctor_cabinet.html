@@ -562,7 +562,10 @@
 
 <div id="editEncounterModal" class="modal">
     <div class="modal-content" style="max-width:800px;">
-        <h3 style="color: #9f7aea; margin-bottom: 20px;">✏️ Редактировать приём</h3>
+        <h3 style="color: #9f7aea; margin-bottom: 8px;">✏️ Редактировать приём</h3>
+        <div style="color:#a0aec0;font-size:0.85em;margin-bottom:20px;">
+            <span id="editEncounterHeaderTitle">—</span> · <span id="editEncounterHeaderPatient">—</span>
+        </div>
         <input type="hidden" id="editEncounterId">
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -572,16 +575,16 @@
             </div>
             <div>
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Специальность</label>
-                <input type="text" id="editEncounterSpecialty" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                <select id="editEncounterSpecialty" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;"></select>
             </div>
             <div>
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Тип</label>
                 <select id="editEncounterKind" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
-                    <option value="consultation">consultation</option>
-                    <option value="study">study</option>
-                    <option value="procedure">procedure</option>
-                    <option value="lab">lab</option>
-                    <option value="followup">followup</option>
+                    <option value="consultation">Консультация</option>
+                    <option value="study">Исследование</option>
+                    <option value="procedure">Процедура</option>
+                    <option value="lab">Анализы</option>
+                    <option value="followup">Повторный приём</option>
                 </select>
             </div>
             <div style="grid-column: 1 / -1;">
@@ -632,25 +635,21 @@
             </div>
             <div>
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Специальность</label>
-                <input type="text" id="newEncounterSpecialty" placeholder="ЛОР" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+                <select id="newEncounterSpecialty" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;"></select>
             </div>
             <div>
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Тип</label>
                 <select id="newEncounterKind" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
-                    <option value="consultation">consultation</option>
-                    <option value="study">study</option>
-                    <option value="procedure">procedure</option>
-                    <option value="lab">lab</option>
-                    <option value="followup">followup</option>
+                    <option value="consultation">Консультация</option>
+                    <option value="study">Исследование</option>
+                    <option value="procedure">Процедура</option>
+                    <option value="lab">Анализы</option>
+                    <option value="followup">Повторный приём</option>
                 </select>
             </div>
             <div style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Название *</label>
                 <input type="text" id="newEncounterTitle" placeholder="Первичный осмотр" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
-            </div>
-            <div style="grid-column: 1 / -1;">
-                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Жалобы</label>
-                <textarea id="newEncounterComplaint" rows="3" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
             </div>
         </div>
 
@@ -2011,6 +2010,32 @@
         container.innerHTML = html;
     }
 
+    // ---------- B28.4.4: русские названия типов приёмов ----------
+    var ENCOUNTER_KIND_RU = {
+        consultation: 'Консультация',
+        study:        'Исследование',
+        procedure:    'Процедура',
+        lab:          'Анализы',
+        followup:     'Повторный приём'
+    };
+    function encounterKindRu(kind) { return ENCOUNTER_KIND_RU[kind] || kind || '—'; }
+
+    // ---------- B28.4.4: список специальностей ----------
+    var SPECIALTY_LIST = [
+        'ЛОР', 'Терапевт', 'Хирург', 'Педиатр', 'Невролог',
+        'Кардиолог', 'Офтальмолог', 'Дерматолог', 'Гинеколог',
+        'Уролог', 'Эндокринолог', 'Гастроэнтеролог', 'Психиатр',
+        'Стоматолог', 'Другое'
+    ];
+    function renderSpecialtyOptions(selected) {
+        var opts = '<option value="">— выберите —</option>';
+        for (var i = 0; i < SPECIALTY_LIST.length; i++) {
+            var s = SPECIALTY_LIST[i];
+            opts += '<option value="' + s + '"' + (s === selected ? ' selected' : '') + '>' + s + '</option>';
+        }
+        return opts;
+    }
+
     // ---------- B28.4.3: редактирование / завершение / удаление ----------
     function openEditEncounterModal(id) {
         apiRequest('GET', '/api/encounters/' + encodeURIComponent(id))
@@ -2018,8 +2043,11 @@
                 if (!e) { alert('Приём не найден'); return; }
                 document.getElementById('editEncounterId').value = e.id || '';
                 document.getElementById('editEncounterPatient').textContent = e.patient_id || '—';
+                document.getElementById('editEncounterHeaderTitle').textContent = e.title || '(без названия)';
+                document.getElementById('editEncounterHeaderPatient').textContent = e.patient_id || '—';
                 document.getElementById('editEncounterTitle').value = e.title || '';
-                document.getElementById('editEncounterSpecialty').value = e.specialty || '';
+                var specSel = document.getElementById('editEncounterSpecialty');
+                if (specSel) specSel.innerHTML = renderSpecialtyOptions(e.specialty || '');
                 document.getElementById('editEncounterKind').value = e.kind || 'consultation';
                 document.getElementById('editEncounterComplaint').value = e.complaint || '';
                 document.getElementById('editEncounterAnamnesis').value = e.anamnesis || '';
@@ -2031,6 +2059,10 @@
                 if (m) { m.classList.add('active'); m.style.display = 'flex'; }
             })
             .catch(function(err){ alert('Ошибка загрузки приёма: ' + (err && err.message ? err.message : 'unknown')); });
+    }
+
+    function openEncounterInNewTab(id) {
+        window.open('encounter.html?id=' + encodeURIComponent(id), '_blank');
     }
 
     function closeEditEncounterModal() {
@@ -2102,10 +2134,11 @@
                  +  '<td style="padding:10px;">' + (e.patient_id || '—') + '</td>'
                  +  '<td style="padding:10px;">' + (e.specialty || '—') + '</td>'
                  +  '<td style="padding:10px;">' + (e.title || '—') + '</td>'
-                 +  '<td style="padding:10px;">' + (e.kind || '—') + '</td>'
+                 +  '<td style="padding:10px;">' + encounterKindRu(e.kind) + '</td>'
                  +  '<td style="padding:10px;">' + badge + '</td>'
                  +  '<td style="padding:10px;white-space:nowrap;">'
                  +  '<button class="btn btn-sm btn-info" onclick="openEncounterFromTable(\'' + e.id + '\')">Открыть</button>'
+                 +  ' <button class="btn btn-sm btn-secondary" onclick="openEncounterInNewTab(\'' + e.id + '\')" title="В новой вкладке">🔗</button>'
                  +  (finished ? '' : ' <button class="btn btn-sm btn-primary" onclick="finishEncounter(\'' + e.id + '\')">Завершить</button>')
                  +  (finished ? '' : ' <button class="btn btn-sm btn-danger" onclick="deleteEncounter(\'' + e.id + '\')">Удалить</button>')
                  +  '</td>'
@@ -2121,13 +2154,16 @@
     function openNewEncounterModal() {
         var sel = document.getElementById('newEncounterPatientId');
         if (sel) {
+            var src = (typeof patients !== 'undefined' && patients) || window.patients || [];
             var opts = '<option value="">— выберите пациента —</option>';
-            for (var i = 0; i < patients.length; i++) {
-                var p = patients[i];
+            for (var i = 0; i < src.length; i++) {
+                var p = src[i];
                 opts += '<option value="' + p.id + '">' + (p.name || p.id) + '</option>';
             }
             sel.innerHTML = opts;
         }
+        var specSel = document.getElementById('newEncounterSpecialty');
+        if (specSel) specSel.innerHTML = renderSpecialtyOptions('');
         var m = document.getElementById('newEncounterModal');
         if (m) { m.classList.add('active'); m.style.display = 'flex'; }
     }
@@ -2146,8 +2182,7 @@
             patient_id: patientId,
             title: title,
             specialty: ((document.getElementById('newEncounterSpecialty') || {}).value || '').trim(),
-            kind: ((document.getElementById('newEncounterKind') || {}).value || 'consultation'),
-            complaint: ((document.getElementById('newEncounterComplaint') || {}).value || '').trim()
+            kind: ((document.getElementById('newEncounterKind') || {}).value || 'consultation')
         };
         apiRequest('POST', '/api/encounters', body)
             .then(function(){ closeNewEncounterModal(); return loadMyEncounters(); })
