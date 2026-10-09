@@ -119,6 +119,7 @@ func InitDB(path string) (*sql.DB, error) {
 		`CREATE INDEX IF NOT EXISTS idx_enc_patient ON encounters(patient_id, started_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_enc_doctor  ON encounters(doctor_id, started_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_enc_clinic  ON encounters(clinic_id, started_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_enc_patient_kind ON encounters(patient_id, kind, started_at DESC);`,
 
 		// === Витальные (текущие) ===
 		`CREATE TABLE IF NOT EXISTS vitals (
