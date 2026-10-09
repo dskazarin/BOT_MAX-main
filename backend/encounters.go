@@ -10,10 +10,12 @@ package main
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +34,138 @@ var validEncounterKinds = map[string]bool{
 var validEncounterStatuses = map[string]bool{
 	"draft":    true,
 	"finished": true,
+}
+
+// ---------------------------------------------------------------
+// B29.1.2 — фильтр + пагинация для GET /api/encounters
+// ---------------------------------------------------------------
+
+const (
+	// Границы limit/offset (согласовано в §6.39).
+	encounterListLimitMin     = 1
+	encounterListLimitMax     = 200
+	encounterListLimitDefault = 20
+	encounterListOffsetMax    = 10000
+	encounterListOffsetMin    = 0
+)
+
+// EncounterFilter — разобранные параметры GET /api/encounters.
+// Все поля опциональны, кроме обязательного "скоупа"
+// (patient_id | doctor_id | clinic_id) — проверяется в handleEncountersList.
+type EncounterFilter struct {
+	PatientID string
+	DoctorID  string
+	ClinicID  string
+
+	Kind      string     // "" | consultation | study | procedure | lab | followup
+	Status    string     // "" | draft | finished
+	Specialty string     // произвольная строка (точное совпадение)
+	From      *time.Time // включительно
+	To        *time.Time // включительно
+
+	Limit   int
+	Offset  int
+	Cursor  string // opaque; если задан — offset игнорируется
+	NoTotal bool
+}
+
+// parseEncounterFilter — разбирает и валидирует query-параметры.
+// Возвращает ошибку с человекочитаемым сообщением (→ 400).
+func parseEncounterFilter(q url.Values) (*EncounterFilter, error) {
+	f := &EncounterFilter{
+		PatientID: strings.TrimSpace(q.Get("patient_id")),
+		DoctorID:  strings.TrimSpace(q.Get("doctor_id")),
+		ClinicID:  strings.TrimSpace(q.Get("clinic_id")),
+		Kind:      strings.TrimSpace(q.Get("kind")),
+		Status:    strings.TrimSpace(q.Get("status")),
+		Specialty: strings.TrimSpace(q.Get("specialty")),
+		Cursor:    strings.TrimSpace(q.Get("cursor")),
+		Limit:     encounterListLimitDefault,
+		Offset:    0,
+	}
+
+	if f.Kind != "" && !validEncounterKinds[f.Kind] {
+		return nil, fmt.Errorf("invalid kind: %q", f.Kind)
+	}
+	if f.Status != "" && !validEncounterStatuses[f.Status] {
+		return nil, fmt.Errorf("invalid status: %q", f.Status)
+	}
+
+	if v := strings.TrimSpace(q.Get("limit")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid limit: %q", v)
+		}
+		if n < encounterListLimitMin || n > encounterListLimitMax {
+			return nil, fmt.Errorf("limit out of range [%d..%d]: %d",
+				encounterListLimitMin, encounterListLimitMax, n)
+		}
+		f.Limit = n
+	}
+
+	if v := strings.TrimSpace(q.Get("offset")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid offset: %q", v)
+		}
+		if n < encounterListOffsetMin || n > encounterListOffsetMax {
+			return nil, fmt.Errorf("offset out of range [%d..%d]: %d",
+				encounterListOffsetMin, encounterListOffsetMax, n)
+		}
+		f.Offset = n
+	}
+
+	if v := strings.TrimSpace(q.Get("from")); v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid from (RFC3339): %q", v)
+		}
+		f.From = &t
+	}
+	if v := strings.TrimSpace(q.Get("to")); v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid to (RFC3339): %q", v)
+		}
+		f.To = &t
+	}
+	if f.From != nil && f.To != nil && f.From.After(*f.To) {
+		return nil, fmt.Errorf("from > to")
+	}
+
+	if v := strings.TrimSpace(q.Get("no_total")); v == "1" || v == "true" {
+		f.NoTotal = true
+	}
+
+	return f, nil
+}
+
+// ---------------------------------------------------------------
+// B29.1.2 — cursor (keyset) helpers
+// Формат: base64url( startedAt | id ),  startedAt — RFC3339Nano.
+// ---------------------------------------------------------------
+
+// encodeEncounterCursor — пакует (startedAt, id) в opaque-строку.
+func encodeEncounterCursor(startedAt string, id string) string {
+	raw := startedAt + "|" + id
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+// decodeEncounterCursor — распаковывает cursor.
+// Возвращает (startedAt, id, err). Пустой cursor → ("", "", nil).
+func decodeEncounterCursor(s string) (string, string, error) {
+	if s == "" {
+		return "", "", nil
+	}
+	b, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid cursor (base64): %w", err)
+	}
+	parts := strings.SplitN(string(b), "|", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("invalid cursor (format)")
+	}
+	return parts[0], parts[1], nil
 }
 
 // Encounter — эпизод приёма.
