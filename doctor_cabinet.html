@@ -651,9 +651,34 @@
                 <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Название *</label>
                 <input type="text" id="newEncounterTitle" placeholder="Первичный осмотр" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
             </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Жалобы</label>
+                <textarea id="newEncounterComplaint" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Анамнез</label>
+                <textarea id="newEncounterAnamnesis" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Осмотр</label>
+                <textarea id="newEncounterExamination" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Диагноз (текст)</label>
+                <textarea id="newEncounterDiagnosisText" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">МКБ-10</label>
+                <input type="text" id="newEncounterDiagnosisICD10" placeholder="J06.9" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0;">
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 0.8em; color: #a0aec0; margin-bottom: 5px;">Рекомендации</label>
+                <textarea id="newEncounterRecommendations" rows="2" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e2e8f0; resize:vertical;"></textarea>
+            </div>
         </div>
 
         <div class="modal-buttons">
+            <button class="btn btn-info" onclick="prefillFromHistory()" style="margin-right:auto;">🪄 Заполнить из истории</button>
             <button class="btn btn-danger" onclick="closeNewEncounterModal()">❌ Отмена</button>
             <button class="btn btn-success" onclick="submitNewEncounter()">✅ Создать</button>
         </div>
@@ -2182,11 +2207,56 @@
             patient_id: patientId,
             title: title,
             specialty: ((document.getElementById('newEncounterSpecialty') || {}).value || '').trim(),
-            kind: ((document.getElementById('newEncounterKind') || {}).value || 'consultation')
+            kind: ((document.getElementById('newEncounterKind') || {}).value || 'consultation'),
+            complaint: ((document.getElementById('newEncounterComplaint') || {}).value || '').trim(),
+            anamnesis: ((document.getElementById('newEncounterAnamnesis') || {}).value || '').trim(),
+            examination: ((document.getElementById('newEncounterExamination') || {}).value || '').trim(),
+            diagnosis_text: ((document.getElementById('newEncounterDiagnosisText') || {}).value || '').trim(),
+            diagnosis_icd10: ((document.getElementById('newEncounterDiagnosisICD10') || {}).value || '').trim(),
+            recommendations: ((document.getElementById('newEncounterRecommendations') || {}).value || '').trim()
         };
         apiRequest('POST', '/api/encounters', body)
             .then(function(){ closeNewEncounterModal(); return loadMyEncounters(); })
             .catch(function(err){ alert('Ошибка создания: ' + (err && err.message ? err.message : 'unknown')); });
+    }
+
+    // ---------- B28.5.2: prefill из истории ----------
+    function prefillFromHistory() {
+        var patientId = (document.getElementById('newEncounterPatientId') || {}).value || '';
+        if (!patientId) { alert('Сначала выберите пациента'); return; }
+
+        apiRequest('POST', '/api/encounters/prefill', { patient_id: patientId })
+            .then(function(data){
+                if (!data || !data.found) {
+                    alert('У пациента нет предыдущих приёмов — нечего заполнять');
+                    return;
+                }
+                // Заполняем все клинические поля (если пришли данные)
+                var setters = [
+                    ['newEncounterTitle',           data.title],
+                    ['newEncounterComplaint',       data.complaint],
+                    ['newEncounterAnamnesis',       data.anamnesis],
+                    ['newEncounterExamination',     data.examination],
+                    ['newEncounterDiagnosisText',   data.diagnosis_text],
+                    ['newEncounterDiagnosisICD10',  data.diagnosis_icd10],
+                    ['newEncounterRecommendations', data.recommendations]
+                ];
+                for (var i = 0; i < setters.length; i++) {
+                    var el = document.getElementById(setters[i][0]);
+                    var val = setters[i][1];
+                    if (el && val) el.value = val;
+                }
+                // Специальность — через select
+                var specSel = document.getElementById('newEncounterSpecialty');
+                if (specSel && data.specialty) {
+                    specSel.innerHTML = renderSpecialtyOptions(data.specialty);
+                }
+                // Информация пользователю
+                alert('Поля заполнены из приёма от ' + (data.started_at || '') + ' (id: ' + (data.encounter_id || '') + ')');
+            })
+            .catch(function(err){
+                alert('Ошибка prefill: ' + (err && err.message ? err.message : 'unknown'));
+            });
     }
 
     function renderPatientsTable() {
