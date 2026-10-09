@@ -600,18 +600,10 @@ func handleEncountersList(w http.ResponseWriter, r *http.Request) {
 	)
 	switch {
 	case patientID != "":
-		// Врачу — только если у него есть encounter с этим пациентом.
-		if role == RoleDoctor {
-			ok, e := encounterExistsForDoctorAndPatient(db, me, patientID)
-			if e != nil {
-				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-				return
-			}
-			if !ok {
-				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-				return
-			}
-		}
+		// B28.4.4: врач видит timeline пациента так же, как его карточку.
+		// В рамках одной клиники — это норма. Consent-модель для сторонних
+		// врачей (из других клиник) — в B30 (личный кабинет пациента).
+		// См. также §6.38 checkpoint.
 		if role == RoleAdmin {
 			// Проверим, что patient в его клинике (через encounters).
 			// Упрощённо: если clinicID не задан — запретим.
