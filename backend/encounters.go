@@ -444,6 +444,35 @@ func handleEncounters(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// getLatestEncounterForPrefill — последний приём пациента для prefill.
+// Возвращает nil, ErrNoRows, если приёмов нет.
+func getLatestEncounterForPrefill(db *sql.DB, patientID string) (*Encounter, error) {
+	var enc Encounter
+	err := db.QueryRow(
+		`SELECT id, patient_id, doctor_id, COALESCE(clinic_id,''), specialty, title, kind,
+		        started_at, COALESCE(finished_at,''), status, complaint, anamnesis,
+		        examination, diagnosis_text, diagnosis_icd10, recommendations,
+		        common_json, specialty_json, created_at, updated_at
+		 FROM encounters
+		 WHERE patient_id = ?
+		 ORDER BY started_at DESC
+		 LIMIT 1`,
+		patientID,
+	).Scan(
+		&enc.ID, &enc.PatientID, &enc.DoctorID, &enc.ClinicID, &enc.Specialty, &enc.Title,
+		&enc.Kind, &enc.StartedAt, &enc.FinishedAt, &enc.Status, &enc.Complaint, &enc.Anamnesis,
+		&enc.Examination, &enc.DiagnosisText, &enc.DiagnosisICD10, &enc.Recommendations,
+		&enc.CommonJSON, &enc.SpecialtyJSON, &enc.CreatedAt, &enc.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &enc, nil
+}
+
 // handleEncounterPrefill — POST /api/encounters/prefill.
 // Body: {"patient_id": "PAT-..."}.
 // Возвращает клинические поля последнего приёма пациента (для автозаполнения
@@ -475,51 +504,31 @@ func handleEncounterPrefill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Последний приём пациента.
-	var (
-		encID       string
-		startedAt   string
-		specialty   string
-		complaint   string
-		anamnesis   string
-		examination string
-		diagText    string
-		diagICD10   string
-		recs        string
-	)
-	err := db.QueryRow(
-		`SELECT id, started_at, specialty, complaint, anamnesis, examination,
-		        diagnosis_text, diagnosis_icd10, recommendations
-		 FROM encounters
-		 WHERE patient_id = ?
-		 ORDER BY started_at DESC
-		 LIMIT 1`,
-		req.PatientID,
-	).Scan(&encID, &startedAt, &specialty, &complaint, &anamnesis,
-		&examination, &diagText, &diagICD10, &recs)
-
-	w.Header().Set("Content-Type", "application/json")
-
-	if err == sql.ErrNoRows {
-		_ = json.NewEncoder(w).Encode(PrefillOutput{Found: false})
-		return
-	}
+	enc, err := getLatestEncounterForPrefill(db, req.PatientID)
 	if err != nil {
 		slog.Warn("encounter.prefill", "err", err, "patient_id", req.PatientID)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+
+	if enc == nil {
+		_ = json.NewEncoder(w).Encode(PrefillOutput{Found: false})
+		return
+	}
+
 	out := PrefillOutput{
 		Found:           true,
-		EncounterID:     encID,
-		StartedAt:       startedAt,
-		Specialty:       specialty,
-		Complaint:       complaint,
-		Anamnesis:       anamnesis,
-		Examination:     examination,
-		DiagnosisText:   diagText,
-		DiagnosisICD10:  diagICD10,
-		Recommendations: recs,
+		EncounterID:     enc.ID,
+		StartedAt:       enc.StartedAt,
+		Specialty:       enc.Specialty,
+		Complaint:       enc.Complaint,
+		Anamnesis:       enc.Anamnesis,
+		Examination:     enc.Examination,
+		DiagnosisText:   enc.DiagnosisText,
+		DiagnosisICD10:  enc.DiagnosisICD10,
+		Recommendations: enc.Recommendations,
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }

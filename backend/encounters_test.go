@@ -339,3 +339,152 @@ func TestEncounter_UpdatedAtChanged(t *testing.T) {
 		t.Errorf("UpdatedAt не изменился: %q", got.UpdatedAt)
 	}
 }
+
+// ---------- B28.5.1b: тесты prefill ----------
+
+// TestPrefill_GetLatest_Found — есть 2 приёма, возвращается последний.
+func TestPrefill_GetLatest_Found(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	seedPatientForEncounter(t, db, "P1", "D1")
+
+	// Старый приём
+	_, err := createEncounter(db, CreateEncounterInput{
+		PatientID: "P1", DoctorID: "D1", Specialty: "lor",
+		Title: "Первый", Kind: "consultation", Complaint: "старая жалоба",
+	})
+	if err != nil {
+		t.Fatalf("create 1: %v", err)
+	}
+	time.Sleep(1100 * time.Millisecond) // гарантируем, что started_at отличается
+
+	// Новый приём
+	newEnc, err := createEncounter(db, CreateEncounterInput{
+		PatientID: "P1", DoctorID: "D1", Specialty: "therapy",
+		Title: "Второй", Kind: "followup", Complaint: "новая жалоба",
+	})
+	if err != nil {
+		t.Fatalf("create 2: %v", err)
+	}
+
+	got, err := getLatestEncounterForPrefill(db, "P1")
+	if err != nil {
+		t.Fatalf("getLatestEncounterForPrefill: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("got nil, want encounter")
+	}
+	if got.ID != newEnc.ID {
+		t.Errorf("ID: got %q, want %q", got.ID, newEnc.ID)
+	}
+	if got.Specialty != "therapy" {
+		t.Errorf("Specialty: got %q, want therapy", got.Specialty)
+	}
+	if got.Complaint != "новая жалоба" {
+		t.Errorf("Complaint: got %q", got.Complaint)
+	}
+}
+
+// TestPrefill_GetLatest_NoHistory — нет приёмов → nil.
+func TestPrefill_GetLatest_NoHistory(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	seedPatientForEncounter(t, db, "P1", "D1")
+
+	got, err := getLatestEncounterForPrefill(db, "P1")
+	if err != nil {
+		t.Fatalf("getLatestEncounterForPrefill: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %+v, want nil", got)
+	}
+}
+
+// TestPrefill_GetLatest_AllClinicalFields — все клинические поля копируются.
+func TestPrefill_GetLatest_AllClinicalFields(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	seedPatientForEncounter(t, db, "P1", "D1")
+
+	_, err := createEncounter(db, CreateEncounterInput{
+		PatientID:       "P1",
+		DoctorID:        "D1",
+		Specialty:       "lor",
+		Title:           "Осмотр",
+		Kind:            "consultation",
+		Complaint:       "жалоба-тест",
+		Anamnesis:       "анамнез-тест",
+		Examination:     "осмотр-тест",
+		DiagnosisText:   "диагноз-тест",
+		DiagnosisICD10:  "J06.9",
+		Recommendations: "рекомендации-тест",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	got, err := getLatestEncounterForPrefill(db, "P1")
+	if err != nil {
+		t.Fatalf("getLatest: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("got nil")
+	}
+
+	checks := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"Specialty", got.Specialty, "lor"},
+		{"Complaint", got.Complaint, "жалоба-тест"},
+		{"Anamnesis", got.Anamnesis, "анамнез-тест"},
+		{"Examination", got.Examination, "осмотр-тест"},
+		{"DiagnosisText", got.DiagnosisText, "диагноз-тест"},
+		{"DiagnosisICD10", got.DiagnosisICD10, "J06.9"},
+		{"Recommendations", got.Recommendations, "рекомендации-тест"},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
+		}
+	}
+}
+
+// TestPrefill_DifferentPatients — изоляция: приёмы другого пациента не подтягиваются.
+func TestPrefill_DifferentPatients(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	seedPatientForEncounter(t, db, "P1", "D1")
+	seedPatientForEncounter(t, db, "P2", "D1")
+
+	// Приём только у P1
+	_, err := createEncounter(db, CreateEncounterInput{
+		PatientID: "P1", DoctorID: "D1", Specialty: "lor",
+		Title: "P1 enc", Kind: "consultation", Complaint: "жалоба P1",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Для P2 — nil
+	got, err := getLatestEncounterForPrefill(db, "P2")
+	if err != nil {
+		t.Fatalf("P2: %v", err)
+	}
+	if got != nil {
+		t.Errorf("P2 got %+v, want nil", got)
+	}
+
+	// Для P1 — есть
+	got1, err := getLatestEncounterForPrefill(db, "P1")
+	if err != nil {
+		t.Fatalf("P1: %v", err)
+	}
+	if got1 == nil {
+		t.Fatalf("P1 got nil, want encounter")
+	}
+	if got1.Complaint != "жалоба P1" {
+		t.Errorf("P1 Complaint: got %q", got1.Complaint)
+	}
+}
