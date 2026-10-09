@@ -5,7 +5,6 @@ package main
 import (
 	"net/url"
 	"testing"
-	"time"
 )
 
 func TestParseEncounterFilter_Defaults(t *testing.T) {
@@ -56,9 +55,6 @@ func TestParseEncounterFilter_OK(t *testing.T) {
 }
 
 func TestParseEncounterFilter_Errors(t *testing.T) {
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	_ = base
-
 	cases := []struct {
 		name string
 		q    url.Values

@@ -345,61 +345,152 @@ func getEncounterByID(db *sql.DB, id string) (*Encounter, error) {
 	return &e, nil
 }
 
-// listEncountersByPatient — список encounter'ов пациента.
-func listEncountersByPatient(db *sql.DB, patientID string, limit, offset int) ([]*Encounter, error) {
-	return listEncounters(db,
-		`WHERE patient_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?`,
-		patientID, limit, offset)
-}
+// ---------------------------------------------------------------
+// B29.1.3 — SQL-сборщик WHERE + keyset-пагинация
+// ---------------------------------------------------------------
 
-// listEncountersByDoctor — список encounter'ов врача.
-func listEncountersByDoctor(db *sql.DB, doctorID string, limit, offset int) ([]*Encounter, error) {
-	return listEncounters(db,
-		`WHERE doctor_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?`,
-		doctorID, limit, offset)
-}
+const encounterSelectCols = `id, patient_id, doctor_id, COALESCE(clinic_id, ''),
+	specialty, title, kind, started_at, COALESCE(finished_at, ''),
+	status, complaint, anamnesis, examination, diagnosis_text, diagnosis_icd10,
+	recommendations, common_json, specialty_json, created_at, updated_at`
 
-// listEncounters — общий внутренний SELECT.
-func listEncounters(db *sql.DB, where string, args ...any) ([]*Encounter, error) {
-	if len(args) >= 3 {
-		if lim, ok := args[len(args)-2].(int); ok && (lim <= 0 || lim > 1000) {
-			args[len(args)-2] = 100
-		}
-		if off, ok := args[len(args)-1].(int); ok && off < 0 {
-			args[len(args)-1] = 0
-		}
+// scanEncounter — сканирует одну строку из encounterSelectCols.
+func scanEncounter(sc interface {
+	Scan(dest ...any) error
+}) (*Encounter, error) {
+	var e Encounter
+	err := sc.Scan(
+		&e.ID, &e.PatientID, &e.DoctorID, &e.ClinicID,
+		&e.Specialty, &e.Title, &e.Kind, &e.StartedAt, &e.FinishedAt,
+		&e.Status, &e.Complaint, &e.Anamnesis, &e.Examination,
+		&e.DiagnosisText, &e.DiagnosisICD10,
+		&e.Recommendations, &e.CommonJSON, &e.SpecialtyJSON,
+		&e.CreatedAt, &e.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
 	}
-	q := `SELECT id, patient_id, doctor_id, COALESCE(clinic_id, ''),
-		specialty, title, kind, started_at, COALESCE(finished_at, ''),
-		status, complaint, anamnesis, examination, diagnosis_text, diagnosis_icd10,
-		recommendations, common_json, specialty_json, created_at, updated_at
-		FROM encounters ` + where
+	return &e, nil
+}
+
+// buildEncounterWhere — собирает WHERE-условие и args.
+// Вызывающая сторона гарантирует, что хотя бы один скоуп задан
+// (patient_id | doctor_id | clinic_id).
+func buildEncounterWhere(f *EncounterFilter) (string, []any) {
+	conds := []string{}
+	args := []any{}
+
+	if f.PatientID != "" {
+		conds = append(conds, "patient_id = ?")
+		args = append(args, f.PatientID)
+	}
+	if f.DoctorID != "" {
+		conds = append(conds, "doctor_id = ?")
+		args = append(args, f.DoctorID)
+	}
+	if f.ClinicID != "" {
+		conds = append(conds, "clinic_id = ?")
+		args = append(args, f.ClinicID)
+	}
+	if f.Kind != "" {
+		conds = append(conds, "kind = ?")
+		args = append(args, f.Kind)
+	}
+	if f.Status != "" {
+		conds = append(conds, "status = ?")
+		args = append(args, f.Status)
+	}
+	if f.Specialty != "" {
+		conds = append(conds, "specialty = ?")
+		args = append(args, f.Specialty)
+	}
+	if f.From != nil {
+		conds = append(conds, "started_at >= ?")
+		args = append(args, f.From.UTC().Format(time.RFC3339Nano))
+	}
+	if f.To != nil {
+		conds = append(conds, "started_at <= ?")
+		args = append(args, f.To.UTC().Format(time.RFC3339Nano))
+	}
+
+	if len(conds) == 0 {
+		return "", args
+	}
+	return "WHERE " + strings.Join(conds, " AND "), args
+}
+
+// listEncountersFiltered — выборка с фильтром, offset- или keyset-пагинацией.
+// Возвращает (items, nextCursor).
+//   - если f.Cursor != "" — keyset: ORDER BY started_at DESC, id DESC + строгое <.
+//   - иначе — offset.
+//   - берём LIMIT limit+1, чтобы понять, есть ли ещё; возвращаем items[:limit].
+//   - nextCursor — курсор последнего возвращённого элемента, если есть ещё; иначе "".
+func listEncountersFiltered(db *sql.DB, f *EncounterFilter) ([]*Encounter, string, error) {
+	where, args := buildEncounterWhere(f)
+
+	if f.Cursor != "" {
+		curStart, curID, err := decodeEncounterCursor(f.Cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		keyCond := "(started_at < ? OR (started_at = ? AND id < ?))"
+		if where == "" {
+			where = "WHERE " + keyCond
+		} else {
+			where = where + " AND " + keyCond
+		}
+		args = append(args, curStart, curStart, curID)
+	}
+
+	q := "SELECT " + encounterSelectCols + " FROM encounters " + where +
+		" ORDER BY started_at DESC, id DESC LIMIT ?"
+
+	if f.Cursor != "" {
+		args = append(args, f.Limit+1)
+	} else {
+		q += " OFFSET ?"
+		args = append(args, f.Limit+1, f.Offset)
+	}
 
 	rows, err := db.Query(q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list encounters: %w", err)
+		return nil, "", fmt.Errorf("list encounters: %w", err)
 	}
 	defer rows.Close()
 
-	out := []*Encounter{}
+	all := []*Encounter{}
 	for rows.Next() {
-		var e Encounter
-		if err := rows.Scan(
-			&e.ID, &e.PatientID, &e.DoctorID, &e.ClinicID,
-			&e.Specialty, &e.Title, &e.Kind, &e.StartedAt, &e.FinishedAt,
-			&e.Status, &e.Complaint, &e.Anamnesis, &e.Examination,
-			&e.DiagnosisText, &e.DiagnosisICD10,
-			&e.Recommendations, &e.CommonJSON, &e.SpecialtyJSON,
-			&e.CreatedAt, &e.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan encounter: %w", err)
+		e, err := scanEncounter(rows)
+		if err != nil {
+			return nil, "", fmt.Errorf("scan encounter: %w", err)
 		}
-		out = append(out, &e)
+		all = append(all, e)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows.Err: %w", err)
+		return nil, "", fmt.Errorf("rows.Err: %w", err)
 	}
-	return out, nil
+
+	var nextCursor string
+	if len(all) > f.Limit {
+		last := all[f.Limit-1]
+		nextCursor = encodeEncounterCursor(last.StartedAt, last.ID)
+		all = all[:f.Limit]
+	}
+	return all, nextCursor, nil
+}
+
+// countEncounters — COUNT(*) с тем же WHERE, без cursor/offset/limit.
+func countEncounters(db *sql.DB, f *EncounterFilter) (int, error) {
+	base := *f
+	base.Cursor = ""
+	where, args := buildEncounterWhere(&base)
+	q := "SELECT COUNT(*) FROM encounters " + where
+
+	var n int
+	if err := db.QueryRow(q, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count encounters: %w", err)
+	}
+	return n, nil
 }
 
 // updateEncounter — частичное обновление.
@@ -810,89 +901,87 @@ func handleEncounterCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleEncountersList — GET /api/encounters.
-// Обязательно: ?patient_id= или ?doctor_id= (иначе 400).
-// Для admin/superadmin: можно ?clinic_id=.
+//
+// Query:
+//
+//	patient_id | doctor_id | clinic_id   (хотя бы один; скоуп)
+//	kind      ∈ {consultation,study,procedure,lab,followup}
+//	status    ∈ {draft,finished}
+//	specialty — точное совпадение
+//	from, to  — RFC3339 (started_at, включительно); from ≤ to
+//	limit     ∈ [1..200], default 20
+//	offset    ∈ [0..10000], default 0
+//	cursor    — opaque keyset; если задан — offset игнорируется
+//	no_total=1 — не считать COUNT(*)
+//
+// Права (B29.1.3):
+//
+//	doctor     — только doctor_id=me; patient_id разрешён (consent-модель в B30);
+//	admin      — только своя клиника (по patient_id — автоматически clinic_id);
+//	superadmin — любые фильтры.
 func handleEncountersList(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	patientID := strings.TrimSpace(q.Get("patient_id"))
-	doctorID := strings.TrimSpace(q.Get("doctor_id"))
-	clinicID := strings.TrimSpace(q.Get("clinic_id"))
-
-	limit := 100
-	offset := 0
-	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1000 {
-			limit = n
-		}
-	}
-	if v := q.Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			offset = n
-		}
+	f, err := parseEncounterFilter(r.URL.Query())
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
 	}
 
 	role, _ := doctorRoleFromCtx(r)
 	me := doctorIDFromCtx(r)
 
-	// Права на list:
-	//   doctor  — только свои (doctor_id=me) или по пациенту, с которым есть encounter;
-	//   admin   — только своя клиника;
-	//   superadmin — любые фильтры.
-	var (
-		list []*Encounter
-		err  error
-	)
-	switch {
-	case patientID != "":
-		// B28.4.4: врач видит timeline пациента так же, как его карточку.
-		// В рамках одной клиники — это норма. Consent-модель для сторонних
-		// врачей (из других клиник) — в B30 (личный кабинет пациента).
-		// См. также §6.38 checkpoint.
-		if role == RoleAdmin {
-			// Проверим, что patient в его клинике (через encounters).
-			// Упрощённо: если clinicID не задан — запретим.
-			if clinicID == "" {
-				adminDoc, _ := getDoctorRowByID(db, me)
-				if adminDoc != nil {
-					clinicID = adminDoc.ClinicID
-				}
-			}
-			list, err = listEncounters(db,
-				`WHERE patient_id = ? AND clinic_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?`,
-				patientID, clinicID, limit, offset)
-		} else {
-			list, err = listEncountersByPatient(db, patientID, limit, offset)
-		}
-	case doctorID != "":
-		// Врачу — только свой doctor_id.
-		if role == RoleDoctor && doctorID != me {
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-			return
-		}
-		list, err = listEncountersByDoctor(db, doctorID, limit, offset)
-	case clinicID != "" && (role == RoleAdmin || role == RoleSuperadmin):
-		list, err = listEncounters(db,
-			`WHERE clinic_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?`,
-			clinicID, limit, offset)
-	default:
+	if f.PatientID == "" && f.DoctorID == "" && f.ClinicID == "" {
 		http.Error(w, `{"error":"patient_id or doctor_id or clinic_id required"}`,
 			http.StatusBadRequest)
 		return
 	}
+	if f.DoctorID != "" && role == RoleDoctor && f.DoctorID != me {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	if f.ClinicID != "" && role == RoleAdmin {
+		adminDoc, _ := getDoctorRowByID(db, me)
+		if adminDoc == nil || adminDoc.ClinicID != f.ClinicID {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
+	}
+	if f.PatientID != "" && role == RoleAdmin && f.ClinicID == "" {
+		// B28.4.4: timeline пациента в рамках клиники admin'а.
+		if adminDoc, _ := getDoctorRowByID(db, me); adminDoc != nil {
+			f.ClinicID = adminDoc.ClinicID
+		}
+	}
+
+	list, nextCursor, err := listEncountersFiltered(db, f)
 	if err != nil {
 		slog.Warn("encounters.list", "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// Считаем count для пагинации (упрощённо — len от limit).
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"items":  list,
-		"limit":  limit,
-		"offset": offset,
+		"limit":  f.Limit,
+		"offset": f.Offset,
 		"count":  len(list),
-	})
+	}
+	if !f.NoTotal {
+		total, err := countEncounters(db, f)
+		if err != nil {
+			slog.Warn("encounters.count", "err", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		resp["total"] = total
+	}
+	if nextCursor != "" {
+		resp["next_cursor"] = nextCursor
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // handleEncounterGet — GET /api/encounters/{id}.

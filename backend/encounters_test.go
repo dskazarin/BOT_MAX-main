@@ -115,9 +115,9 @@ func TestEncounter_ListByPatient(t *testing.T) {
 		}
 	}
 
-	list, err := listEncountersByPatient(db, "P1", 10, 0)
+	list, _, err := listEncountersFiltered(db, &EncounterFilter{PatientID: "P1", Limit: 10})
 	if err != nil {
-		t.Fatalf("listEncountersByPatient: %v", err)
+		t.Fatalf("listEncountersFiltered: %v", err)
 	}
 	if len(list) != 3 {
 		t.Fatalf("got %d, want 3", len(list))
@@ -143,8 +143,8 @@ func TestEncounter_ListByDoctor(t *testing.T) {
 	_, _ = createEncounter(db, CreateEncounterInput{PatientID: "P1", DoctorID: "D1"})
 	_, _ = createEncounter(db, CreateEncounterInput{PatientID: "P2", DoctorID: "D2"})
 
-	list1, _ := listEncountersByDoctor(db, "D1", 10, 0)
-	list2, _ := listEncountersByDoctor(db, "D2", 10, 0)
+	list1, _, _ := listEncountersFiltered(db, &EncounterFilter{DoctorID: "D1", Limit: 10})
+	list2, _, _ := listEncountersFiltered(db, &EncounterFilter{DoctorID: "D2", Limit: 10})
 	if len(list1) != 2 {
 		t.Errorf("D1: got %d, want 2", len(list1))
 	}
