@@ -94,6 +94,25 @@ type UpdateEncounterInput struct {
 	SpecialtyJSON   *string `json:"specialty_json"`
 }
 
+// PrefillInput — вход для prefill.
+type PrefillInput struct {
+	PatientID string `json:"patient_id"`
+}
+
+// PrefillOutput — ответ prefill (клинические поля последнего приёма).
+type PrefillOutput struct {
+	Found           bool   `json:"found"`
+	EncounterID     string `json:"encounter_id,omitempty"`
+	StartedAt       string `json:"started_at,omitempty"`
+	Specialty       string `json:"specialty"`
+	Complaint       string `json:"complaint"`
+	Anamnesis       string `json:"anamnesis"`
+	Examination     string `json:"examination"`
+	DiagnosisText   string `json:"diagnosis_text"`
+	DiagnosisICD10  string `json:"diagnosis_icd10"`
+	Recommendations string `json:"recommendations"`
+}
+
 // validateEncounterKind — проверка допустимого kind.
 func validateEncounterKind(kind string) error {
 	if kind == "" {
@@ -405,10 +424,12 @@ func UnmarshalJSONValue(s string) (map[string]any, error) {
 func registerEncounterRoutes() {
 	guard := requireRole(RoleDoctor, RoleAdmin, RoleSuperadmin)
 	http.Handle("/api/encounters", guard(http.HandlerFunc(handleEncounters)))
+	// B28.5: prefill — регистрируем ДО /api/encounters/, чтобы не попал в {id}.
+	http.Handle("/api/encounters/prefill", guard(http.HandlerFunc(handleEncounterPrefill)))
 	http.Handle("/api/encounters/", guard(http.HandlerFunc(handleEncounterByID)))
 
 	slog.Info("registerEncounterRoutes", "routes",
-		"/api/encounters (GET, POST), /api/encounters/{id} (GET, PATCH, DELETE, /finish)")
+		"/api/encounters (GET, POST), /api/encounters/prefill (POST), /api/encounters/{id} (GET, PATCH, DELETE, /finish)")
 }
 
 // handleEncounters — /api/encounters (без id).
@@ -421,6 +442,86 @@ func handleEncounters(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
 	}
+}
+
+// handleEncounterPrefill — POST /api/encounters/prefill.
+// Body: {"patient_id": "PAT-..."}.
+// Возвращает клинические поля последнего приёма пациента (для автозаполнения
+// формы нового приёма). Если приёмов нет — found=false, все поля пустые.
+func handleEncounterPrefill(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req PrefillInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if req.PatientID == "" {
+		http.Error(w, `{"error":"patient_id required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Пациент должен существовать.
+	if _, err := getPatientByID(db, req.PatientID); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, `{"error":"patient not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Последний приём пациента.
+	var (
+		encID       string
+		startedAt   string
+		specialty   string
+		complaint   string
+		anamnesis   string
+		examination string
+		diagText    string
+		diagICD10   string
+		recs        string
+	)
+	err := db.QueryRow(
+		`SELECT id, started_at, specialty, complaint, anamnesis, examination,
+		        diagnosis_text, diagnosis_icd10, recommendations
+		 FROM encounters
+		 WHERE patient_id = ?
+		 ORDER BY started_at DESC
+		 LIMIT 1`,
+		req.PatientID,
+	).Scan(&encID, &startedAt, &specialty, &complaint, &anamnesis,
+		&examination, &diagText, &diagICD10, &recs)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err == sql.ErrNoRows {
+		_ = json.NewEncoder(w).Encode(PrefillOutput{Found: false})
+		return
+	}
+	if err != nil {
+		slog.Warn("encounter.prefill", "err", err, "patient_id", req.PatientID)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	out := PrefillOutput{
+		Found:           true,
+		EncounterID:     encID,
+		StartedAt:       startedAt,
+		Specialty:       specialty,
+		Complaint:       complaint,
+		Anamnesis:       anamnesis,
+		Examination:     examination,
+		DiagnosisText:   diagText,
+		DiagnosisICD10:  diagICD10,
+		Recommendations: recs,
+	}
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // handleEncounterByID — /api/encounters/{id} и подпути.
