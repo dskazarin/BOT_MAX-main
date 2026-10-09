@@ -951,87 +951,55 @@
 
 <!-- B27_SNAPSHOT_APPLIED -->
 
-### 6.38 (B28) — TODO (уточнить)
-- **Статус:** запланирован
-- **Цель:** Encounters + clinics (минимум) — центральная сущность МИС
-  (см. §6.37 «План развития»).
-- **Скоуп по плану:**
-  - Схема `encounters` (id, patient_id, doctor_id, clinic_id, specialty,
-    title, kind, started_at, finished_at, status, complaint, anamnesis,
-    examination, diagnosis_text, diagnosis_icd10, recommendations,
-    common_json, specialty_json).
-  - Поля `title`, `kind` (consultation | study | procedure | lab | followup).
-  - Общие поля (common_json) + специфичные (specialty_json).
-  - Минимальная схема `clinics` (для FK) — если её ещё нет.
-  - Store: createEncounter, getEncounterByID, listEncountersByPatient,
-    listEncountersByDoctor, updateEncounter, finishEncounter.
-  - API: POST/GET/PATCH /api/encounters, GET /api/patients/{id}/encounters.
-  - UI: раздел «Приёмы» в `doctor_cabinet.html` + timeline в
-    `patient_card.html`.
-- **Зависимости:** только базовые (auth, doctors, patients).
-- **Следующие подпатчи (B28.x):** B28.5 — prefill
-  (`POST /api/encounters/prefill` + UI-модалка).
+### 6.38 (B28) — ЗАКРЫТО (2026-10-09)
 
-<!-- B28_SNAPSHOT_PENDING -->
-
-### 6.38 (B28) — В РАБОТЕ (checkpoint 2026-10-03)
-
-**Статус:** в работе, 3 из 6 подпатчей закрыты.
+**Статус:** закрыто полностью, 12 подпатчей.
 
 **Закрыто:**
-- **B28.1** (`7d8de0e`) — схема `encounters` + `newID` helper.
+- **B28.1** (`7d8de0e`) — schema `encounters` (20 колонок + 3 индекса) + `newID` helper.
 - **B28.2** (`57d3069`) — store-слой (CRUD + list + finish), 17 тестов.
-- **B28.3** (`d53c49d`) — HTTP API `/api/encounters/*` + json-теги + права
-  + аудит. Smoke end-to-end: create → patch → finish → 403 → list.
+- **B28.3** (`d53c49d`) — HTTP API `/api/encounters/*` + json-теги + права + аудит.
+- **B28.4.1** (`0a4a016`) — timeline приёмов в `patient_card.html`.
+- **B28.4.2** (`aba510d`) — раздел «Приёмы» в `doctor_cabinet.html`.
+- **B28.4.3** (`0fc75bb`) — редактирование / завершение / удаление.
+- **B28.4.4a** (`fd96a18`) — фикс 403: врач видит timeline пациента (в рамках одной клиники).
+- **B28.4.4b** (`f3b4671`) — русификация типов, специальности select, кнопка 🔗 «в новой вкладке».
+- **B28.4.5** (`ea137d9`) — `encounter.html` — отдельная страница просмотра приёма.
+- **B28.5.1** (`00007ab`) — `POST /api/encounters/prefill` (backend).
+- **B28.5.1b** (`a33f90a`) — 4 теста prefill + helper `getLatestEncounterForPrefill`.
+- **B28.5.2** (`e524d97`) — prefill UI (кнопка 🪄 + 6 клинических полей в модалке).
 
-**Осталось:**
-- **B28.4** — UI: раздел «Приёмы» в `doctor_cabinet.html` + timeline
-  в `patient_card.html`.
-- **B28.5** — prefill (`POST /api/encounters/prefill` + UI-модалка).
-- **B28.6** — финальный снапшот §6.38.
+**Что реализовано:**
+- Полный CRUD по приёмам (encounters).
+- Три UI-точки: раздел «Приёмы» в кабинете врача, timeline в карточке пациента, отдельная страница `encounter.html`.
+- Prefill — автозаполнение формы нового приёма из последнего приёма пациента.
+- Русификация типов приёмов, справочник специальностей (15).
+- **21 тест** (17 store + 4 prefill).
 
-**Решения по B28.4 (UI) — для следующей сессии:**
-1. **`patient_card.html`** — timeline приёмов (read-only, из `?patient_id=`),
-   клик по строке → открытие encounter.
-2. **`doctor_cabinet.html`** — раздел «Приёмы»:
-   - список своих encounters (`?doctor_id=me`);
-   - кнопка «Новый приём» (форма: patient, specialty, title, kind, complaint);
-   - открытие/редактирование/завершение;
-   - DELETE только для draft (скрывать на finished).
-3. **Решить:** встроенный раздел в `doctor_cabinet.html` или отдельная
-   страница `encounters.html`. **Рекомендация:** встроенный раздел + timeline
-   в `patient_card.html` (не плодить файлы).
-4. **UI-индикация статуса:** badge `draft` / `finished`.
-5. **Разбивка B28.4:**
-   - B28.4.1 — timeline в `patient_card.html` (read-only).
-   - B28.4.2 — раздел «Приёмы» в `doctor_cabinet.html` + создание.
-   - B28.4.3 — редактирование, завершение, удаление.
+**API:**
+- `GET    /api/encounters?patient_id=|doctor_id=|clinic_id=` — список.
+- `POST   /api/encounters` — создать.
+- `GET    /api/encounters/{id}` — получить.
+- `PATCH  /api/encounters/{id}` — обновить.
+- `POST   /api/encounters/{id}/finish` — завершить.
+- `DELETE /api/encounters/{id}` — удалить (только draft).
+- `POST   /api/encounters/prefill` — prefill из последнего приёма.
 
-**Разведка для B28.4 (что нужно уточнить):**
-- `patient_card.html`: где рендерится список/карточка пациента, есть ли
-  уже блок истории.
-- `doctor_cabinet.html`: где раздел пациентов, как рендерится список,
-  где добавить «Приёмы».
-- `auth.js`: `BotMaxAuth.authFetch` — уже используется, переиспользуем.
+**Модель доступа к истории пациента (решение B28.4.4a):**
+1. **Врачи одной клиники** видят историю пациента без доп. разрешений.
+2. **Сторонние врачи** (из других клиник) — только по consent от пациента.
+3. **Личный кабинет пациента** хранит все приёмы от всех врачей.
+4. **Пациент** управляет доступом (выдаёт/отзывает consent).
+5. **Scope'ы**: encounters, adherence, diary (отдельные разрешения).
+6. В B28.4.4a — временное послабление (403 убран): в системе одна клиника.
+7. Полная consent-модель — в **B30**.
 
-**Файлы B28.1–B28.2:**
-- `backend/db.go` — схема `encounters` (20 колонок + 3 индекса).
-- `backend/id.go` — `newID(prefix)` (`<PREFIX>-<YYYYMMDD>-<8hex>`).
-- `backend/encounters.go` — store (394 строки):
-  - типы: `Encounter`, `CreateEncounterInput`, `UpdateEncounterInput`;
-  - валидация: `validateEncounterKind`, `validateEncounterStatus`;
-  - CRUD: `createEncounter`, `getEncounterByID`, `updateEncounter`,
-    `deleteEncounter`;
-  - списки: `listEncountersByPatient`, `listEncountersByDoctor`;
-  - lifecycle: `finishEncounter`;
-  - права: `encounterExistsForDoctorAndPatient`;
-  - утилиты: `countEncountersByPatient`, `MarshalJSONValue`,
-    `UnmarshalJSONValue`.
-- `backend/encounters_test.go` — 17 тестов.
+**Открытые TODO (перенесено в план):**
+- **B29** — auth: PIN-код + вход по ссылке на email (magic link).
+- **B30** — кабинет пациента: рекомендации + дневник + adherence + consent + доступ сторонним врачам.
+- **Синхронизация пациентов**: `STORAGE_MODE` (`server` vs `cache`) — пациенты в UI есть, в БД нет (обнаружено в smoke B28.4).
 
-**Следующая сессия:** продолжить с **B28.4 (UI)**.
-Первая команда: `cd /workspaces/BOT_MAX-main && git log --oneline -5 && git status --short`.
-Проверки: `gofmt -l backend/ && go vet ./... && go build -o /tmp/botmax_server ./backend && go test -count=1 ./backend/...`.
+**Следующая волна:** B29 или B30 (на выбор).
 
 
 ---
