@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Приём — BOT_MAX</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #1a202c; color: #e2e8f0; min-height: 100vh; padding: 20px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    .card {
+        background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px; padding: 24px; margin-bottom: 20px;
+    }
+    .card-header {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 15px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .card-title { font-size: 1.4em; font-weight: 600; color: #9f7aea; }
+    .meta {
+        color: #a0aec0; font-size: 0.9em; display: flex; flex-wrap: wrap;
+        gap: 15px; margin-bottom: 20px; padding-bottom: 15px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .field { margin-bottom: 18px; }
+    .field-label {
+        font-size: 0.75em; color: #a0aec0; text-transform: uppercase;
+        letter-spacing: 0.05em; margin-bottom: 6px; font-weight: 500;
+    }
+    .field-value {
+        white-space: pre-wrap; line-height: 1.5;
+        padding: 12px; background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+        min-height: 40px;
+    }
+    .field-value.empty { color: #4a5568; font-style: italic; }
+    .badge {
+        display: inline-block; padding: 4px 12px; border-radius: 6px;
+        font-size: 0.8em; font-weight: 500;
+    }
+    .badge.draft { background: rgba(237,137,54,0.2); color: #ed8936; }
+    .badge.finished { background: rgba(72,187,120,0.2); color: #48bb78; }
+    .btn {
+        padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer;
+        font-size: 0.95em; font-weight: 500; transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-secondary { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+    .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+    .toolbar { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 20px; }
+    .error-box {
+        background: rgba(245,101,101,0.1); border: 1px solid rgba(245,101,101,0.3);
+        color: #f56565; padding: 20px; border-radius: 12px; text-align: center;
+    }
+    .loading { text-align: center; color: #a0aec0; padding: 40px; }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="toolbar">
+        <button class="btn btn-secondary" onclick="history.back()">◀ Назад</button>
+        <button class="btn btn-primary" onclick="window.print()">🖨 Печать</button>
+    </div>
+    <div id="content">
+        <div class="loading">Загрузка приёма…</div>
+    </div>
+</div>
+
+<script src="auth.js"></script>
+<script>
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    var KIND_RU = {
+        consultation: 'Консультация',
+        study:        'Исследование',
+        procedure:    'Процедура',
+        lab:          'Анализы',
+        followup:     'Повторный приём'
+    };
+
+    function fmtKind(k) { return KIND_RU[k] || k || '—'; }
+
+    function field(label, value) {
+        var v = escapeHtml(value || '');
+        var cls = value ? 'field-value' : 'field-value empty';
+        return '<div class="field">'
+             +   '<div class="field-label">' + escapeHtml(label) + '</div>'
+             +   '<div class="' + cls + '">' + (value ? v : '—') + '</div>'
+             + '</div>';
+    }
+
+    function renderEncounter(e) {
+        var finished = (e.status === 'finished');
+        var badgeCls = finished ? 'badge finished' : 'badge draft';
+        var badgeTxt = finished ? 'finished' : 'draft';
+
+        var html = '';
+        html += '<div class="card">';
+        html += '<div class="card-header">';
+        html += '<div class="card-title">🩺 ' + escapeHtml(e.title || '(без названия)') + '</div>';
+        html += '<span class="' + badgeCls + '">' + badgeTxt + '</span>';
+        html += '</div>';
+
+        html += '<div class="meta">';
+        html += '<span>📅 ' + escapeHtml(e.started_at || '—') + '</span>';
+        html += '<span>👤 ' + escapeHtml(e.patient_id || '—') + '</span>';
+        html += '<span>🩺 ' + escapeHtml(e.specialty || '—') + '</span>';
+        html += '<span>📋 ' + escapeHtml(fmtKind(e.kind)) + '</span>';
+        if (e.finished_at) html += '<span>✅ Завершён: ' + escapeHtml(e.finished_at) + '</span>';
+        html += '</div>';
+
+        html += field('Жалобы', e.complaint);
+        html += field('Анамнез', e.anamnesis);
+        html += field('Осмотр', e.examination);
+        html += field('Диагноз', e.diagnosis_text);
+        html += field('МКБ-10', e.diagnosis_icd10);
+        html += field('Рекомендации', e.recommendations);
+
+        html += '</div>';
+        return html;
+    }
+
+    function showError(msg) {
+        document.getElementById('content').innerHTML =
+            '<div class="error-box">' + escapeHtml(msg) + '</div>';
+    }
+
+    function loadEncounter() {
+        var params = new URLSearchParams(location.search);
+        var id = params.get('id');
+        if (!id) { showError('Не указан id приёма в URL (?id=...)'); return; }
+
+        if (typeof BotMaxAuth === 'undefined' || !BotMaxAuth.authFetch) {
+            showError('auth.js не загружен');
+            return;
+        }
+
+        BotMaxAuth.authFetch('GET', '/api/encounters/' + encodeURIComponent(id))
+            .then(function(r){
+                if (r.status === 404) throw new Error('Приём не найден');
+                if (r.status === 401) throw new Error('Не авторизован — войдите заново');
+                if (r.status === 403) throw new Error('Нет доступа к этому приёму');
+                if (!r.ok) throw new Error('Ошибка HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(e){
+                document.getElementById('content').innerHTML = renderEncounter(e);
+                document.title = 'Приём: ' + (e.title || e.id) + ' — BOT_MAX';
+            })
+            .catch(function(err){
+                showError(err.message || 'Ошибка загрузки');
+            });
+    }
+
+    if (typeof BotMaxAuth !== 'undefined' && BotMaxAuth.requireAuth) {
+        BotMaxAuth.requireAuth();
+    }
+    document.addEventListener('DOMContentLoaded', loadEncounter);
+</script>
+</body>
+</html>
