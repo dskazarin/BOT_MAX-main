@@ -711,6 +711,52 @@
         /* Задел под B29.6.5 (тема): в светлой — без инверсии. */
         [data-theme="light"] input[type="date"] { color-scheme: light; }
         [data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator { filter: none; }
+        /* B29.6.5a.1: theme tokens (scaffolding).
+           Правила будут переведены на var(--...) в B29.6.5a.2 (CSS) и a.3 (inline). */
+        :root {
+            --bg-body-1: #1a202c;
+            --bg-body-2: #2d3748;
+            --bg-header: rgba(26, 32, 44, 0.98);
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --bg-card-border: rgba(255, 255, 255, 0.08);
+            --bg-modal: #2d3748;
+            --bg-modal-border: rgba(255, 255, 255, 0.1);
+            --bg-input: rgba(0, 0, 0, 0.25);
+            --bg-input-border: rgba(255, 255, 255, 0.12);
+            --bg-row-hover: rgba(255, 255, 255, 0.03);
+            --text-primary: #e2e8f0;
+            --text-secondary: #a0aec0;
+            --text-title: #ffffff;
+            --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+            --accent-purple: #9f7aea;
+            --badge-finished-bg: rgba(72, 187, 120, 0.2);
+            --badge-finished-fg: #48bb78;
+            --badge-draft-bg: rgba(237, 137, 54, 0.2);
+            --badge-draft-fg: #ed8936;
+        }
+        [data-theme="light"] {
+            --bg-body-1: #f7fafc;
+            --bg-body-2: #edf2f7;
+            --bg-header: rgba(255, 255, 255, 0.98);
+            --bg-card: #ffffff;
+            --bg-card-border: rgba(0, 0, 0, 0.08);
+            --bg-modal: #ffffff;
+            --bg-modal-border: rgba(0, 0, 0, 0.15);
+            --bg-input: #ffffff;
+            --bg-input-border: rgba(0, 0, 0, 0.15);
+            --bg-row-hover: rgba(0, 0, 0, 0.03);
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-title: #1a202c;
+            --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.10);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.15);
+            --accent-purple: #7c5cbf;
+            --badge-finished-bg: rgba(56, 161, 105, 0.15);
+            --badge-finished-fg: #2f855a;
+            --badge-draft-bg: rgba(214, 158, 46, 0.15);
+            --badge-draft-fg: #b7791f;
+        }
     </style>
 </head>
 <body>
@@ -726,6 +772,7 @@
                     <div style="display:flex; align-items:center; gap:12px; margin-bottom:5px;">
                         <h1 id="patientName">Загрузка...</h1>
                         <button onclick="openEditPatientCardModal()" title="Редактировать данные" style="background:rgba(159,122,234,0.15); border:1px solid rgba(159,122,234,0.4); color:#9f7aea; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.85em;">✏️ Редактировать</button>
+                        <span id="themeHost"></span>
                     </div>
                     <small>
                         ID: <span id="patientId">-</span> •
@@ -937,6 +984,8 @@
     </div>
 </div>
 
+<script src="theme.js"></script>
+<script>BotMaxTheme.init({ button: '#themeHost' });</script>
 <script src="auth.js"></script>
 <script src="pager.js"></script>
 <script>
