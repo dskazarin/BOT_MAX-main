@@ -8,10 +8,10 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            background: linear-gradient(135deg, var(--bg-body-1) 0%, var(--bg-body-2) 100%);
             min-height: 100vh;
             padding: 20px;
-            color: #e2e8f0;
+            color: var(--text-primary);
         }
         .container { max-width: 1400px; margin: 0 auto; }
         .header {
@@ -41,8 +41,8 @@
             display: flex; align-items: center; justify-content: center;
             font-size: 1.8em;
         }
-        .patient-info h1 { font-size: 1.4em; color: #fff; margin-bottom: 5px; }
-        .patient-info small { color: #a0aec0; font-size: 0.9em; }
+        .patient-info h1 { font-size: 1.4em; color: var(--text-title); margin-bottom: 5px; }
+        .patient-info small { color: var(--text-secondary); font-size: 0.9em; }
         .btn {
             padding: 10px 20px;
             border: none;
@@ -92,7 +92,7 @@
         .toggle-icon {
             font-size: 1.2em;
             transition: transform 0.3s;
-            color: #a0aec0;
+            color: var(--text-secondary);
         }
         .toggle-icon.collapsed { transform: rotate(-90deg); }
         .section-content { transition: all 0.3s; }
@@ -101,7 +101,7 @@
         .field-label {
             display: block;
             font-size: 0.85em;
-            color: #a0aec0;
+            color: var(--text-secondary);
             margin-bottom: 8px;
             font-weight: 600;
         }
@@ -112,7 +112,7 @@
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
-            color: #e2e8f0;
+            color: var(--text-primary);
             font-family: inherit;
             font-size: 0.95em;
             line-height: 1.6;
@@ -147,7 +147,7 @@
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 10px;
-            color: #e2e8f0;
+            color: var(--text-primary);
             font-size: 0.95em;
         }
         .mkb-input-wrapper input:focus { outline: none; border-color: #667eea; }
@@ -193,7 +193,7 @@
         }
         .vital-item label {
             font-size: 0.7em;
-            color: #a0aec0;
+            color: var(--text-secondary);
             text-transform: uppercase;
             font-weight: 600;
         }
@@ -203,7 +203,7 @@
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 6px;
-            color: #e2e8f0;
+            color: var(--text-primary);
             font-size: 0.85em;
             font-weight: 600;
         }
@@ -239,7 +239,7 @@
         }
         .chart-modal.active { display: flex; }
         .chart-modal-content {
-            background: #2d3748;
+            background: var(--bg-modal);
             border-radius: 20px;
             padding: 30px;
             max-width: 900px;
@@ -288,7 +288,7 @@
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 6px;
-            color: #e2e8f0;
+            color: var(--text-primary);
             font-size: 0.85em;
             font-weight: 600;
         }
@@ -298,7 +298,7 @@
             background: rgba(159, 122, 234, 0.1);
         }
         .bp-sep {
-            color: #a0aec0;
+            color: var(--text-secondary);
             font-weight: 700;
             font-size: 1.2em;
         }
@@ -315,7 +315,7 @@
         }
         .chart-menu.active { display: flex; }
         .chart-menu-content {
-            background: #2d3748;
+            background: var(--bg-modal);
             border-radius: 20px;
             padding: 30px;
             max-width: 500px;
@@ -338,7 +338,7 @@
             background: rgba(159, 122, 234, 0.1);
             border: 2px solid rgba(159, 122, 234, 0.3);
             border-radius: 12px;
-            color: #e2e8f0;
+            color: var(--text-primary);
             font-size: 0.95em;
             font-weight: 600;
             cursor: pointer;
@@ -398,7 +398,7 @@
             z-index: 1;
             background: transparent !important;
             color: transparent !important;
-            caret-color: #e2e8f0 !important;
+            caret-color: var(--text-primary) !important;
             width: 100%;
             min-height: 80px;
             padding: 15px;
@@ -427,7 +427,7 @@
             font-family: inherit;
             font-size: 0.95em;
             line-height: 1.6;
-            color: #e2e8f0;
+            color: var(--text-primary);
             pointer-events: none;
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -499,7 +499,7 @@
 
         .spell-tooltip-header {
             font-size: 0.7em;
-            color: #a0aec0;
+            color: var(--text-secondary);
             text-transform: uppercase;
             margin-bottom: 8px;
             font-weight: 700;
@@ -543,7 +543,7 @@
         }
 
         .spell-tooltip-arrow {
-            color: #a0aec0;
+            color: var(--text-secondary);
             font-size: 0.9em;
         }
 
@@ -556,7 +556,7 @@
         .spell-tooltip-confidence {
             margin-left: auto;
             font-size: 0.65em;
-            color: #a0aec0;
+            color: var(--text-secondary);
             background: rgba(159, 122, 234, 0.15);
             padding: 2px 6px;
             border-radius: 8px;
@@ -589,7 +589,7 @@
 
         .btn-ignore {
             background: rgba(160, 174, 192, 0.15);
-            color: #a0aec0;
+            color: var(--text-secondary);
         }
         .btn-ignore:hover { background: rgba(160, 174, 192, 0.3); }
 
@@ -643,13 +643,13 @@
             display: flex;
         }
         .edit-card-modal-content {
-            background: #1a202c;
+            background: var(--bg-modal);
             padding: 30px;
             border-radius: 16px;
             max-width: 600px;
             width: 90%;
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid var(--bg-modal-border);
+            box-shadow: var(--shadow-lg);
         }
         .edit-card-modal-buttons {
             display: flex;
@@ -674,7 +674,7 @@
             transition: opacity 0.25s ease, transform 0.25s ease;
             transform: translateY(8px);
             z-index: 9999;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            box-shadow: var(--shadow-md);
             max-width: 340px;
         }
         .save-status.saving,
