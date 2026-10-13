@@ -951,6 +951,44 @@
 
 <!-- B27_SNAPSHOT_APPLIED -->
 
+### 6.41 (B29.2) — ЗАКРЫТО (2026-10-13)
+
+**Статус:** B29.2 (frontend: панель фильтров + пагинация в `patient_card.html`) — закрыто, 4 подпатча + смоук.
+
+**Коммиты:**
+- `e134215` — B29.2.1 — HTML: `<details>` панель фильтров + `#encountersPager`.
+- `cfd668c` — B29.2.2 — JS: `encState` + `fetchEncounters` + meta (limit/offset/total) в timeline.
+- `8483575` — B29.2.3 — `renderPager`: Назад/Вперёд + «N–M из TOTAL».
+- `313b95b` — B29.2.4 — Применить/Сбросить + URL-синхронизация (`replaceState`) + Enter/change.
+
+**Что появилось на странице `patient_card.html`:**
+- Свёрнутая панель «🔎 Фильтры»: `kind` (select), `status` (select), `specialty` (text),
+  `from`/`to` (`<input type="date">`), `limit` (10/20/50/100, default 20).
+  Кнопки «Применить»/«Сбросить».
+- Счётчик `#encFiltersTotal` («Найдено: N») и `#encountersCountLabel` («показано X–Y из N»).
+- Пагинация `#encountersPager` (offset-режим): «← Назад» / «N–M из TOTAL» / «Вперёд →».
+  Кнопки дизейблятся на границах.
+- Синхронизация фильтров с URL через `history.replaceState` — ссылка шарится.
+- Enter в поле `specialty` / изменение `select`'ов = «Применить».
+- «Сбросить» возвращает `limit=20` и пустые поля.
+
+**Смоук (curl, `/tmp/botmax_b29_2.db`):**
+- `/api/health` → `{"status":"ok"}`.
+- login (`doctor@local` / `doctor@local`) → `accessToken`.
+- `?doctor_id=DOC-001&limit=5` → `{count, items, limit, offset, total}`.
+- `?...&no_total=1` → без ключа `total`.
+- `?kind=bogus` → HTTP 400 `{"error":"invalid kind: \"bogus\""}`.
+
+**Осталось за кадром (backlog):**
+- `doctor_cabinet.html:2134` — `GET /api/encounters?doctor_id=...` всё ещё без фильтров
+  и пагинации. Отдельный подпатч B29.5 или перенести в B30+.
+- Ключ `total` в счётчике при `no_total` не используется на UI; если понадобится
+  «Ещё»-кнопка на keyset — API готово.
+- Экспорт фильтров в CSV — не в этой волне.
+
+**Следующий шаг:** B29.3 — frontend: keyset-пагинация (опционально) или перейти к B30
+(экспорт/печать). Решение — в начале следующей сессии.
+
 ### 6.40 (B29.1) — ЗАКРЫТО (2026-10-13)
 
 **Статус:** B29.1 (backend: фильтры + пагинация + масштабирование) — закрыто, 6 подпатчей + правки тестов.
