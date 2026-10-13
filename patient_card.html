@@ -1631,12 +1631,36 @@
         if (p) p.reload();
     }
 
+    // B29.6.2: заполняет <select id="encFilterSpecialty"> из /api/specialties.
+    // Ошибка/пусто — оставляем только «— все —», не блокируем UI.
+    function loadSpecialtiesIntoFilter() {
+        var sel = document.getElementById('encFilterSpecialty');
+        if (!sel || !window.BotMaxAuth) return;
+        BotMaxAuth.authFetch('GET', '/api/specialties')
+            .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function(data){
+                if (!data || typeof data !== 'object') return;
+                var keys = Object.keys(data).sort();
+                var current = sel.value;
+                var html = '<option value="">— все —</option>';
+                for (var i = 0; i < keys.length; i++) {
+                    html += '<option value="' + escapeHtml(keys[i]) + '">' + escapeHtml(keys[i]) + '</option>';
+                }
+                sel.innerHTML = html;
+                if (current) sel.value = current;
+                // B29.6.2-fix: опции появились позже readFiltersFromURL — восстановим specialty из URL.
+                readFiltersFromURL();
+            })
+            .catch(function(err){ console.warn('specialties: ', err); });
+    }
+
     // initEncounterFilters — привязка обработчиков (один раз).
     var __encFiltersInited = false;
     function initEncounterFilters() {
         if (__encFiltersInited) return;
         __encFiltersInited = true;
 
+        loadSpecialtiesIntoFilter();
         readFiltersFromURL();
 
         var apply = document.getElementById('encFiltersApply');
@@ -1645,14 +1669,8 @@
         var reset = document.getElementById('encFiltersReset');
         if (reset) reset.addEventListener('click', resetEncountersFilters);
 
-        // Enter в specialty и change в select'ах → Применить.
-        var spec = document.getElementById('encFilterSpecialty');
-        if (spec) {
-            spec.addEventListener('keydown', function(ev){
-                if (ev.key === 'Enter') { ev.preventDefault(); applyEncountersFilters(); }
-            });
-        }
-        var ids = ['encFilterKind', 'encFilterStatus', 'encFilterFrom', 'encFilterTo', 'encFilterLimit'];
+        // B29.6.2: specialty теперь <select> — change → Применить (как остальные).
+        var ids = ['encFilterKind', 'encFilterStatus', 'encFilterSpecialty', 'encFilterFrom', 'encFilterTo', 'encFilterLimit'];
         ids.forEach(function(id){
             var el = document.getElementById(id);
             if (el) el.addEventListener('change', applyEncountersFilters);
@@ -3215,8 +3233,9 @@
             </label>
             <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
                 Специальность
-                <input type="text" id="encFilterSpecialty" placeholder="например, lor"
-                       style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                <select id="encFilterSpecialty" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                    <option value="">— все —</option>
+                </select>
             </label>
             <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
                 С даты
