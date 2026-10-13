@@ -1540,7 +1540,8 @@
             specialty: el('encFilterSpecialty') ? el('encFilterSpecialty').value.trim() : '',
             from: range.from,
             to: range.to,
-            limit: el('encFilterLimit') ? Number(el('encFilterLimit').value) || 20 : 20
+            limit: el('encFilterLimit') ? Number(el('encFilterLimit').value) || 20 : 20,
+            order: el('encFilterOrder') ? el('encFilterOrder').value : 'desc'
         };
     }
 
@@ -1586,7 +1587,7 @@
     function writeFiltersToURL(f) {
         if (typeof history === 'undefined' || !history.replaceState) return;
         var params = new URLSearchParams(location.search);
-        var keys = ['kind', 'status', 'specialty', 'from', 'to', 'limit'];
+        var keys = ['kind', 'status', 'specialty', 'from', 'to', 'limit', 'order'];
         for (var i = 0; i < keys.length; i++) {
             var k = keys[i];
             if (f[k]) params.set(k, f[k]);
@@ -1606,6 +1607,7 @@
         setVal('encFilterKind', params.get('kind') || '');
         setVal('encFilterStatus', params.get('status') || '');
         setVal('encFilterSpecialty', params.get('specialty') || '');
+        setVal('encFilterOrder', params.get('order') || 'desc');
 
         // from/to в URL — RFC3339; обрезаем до YYYY-MM-DD для <input type="date">.
         var from = params.get('from') || '';
@@ -1635,6 +1637,9 @@
         });
         var lim = document.getElementById('encFilterLimit');
         if (lim) lim.value = '20';
+        // B29.6.4b: сортировка — не «пусто», а дефолт desc.
+        var ord = document.getElementById('encFilterOrder');
+        if (ord) ord.value = 'desc';
         encState.limit = 20;
         encState.lastFilters = {};
         writeFiltersToURL({});
@@ -1681,7 +1686,7 @@
         if (reset) reset.addEventListener('click', resetEncountersFilters);
 
         // B29.6.2: specialty теперь <select> — change → Применить (как остальные).
-        var ids = ['encFilterKind', 'encFilterStatus', 'encFilterSpecialty', 'encFilterFrom', 'encFilterTo', 'encFilterLimit'];
+        var ids = ['encFilterKind', 'encFilterStatus', 'encFilterSpecialty', 'encFilterFrom', 'encFilterTo', 'encFilterLimit', 'encFilterOrder'];
         ids.forEach(function(id){
             var el = document.getElementById(id);
             if (el) el.addEventListener('change', applyEncountersFilters);
@@ -1709,7 +1714,7 @@
             box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">Приёмов пока нет</div>';
             return;
         }
-        items.sort(function(a, b){ return String(b.started_at || '').localeCompare(String(a.started_at || '')); });
+        // B29.6.4b: локальная сортировка убрана — порядок задаёт backend (?order=).
         var html = '';
         for (var i = 0; i < items.length; i++) {
             var e = items[i];
@@ -3257,6 +3262,13 @@
                 По дату
                 <input type="date" id="encFilterTo"
                        style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+            </label>
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+                Сортировка
+                <select id="encFilterOrder" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                    <option value="desc" selected>Сначала новые</option>
+                    <option value="asc">Сначала старые</option>
+                </select>
             </label>
             <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
                 На странице
