@@ -13,7 +13,9 @@
  *
  * API:
  *   init(opts)              — применить тему из localStorage; opts.button — куда
- *                             вставить кнопку переключения (селектор или Node).
+ *                             вставить кнопку переключения (селектор или Node);
+ *                             opts.default — 'dark'|'light' для страниц, где
+ *                             другая тема по умолчанию (например, light).
  *   toggle()                — dark ⇄ light.
  *   set(theme)              — явно 'dark' | 'light'.
  *   current()               — 'dark' | 'light'.
@@ -113,7 +115,13 @@
 
     function init(opts) {
         opts = opts || {};
-        var saved = _read();
+        // B29.6.5b: если в localStorage нет сохранённой темы,
+        // используем opts.default (per-page). Иначе — глобальный DEFAULT.
+        var saved = null;
+        try { saved = localStorage.getItem(KEY); } catch (e) { /* ignore */ }
+        if (!VALID[saved]) {
+            saved = VALID[opts.default] ? opts.default : DEFAULT;
+        }
         _apply(saved);
         if (opts.button) {
             if (document.readyState === 'loading') {
