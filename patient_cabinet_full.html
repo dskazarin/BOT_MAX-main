@@ -463,12 +463,12 @@
         <div class="qr-voice-row">
             <div class="qr-box">
                 <div id="qrcode"></div>
-                <div style="margin-top: 10px; font-size: 0.8em; color: #718096;">Отсканируйте для доступа с телефона</div>
+                <div style="margin-top: 10px; font-size: 0.8em; color: var(--text-muted);">Отсканируйте для доступа с телефона</div>
             </div>
             <div class="computer-box">
                 <a href="#" id="computerLink" class="computer-link" target="_blank">💻 Открыть на компьютере</a>
                 <button onclick="endAllSessions()" class="btn-small btn-danger">🔒 Завершить все сеансы</button>
-                <div style="margin-top: 5px; font-size: 0.7em; color: #718096;">Скопируйте ссылку для открытия на ПК</div>
+                <div style="margin-top: 5px; font-size: 0.7em; color: var(--text-muted);">Скопируйте ссылку для открытия на ПК</div>
             </div>
         </div>
         
@@ -1292,7 +1292,7 @@
     function showSpO2History() { showHistory("История сатурации", patientData.spo2History.map(h=>`${h.date}: ${h.value}%`)); }
     function showHistory(title, items) {
         document.getElementById('historyTitle').innerHTML = title;
-        document.getElementById('historyList').innerHTML = items.map(i=>`<div style="padding:8px; border-bottom:1px solid #e2e8f0;">${i}</div>`).join('');
+        document.getElementById('historyList').innerHTML = items.map(i=>`<div style="padding:8px; border-bottom:1px solid var(--border-subtle);">${i}</div>`).join('');
         document.getElementById('historyModal').style.display = 'flex';
     }
     function closeHistoryModal() { document.getElementById('historyModal').style.display = 'none'; }
