@@ -995,6 +995,128 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.44 (B29.6) — ЗАКРЫТО (2026-10-13)
+
+**Статус:** B29.6 (backlog UI-feedback из §6.43 + доп. тема) — закрыто.
+12 подпатчей + автотесты + смоук.
+
+**Контекст:** из UI-смоука B29.5 (§6.43) накопился backlog:
+1) локализация kind/status, 2) specialty как select,
+3) контрастный календарь, 4) сортировка ASC/DESC.
+Плюс в процессе сессии добавлено требование:
+5) **тёмная/светлая тема** для кабинета пациента и карты пациента.
+
+**Коммиты (12):**
+- `be76538` — B29.6.1 — локализация kind/status (label≠value)
+- `a51e726` — B29.6.2 — specialty как `<select>` (`/api/specialties`)
+- `7e6cab2` — B29.6.3 — контрастный календарь (`color-scheme`+`invert`)
+- `84dc429` — B29.6.4a — `?order=asc|desc` в `listEncountersFiltered`
+- `e84153d` — B29.6.4b — сортировка ASC/DESC в `patient_card`
+- `d7563ac` — B29.6.5a.1 — `theme.js` + scaffolding (patient_card)
+- `4b8a916` — B29.6.5a.2 — токенизация CSS (patient_card)
+- `bee36cc` — B29.6.5a.3 — токенизация inline (patient_card)
+- `6a6b2bc` — B29.6.5b.0 — `theme.js`: per-page default (`init.default`)
+- `6f9e8bd` — B29.6.5b.1 — `theme.js` + scaffolding (cabinet)
+- `452614d` — B29.6.5b.2 — токенизация CSS (cabinet)
+- `5ab58cc` — B29.6.5b.3 — inline-стили (cabinet)
+
+**B29.6.1 — локализация kind/status (label≠value):**
+- `patient_card.html`, `doctor_cabinet.html`: словари
+  `ENCOUNTER_KIND_RU` (consultation/study/procedure/lab/followup)
+  и `ENCOUNTER_STATUS_RU` (draft/finished); функции
+  `encounterKindRu()` / `encounterStatusRu()`.
+- Локализованы `<option>` фильтров и badge статуса
+  (`renderEncountersTable` + view-modal).
+- Значения в API и URL остаются английскими (label ≠ value).
+
+**B29.6.2 — specialty → `<select>`:**
+- `patient_card.html`: `<input type=text id=encFilterSpecialty>`
+  → `<select>`.
+- `loadSpecialtiesIntoFilter()`: `GET /api/specialties` → `Object.keys`
+  → `<option>`; fallback на ошибку/пусто — только «— все —» (UI не
+  блокируется).
+- `keydown`-Enter для specialty удалён (не нужен для `<select>`);
+  `encFilterSpecialty` в `change`-ids (авто-применение).
+- **fix:** `readFiltersFromURL()` вызывается внутри `.then()` загрузки
+  опций — URL-значение `specialty=lor` находит свою опцию (async).
+
+**B29.6.3 — контрастный календарь:**
+- `patient_card.html`, `doctor_cabinet.html`: `input[type="date"]`
+  `color-scheme: dark` + `::-webkit-calendar-picker-indicator`
+  `filter: invert(1) brightness(1.4)`.
+- Задел: `[data-theme="light"]` → `color-scheme: light` + `filter: none`.
+
+**B29.6.4a — backend `?order=asc|desc`:**
+- `EncounterFilter.Order` (`"asc"`|`"desc"`, default desc).
+- `parseEncounterFilter`: валидация; `order=asc` + `cursor` → 400
+  (keyset поддерживает только DESC).
+- `listEncountersFiltered`: offset-ветка
+  `ORDER BY started_at {ASC|DESC}, id {ASC|DESC}`;
+  keyset-ветка без изменений.
+- Тесты: `TestParseEncounterFilter_Order` (6 кейсов),
+  `TestListEncounters_OrderAscDesc` (asc/desc/default + зеркальность).
+- Смоук: `desc[0]==asc[-1]`, `desc[-1]==asc[0]`, `id desc monotonic`,
+  `bogus=400`, `asc+cursor=400`.
+
+**B29.6.4b — frontend сортировка:**
+- `patient_card.html`: `<select id="encFilterOrder">` (Сначала новые /
+  Сначала старые, default desc) в панели фильтров.
+- `readEncounterFilters` + `writeFiltersToURL` (keys) +
+  `readFiltersFromURL` + `resetEncountersFilters` (восстановление
+  `'desc'`) + `initEncounterFilters` (change-ids).
+- `renderEncountersTimeline`: **удалён локальный `items.sort`** —
+  порядок задаёт backend. Устранена двойная сортировка.
+
+**B29.6.5 — тёмная/светлая тема (доп. из UI-feedback):**
+- **`theme.js`** (новый файл в корне, ~148 строк): `window.BotMaxTheme`
+  (`init/toggle/set/current/mountButton/onChange`); ключ localStorage
+  `theme`, default `'dark'`; `init({default})` — per-page default.
+- **`patient_card.html`** (дефолт **dark**):
+  - a.1: `theme.js` + scaffolding + `<span id="themeHost">` (в шапке).
+  - a.2: токенизация CSS — 25 замен (`--bg-body-1/2`, `--bg-modal`,
+    `--bg-modal-border`, `--text-primary/secondary/title`,
+    `--shadow-md/lg`).
+  - a.3: токенизация inline — 61 замена + новый токен `--bg-panel`.
+  - **Итого ~86 замен**; все хардкоды (кроме Chart.js canvas и
+    семантики) переведены на `var(--…)`.
+- **`patient_cabinet_full.html`** (дефолт **light**):
+  - b.0: `theme.js`: `init({default})`.
+  - b.1: `theme.js` + scaffolding + `<span id="themeHost">`
+    (рядом с logout).
+  - b.2: токенизация CSS — 30 замен + новый токен `--border-subtle`.
+  - b.3: токенизация inline — 3 замены.
+  - **`@media print { body { background: white; } }` сохранён**;
+    бренд-градиенты `#667eea→#764ba2` и семантика статусов
+    (`#48bb78`/`#f56565`/`#4299e1`/`#ed8936`) не тронуты.
+
+**Автопроверки:**
+- Backend: `gofmt -l` пусто, `go vet`, `go build`, `go test -count=1` —
+  зелёные на каждом шаге.
+- HTTP: `theme.js` → 200 `text/javascript`; `patient_card.html` → 200;
+  `patient_cabinet_full.html` → 200.
+- Смоук: `/api/specialties` → `{"lor":["2024"]}`;
+  `asc`/`desc` зеркальны (mirror desc[0]==asc[-1], desc[-1]==asc[0]);
+  `bogus=400`; `asc+cursor=400`.
+
+**Файлы, затронутые в волне:**
+- `backend/encounters.go` (+29/−4) — поле `Order`, валидация, SQL.
+- `backend/encounters_filter_test.go` (+52) — тесты парсера.
+- `backend/encounters_list_test.go` (+42) — тест сортировки.
+- `patient_card.html` (много правок: локализация, select specialty,
+  order, CSS-токены, inline-токены, theme.js).
+- `doctor_cabinet.html` (+11/−2 — только локализация + календарь).
+- `patient_cabinet_full.html` (~+65/−62 за 4 подпатча).
+- `theme.js` (**новый**, ~148 строк).
+
+**Не тронуто осознанно:**
+- `doctor_cabinet.html` — уже имел свою систему тем (`:root` /
+  `[data-theme="light"]`), не рефакторили.
+- Chart.js-цвета в `patient_card` (canvas не резолвит CSS-переменные).
+- `@media print`, print-preview iframe, бренд-градиенты, семантика
+  статусов кнопок/бэйджей.
+
+**Закрывает backlog §6.43:** все 4 пункта + тема.
+
 ### 6.42 (B29.5) — ЗАКРЫТО (2026-10-13)
 
 **Статус:** B29.5 (backlog-фикс: регресс `limit` 100→20 в `doctor_cabinet.html`
