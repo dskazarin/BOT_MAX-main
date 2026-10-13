@@ -995,6 +995,67 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.45 (B29.6-fix) — ЗАКРЫТО (2026-10-13)
+
+**Статус:** регресс B29.6.5 (неполная токенизация тем) — исправлен.
+2 подпатча.
+
+**Коммиты:**
+- `<B29.6.6>` — fix(ui): доводка light-темы patient_card
+- `<B29.6.7>` — fix(ui): токенизация input/textarea/select (cabinet)
+
+**Регресс:**
+- **B29.6.5a.2** (CSS-токенизация `patient_card.html`) заменил только
+  `color: #e2e8f0` / `color: #a0aec0`, но **НЕ заменил** background-хардкоды
+  (`rgba(26,32,44,0.98)`, `rgba(255,255,255,0.05)`, `rgba(255,255,255,0.03)`,
+  `rgba(0,0,0,0.8)`, `box-shadow: ...0,0,0,0.5`). Результат — светлая
+  тема полностью сломана: тёмная шапка, невидимые карточки `.section`,
+  белый текст на белом фоне.
+- **B29.6.5b.2/b.3** (токенизация `patient_cabinet_full.html`) не покрыли
+  `input`/`textarea`/`select` в основной части. Результат — в тёмной
+  теме textarea симптомов и dropdown'ы оставались белыми.
+
+**Причина:** в B29.6.5 проверяли только **цвет текста** (grep `color:`),
+но не **фон** (`grep background:`). Граничный случай: правила
+`.section`, `.header`, `.vital-item input` содержали **background**
+с теми же литералами (rgba(255,255,255,0.05)), которые не попали в
+реестр замен.
+
+**B29.6.6 — patient_card.html:**
+- `.header`: background → `var(--bg-header)`; border → `var(--bg-card-border)`;
+  shadow → `var(--shadow-lg)`.
+- `.section`: background → `var(--bg-card)`; border → `var(--bg-card-border)`.
+- `.vital-item input`, `.bp-inputs input`: bg → `var(--bg-input)`;
+  border → `var(--bg-input-border)`.
+- `.field-textarea`, `.mkb-input-wrapper input`: bg → `var(--bg-panel)`;
+  border → `var(--bg-input-border)`.
+- `.spell-tooltip-item`: bg → `var(--bg-row-hover)`.
+- Модалки (chart-modal, chart-menu overlay): bg → `var(--modal-overlay)`.
+- **Новый токен** `--modal-overlay` (dark: rgba(0,0,0,0.8);
+  light: rgba(0,0,0,0.5)).
+
+**B29.6.7 — patient_cabinet_full.html:**
+- Универсальное правило для полей ввода:
+  `input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+   textarea, select { background: var(--bg-card);
+   color: var(--text-primary); border: 1px solid var(--border-subtle); }`.
+- Checkbox/radio/file исключены — семантика (accent-color, display:none).
+
+**Автопроверки:**
+- `gofmt -l` пусто, `go vet`, `go build`, `go test -count=1` — зелёные.
+- В `<style>` `patient_card` **0 остатков** background-хардкодов.
+- Баланс скобок CSS: `127/127`, `87/87`.
+- HTTP: 200/200, `--modal-overlay` = 4, `input:not(...)` = 1.
+
+**Уроки (для будущих токенизаций):**
+- После замены цветов **всегда** проверять и `color:`, и `background:`,
+  и `border:`, и `box-shadow:` — одни и те же rgba могут быть в разных
+  свойствах.
+- **Визуальный смоук в браузере обязателен** для темы — curl не ловит
+  «белый текст на белом фоне».
+
+---
+
 ### 6.44 (B29.6) — ЗАКРЫТО (2026-10-13)
 
 **Статус:** B29.6 (backlog UI-feedback из §6.43 + доп. тема) — закрыто.
