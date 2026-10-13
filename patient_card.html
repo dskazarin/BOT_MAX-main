@@ -1476,6 +1476,7 @@
             console.log('📦 Загружено из localStorage:', patientId);
         }
         renderPatientHeader();
+        initEncounterFilters();   // B29.2.4: до первого fetch — иначе фильтры из URL потеряются
         loadPatientEncounters();
         loadCardData();
         loadVitals();
@@ -1655,6 +1656,96 @@
                 fetchEncounters();
             });
         }
+    }
+
+    // ---------- B29.2.4: обработчики фильтров + URL-синхронизация ----------
+
+    // writeFiltersToURL — сериализует фильтры в ?kind=...&status=... (replaceState).
+    function writeFiltersToURL(f) {
+        if (typeof history === 'undefined' || !history.replaceState) return;
+        var params = new URLSearchParams(location.search);
+        var keys = ['kind', 'status', 'specialty', 'from', 'to', 'limit'];
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            if (f[k]) params.set(k, f[k]);
+            else params.delete(k);
+        }
+        var url = location.pathname + '?' + params.toString();
+        history.replaceState(null, '', url);
+    }
+
+    // readFiltersFromURL — заполняет DOM-поля из query string (при инициализации).
+    function readFiltersFromURL() {
+        var params = new URLSearchParams(location.search);
+        function setVal(id, val) {
+            var el = document.getElementById(id);
+            if (el && val !== null && val !== undefined) el.value = val;
+        }
+        setVal('encFilterKind', params.get('kind') || '');
+        setVal('encFilterStatus', params.get('status') || '');
+        setVal('encFilterSpecialty', params.get('specialty') || '');
+
+        // from/to в URL — RFC3339; обрезаем до YYYY-MM-DD для <input type="date">.
+        var from = params.get('from') || '';
+        var to = params.get('to') || '';
+        if (from.length >= 10) setVal('encFilterFrom', from.slice(0, 10));
+        if (to.length >= 10) setVal('encFilterTo', to.slice(0, 10));
+
+        var lim = params.get('limit');
+        if (lim) setVal('encFilterLimit', lim);
+    }
+
+    // applyFilters — обработчик кнопки «Применить».
+    function applyEncountersFilters() {
+        encState.lastFilters = readEncounterFilters();
+        encState.limit = encState.lastFilters.limit;
+        encState.offset = 0;
+        writeFiltersToURL(encState.lastFilters);
+        fetchEncounters();
+    }
+
+    // resetEncountersFilters — очищает DOM-поля и перезагружает без фильтров.
+    function resetEncountersFilters() {
+        ['encFilterKind', 'encFilterStatus', 'encFilterSpecialty',
+         'encFilterFrom', 'encFilterTo'].forEach(function(id){
+            var el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        var lim = document.getElementById('encFilterLimit');
+        if (lim) lim.value = '20';
+        encState.offset = 0;
+        encState.limit = 20;
+        encState.lastFilters = {};
+        writeFiltersToURL({});
+        fetchEncounters();
+    }
+
+    // initEncounterFilters — привязка обработчиков (один раз).
+    var __encFiltersInited = false;
+    function initEncounterFilters() {
+        if (__encFiltersInited) return;
+        __encFiltersInited = true;
+
+        readFiltersFromURL();
+
+        var apply = document.getElementById('encFiltersApply');
+        if (apply) apply.addEventListener('click', applyEncountersFilters);
+
+        var reset = document.getElementById('encFiltersReset');
+        if (reset) reset.addEventListener('click', resetEncountersFilters);
+
+        // Enter в specialty и change в select'ах → Применить.
+        var spec = document.getElementById('encFilterSpecialty');
+        if (spec) {
+            spec.addEventListener('keydown', function(ev){
+                if (ev.key === 'Enter') { ev.preventDefault(); applyEncountersFilters(); }
+            });
+        }
+        var ids = ['encFilterKind', 'encFilterStatus', 'encFilterFrom', 'encFilterTo', 'encFilterLimit'];
+        ids.forEach(function(id){
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('change', applyEncountersFilters);
+        });
     }
 
     function renderEncountersTimeline(items, meta) {
