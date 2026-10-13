@@ -951,6 +951,50 @@
 
 <!-- B27_SNAPSHOT_APPLIED -->
 
+### 6.43 (B29.6) — Backlog: UI-feedback из смоука B29.5
+
+**Статус:** открыто, не начато.
+**Источник:** ручной UI-смоук B29.5 (2026-10-13, DOC-001, `/tmp/b295_smoke.db`).
+**Приоритет:** низкий (UX, не блокирует закрытие B29.5).
+
+**Коммиты:** —
+
+**Пункты:**
+
+1. **Локализация опций фильтров `kind`/`status` на русский.**
+   - `kind`: consultation→Консультация, study→Исследование,
+     procedure→Процедура, lab→Лаборатория, followup→Повторный приём.
+   - `status`: draft→Черновик, finished→Завершён.
+   - Значения в API и URL остаются английскими; перевод только в `<option>`
+     (label) и в badge статуса.
+   - Файлы: `patient_card.html` (разметка фильтров, ~3300–3320),
+     `doctor_cabinet.html` (`renderEncountersTable`).
+   - Реализация: словари `KIND_RU`/`STATUS_RU` в inline-скрипте страницы.
+
+2. **Специальность → выпадающий список** вместо `<input type="text">`.
+   - Сейчас: `<input type="text" id="encFilterSpecialty" placeholder="например, lor">`.
+   - Нужно: `<select id="encFilterSpecialty">` с опциями специальностей.
+   - Источник списка: `/api/specialties` (проверить наличие эндпоинта)
+     или статический словарь на фронте.
+
+3. **Календарь (`<input type="date">`) — контрастнее.**
+   - Иконки выбора даты плохо видны на тёмном фоне.
+   - Правка CSS: `color-scheme: dark` на `input[type="date"]` либо
+     `filter: invert(1)` на `::-webkit-calendar-picker-indicator`.
+
+4. **Сортировка приёмов ASC/DESC.**
+   - Сейчас на UI жёсткий DESC по `started_at` (`renderEncountersTable`).
+   - Нужен переключатель «от последних к первым / от первых к последним».
+   - Backend: параметр `?order=asc|desc` в `parseEncounterFilter`
+     (`encounters.go`), проброс в SQL `ORDER BY started_at {ASC|DESC}`.
+   - Frontend: select `encFilterOrder` в панели фильтров, проброс через
+     `getFilters()`, добавление `order` в `urlKeys` (`BotMaxPager.create`).
+   - Оценка: ~2 подпатча (backend + frontend).
+
+**Оценка волны:** ~1 сессия (4 подпатча).
+
+<!-- B29_6_BACKLOG_APPLIED -->
+
 ### 6.42 (B29.5) — ЗАКРЫТО (2026-10-13)
 
 **Статус:** B29.5 (backlog-фикс: регресс `limit` 100→20 в `doctor_cabinet.html`
