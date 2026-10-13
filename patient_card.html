@@ -724,6 +724,7 @@
             --bg-input: rgba(0, 0, 0, 0.25);
             --bg-input-border: rgba(255, 255, 255, 0.12);
             --bg-row-hover: rgba(255, 255, 255, 0.03);
+            --bg-panel: rgba(255, 255, 255, 0.02);
             --text-primary: #e2e8f0;
             --text-secondary: #a0aec0;
             --text-title: #ffffff;
@@ -746,6 +747,7 @@
             --bg-input: #ffffff;
             --bg-input-border: rgba(0, 0, 0, 0.15);
             --bg-row-hover: rgba(0, 0, 0, 0.03);
+            --bg-panel: rgba(0, 0, 0, 0.02);
             --text-primary: #1a202c;
             --text-secondary: #4a5568;
             --text-title: #1a202c;
@@ -779,7 +781,7 @@
                         <span id="patientBirthDate">-</span> •
                         <span id="patientAge">-</span> лет
                     </small>
-                    <div class="patient-contact" style="margin-top:6px;font-size:0.85em;color:#a0aec0;">
+                    <div class="patient-contact" style="margin-top:6px;font-size:0.85em;color:var(--text-secondary);">
                         <span id="patientPhone">📞 —</span>
                         <span style="margin-left:12px;" id="patientEmail">✉️ —</span>
                     </div>
@@ -1760,7 +1762,7 @@
             totalEl.textContent = total !== null ? ('Найдено: ' + total) : '';
         }
         if (!items.length) {
-            box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">Приёмов пока нет</div>';
+            box.innerHTML = '<div style="color:var(--text-secondary);padding:20px;text-align:center;">Приёмов пока нет</div>';
             return;
         }
         // B29.6.4b: локальная сортировка убрана — порядок задаёт backend (?order=).
@@ -1773,12 +1775,12 @@
                 : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('draft') + '</span>';
             var border = finished ? '#48bb78' : '#ed8936';
             html += '<div class="encounter-row" data-id="' + escapeHtml(e.id || '') + '" '
-                 +  'style="border-left:3px solid ' + border + ';padding:10px 15px;margin:8px 0;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;">'
+                 +  'style="border-left:3px solid ' + border + ';padding:10px 15px;margin:8px 0;background:var(--bg-row-hover);border-radius:8px;cursor:pointer;">'
                  +  '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">'
                  +  '<div><strong>' + escapeHtml(e.title || '(без названия)') + '</strong> '
-                 +  '<span style="color:#a0aec0;font-size:0.85em;">' + escapeHtml(e.specialty || '') + '</span></div>'
+                 +  '<span style="color:var(--text-secondary);font-size:0.85em;">' + escapeHtml(e.specialty || '') + '</span></div>'
                  +  '<div>' + badge + '</div></div>'
-                 +  '<div style="color:#a0aec0;font-size:0.8em;margin-top:4px;">'
+                 +  '<div style="color:var(--text-secondary);font-size:0.8em;margin-top:4px;">'
                  +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(encounterKindRu(e.kind))
                  +  (e.complaint ? ' · ' + escapeHtml(e.complaint) : '')
                  +  '</div></div>';
@@ -1807,13 +1809,13 @@
                     : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('draft') + '</span>';
                 var html = '';
                 html += '<div style="margin-bottom:10px;"><strong>' + escapeHtml(e.title || '(без названия)') + '</strong> ' + badge + '</div>';
-                html += '<div style="color:#a0aec0;font-size:0.85em;margin-bottom:15px;">'
+                html += '<div style="color:var(--text-secondary);font-size:0.85em;margin-bottom:15px;">'
                      +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(encounterKindRu(e.kind))
                      +  (e.specialty ? ' · ' + escapeHtml(e.specialty) : '')
                      +  '</div>';
                 function row(label, val) {
                     if (!val) return '';
-                    return '<div style="margin-bottom:10px;"><div style="font-size:0.75em;color:#a0aec0;text-transform:uppercase;margin-bottom:3px;">' + label + '</div><div style="white-space:pre-wrap;">' + escapeHtml(val) + '</div></div>';
+                    return '<div style="margin-bottom:10px;"><div style="font-size:0.75em;color:var(--text-secondary);text-transform:uppercase;margin-bottom:3px;">' + label + '</div><div style="white-space:pre-wrap;">' + escapeHtml(val) + '</div></div>';
                 }
                 html += row('Жалобы', e.complaint);
                 html += row('Анамнез', e.anamnesis);
@@ -3270,16 +3272,16 @@
 <div class="card" id="encountersCard" style="margin-top:20px;">
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <h2>🩺 История приёмов</h2>
-        <span style="color:#a0aec0;font-size:0.8em;" id="encountersCountLabel">—</span>
+        <span style="color:var(--text-secondary);font-size:0.8em;" id="encountersCountLabel">—</span>
     </div>
 
     <!-- B29.2.1: панель фильтров (свёрнута по умолчанию) -->
-    <details id="encountersFiltersDetails" style="margin:10px 0;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 12px;background:rgba(255,255,255,0.02);">
+    <details id="encountersFiltersDetails" style="margin:10px 0;border:1px solid var(--bg-card-border);border-radius:10px;padding:8px 12px;background:var(--bg-panel);">
         <summary style="cursor:pointer;color:#9f7aea;font-weight:600;outline:none;">🔎 Фильтры</summary>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px;">
-            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:var(--text-secondary);">
                 Тип (kind)
-                <select id="encFilterKind" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                <select id="encFilterKind" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid var(--bg-input-border);background:var(--bg-input);color:var(--text-primary);">
                     <option value="">— все —</option>
                     <option value="consultation">Консультация</option>
                     <option value="study">Исследование</option>
@@ -3288,40 +3290,40 @@
                     <option value="followup">Повторный приём</option>
                 </select>
             </label>
-            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:var(--text-secondary);">
                 Статус (status)
-                <select id="encFilterStatus" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                <select id="encFilterStatus" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid var(--bg-input-border);background:var(--bg-input);color:var(--text-primary);">
                     <option value="">— все —</option>
                     <option value="draft">Черновик</option>
                     <option value="finished">Завершён</option>
                 </select>
             </label>
-            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:var(--text-secondary);">
                 Специальность
-                <select id="encFilterSpecialty" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                <select id="encFilterSpecialty" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid var(--bg-input-border);background:var(--bg-input);color:var(--text-primary);">
                     <option value="">— все —</option>
                 </select>
             </label>
-            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:var(--text-secondary);">
                 С даты
                 <input type="date" id="encFilterFrom"
-                       style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                       style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid var(--bg-input-border);background:var(--bg-input);color:var(--text-primary);">
             </label>
-            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:var(--text-secondary);">
                 По дату
                 <input type="date" id="encFilterTo"
-                       style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                       style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid var(--bg-input-border);background:var(--bg-input);color:var(--text-primary);">
             </label>
-            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:var(--text-secondary);">
                 Сортировка
-                <select id="encFilterOrder" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                <select id="encFilterOrder" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid var(--bg-input-border);background:var(--bg-input);color:var(--text-primary);">
                     <option value="desc" selected>Сначала новые</option>
                     <option value="asc">Сначала старые</option>
                 </select>
             </label>
-            <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
+            <label style="display:flex;flex-direction:column;font-size:0.85em;color:var(--text-secondary);">
                 На странице
-                <select id="encFilterLimit" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
+                <select id="encFilterLimit" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid var(--bg-input-border);background:var(--bg-input);color:var(--text-primary);">
                     <option value="10">10</option>
                     <option value="20" selected>20</option>
                     <option value="50">50</option>
@@ -3332,12 +3334,12 @@
         <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
             <button class="btn btn-primary" id="encFiltersApply" type="button">Применить</button>
             <button class="btn btn-info" id="encFiltersReset" type="button">Сбросить</button>
-            <span id="encFiltersTotal" style="color:#a0aec0;font-size:0.85em;align-self:center;margin-left:auto;"></span>
+            <span id="encFiltersTotal" style="color:var(--text-secondary);font-size:0.85em;align-self:center;margin-left:auto;"></span>
         </div>
     </details>
 
     <div id="encountersTimeline" style="padding:10px 0;">
-        <div style="color:#a0aec0;padding:20px;text-align:center;">Загрузка…</div>
+        <div style="color:var(--text-secondary);padding:20px;text-align:center;">Загрузка…</div>
     </div>
 
     <!-- B29.2.3: пагинация -->
@@ -3349,7 +3351,7 @@
 <div class="chart-modal" id="viewEncounterModal" style="display:none;">
     <div class="chart-modal-content" style="max-width:700px;max-height:80vh;overflow-y:auto;">
         <h3 style="color:#9f7aea;margin-bottom:20px;">🩺 Приём</h3>
-        <div id="viewEncounterBody" style="color:#e2e8f0;">Загрузка…</div>
+        <div id="viewEncounterBody" style="color:var(--text-primary);">Загрузка…</div>
         <div class="chart-modal-buttons">
             <button class="btn btn-danger" onclick="closeViewEncounterModal()">Закрыть</button>
         </div>
@@ -3374,27 +3376,27 @@
         
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
             <div style="grid-column:1/-1;">
-                <label style="display:block; font-size:0.8em; color:#a0aec0; margin-bottom:5px;">ФИО *</label>
-                <input type="text" id="cardEditName" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#e2e8f0;">
+                <label style="display:block; font-size:0.8em; color:var(--text-secondary); margin-bottom:5px;">ФИО *</label>
+                <input type="text" id="cardEditName" style="width:100%; padding:12px; background:var(--bg-card); border:1px solid var(--bg-input-border); border-radius:10px; color:var(--text-primary);">
             </div>
             <div>
-                <label style="display:block; font-size:0.8em; color:#a0aec0; margin-bottom:5px;">Дата рождения *</label>
-                <input type="date" id="cardEditBirthDate" min="1900-01-01" max="2026-12-31" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#e2e8f0;">
+                <label style="display:block; font-size:0.8em; color:var(--text-secondary); margin-bottom:5px;">Дата рождения *</label>
+                <input type="date" id="cardEditBirthDate" min="1900-01-01" max="2026-12-31" style="width:100%; padding:12px; background:var(--bg-card); border:1px solid var(--bg-input-border); border-radius:10px; color:var(--text-primary);">
             </div>
             <div>
-                <label style="display:block; font-size:0.8em; color:#a0aec0; margin-bottom:5px;">Пол</label>
-                <select id="cardEditGender" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#e2e8f0;">
+                <label style="display:block; font-size:0.8em; color:var(--text-secondary); margin-bottom:5px;">Пол</label>
+                <select id="cardEditGender" style="width:100%; padding:12px; background:var(--bg-card); border:1px solid var(--bg-input-border); border-radius:10px; color:var(--text-primary);">
                     <option value="male">👨 Мужской</option>
                     <option value="female">👩 Женский</option>
                 </select>
             </div>
             <div style="grid-column:1/-1;">
-                <label style="display:block; font-size:0.8em; color:#a0aec0; margin-bottom:5px;">Телефон</label>
-                <input type="tel" id="cardEditPhone" placeholder="+7 900 123-45-67" oninput="formatPhoneInput(this)" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#e2e8f0;">
+                <label style="display:block; font-size:0.8em; color:var(--text-secondary); margin-bottom:5px;">Телефон</label>
+                <input type="tel" id="cardEditPhone" placeholder="+7 900 123-45-67" oninput="formatPhoneInput(this)" style="width:100%; padding:12px; background:var(--bg-card); border:1px solid var(--bg-input-border); border-radius:10px; color:var(--text-primary);">
             </div>
             <div style="grid-column:1/-1;">
-                <label style="display:block; font-size:0.8em; color:#a0aec0; margin-bottom:5px;">Email</label>
-                <input type="email" id="cardEditEmail" placeholder="patient@example.com" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; color:#e2e8f0;">
+                <label style="display:block; font-size:0.8em; color:var(--text-secondary); margin-bottom:5px;">Email</label>
+                <input type="email" id="cardEditEmail" placeholder="patient@example.com" style="width:100%; padding:12px; background:var(--bg-card); border:1px solid var(--bg-input-border); border-radius:10px; color:var(--text-primary);">
             </div>
         </div>
         
