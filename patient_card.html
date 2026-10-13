@@ -1481,30 +1481,134 @@
         loadVitals();
     }
 
-    // ---------- B28.4.1: История приёмов (timeline) ----------
-    function loadPatientEncounters() {
+    // ---------- B28.4.1 + B29.2.2: История приёмов (timeline + фильтры + пагинация) ----------
+
+    // Состояние списка приёмов. Единый источник истины для пагинации и фильтров.
+    var encState = {
+        offset: 0,
+        limit: 20,
+        total: null,      // null — неизвестно (no_total не используется на UI)
+        lastFilters: {}   // последний применённый фильтр (для reset/debug)
+    };
+
+    // Пациент из URL. Кешируется, чтобы не дёргать URLSearchParams каждый раз.
+    function currentPatientId() {
         var params = new URLSearchParams(location.search);
-        var patientId = params.get('patient_id') || params.get('id');
+        return params.get('patient_id') || params.get('id') || '';
+    }
+
+    // dateToRFC3339Range — конвертирует пару date-строк (YYYY-MM-DD) в [from, to] RFC3339 UTC.
+    // from → 00:00:00Z, to → 23:59:59Z. Пустые значения → ''.
+    function dateToRFC3339Range(fromDate, toDate) {
+        function localDateToUTC(dateStr, endOfDay) {
+            if (!dateStr) return '';
+            var parts = dateStr.split('-');
+            if (parts.length !== 3) return '';
+            var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]),
+                             endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, 0);
+            return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+        }
+        return {
+            from: localDateToUTC(fromDate, false),
+            to: localDateToUTC(toDate, true)
+        };
+    }
+
+    // readEncounterFilters — собирает фильтры из DOM.
+    function readEncounterFilters() {
+        var el = function(id){ return document.getElementById(id); };
+        var from = el('encFilterFrom') ? el('encFilterFrom').value : '';
+        var to = el('encFilterTo') ? el('encFilterTo').value : '';
+        var range = dateToRFC3339Range(from, to);
+        return {
+            kind: el('encFilterKind') ? el('encFilterKind').value : '',
+            status: el('encFilterStatus') ? el('encFilterStatus').value : '',
+            specialty: el('encFilterSpecialty') ? el('encFilterSpecialty').value.trim() : '',
+            from: range.from,
+            to: range.to,
+            limit: el('encFilterLimit') ? Number(el('encFilterLimit').value) || 20 : 20
+        };
+    }
+
+    // loadPatientEncounters — точка входа (вызывается при init и по кнопке "Применить").
+    // Сбрасывает offset на 0 и запускает выборку.
+    function loadPatientEncounters() {
+        encState.offset = 0;
+        encState.lastFilters = readEncounterFilters();
+        encState.limit = encState.lastFilters.limit;
+        fetchEncounters();
+    }
+
+    // fetchEncounters — сетевой вызов с текущими фильтрами и offset.
+    function fetchEncounters() {
+        var patientId = currentPatientId();
         var box = document.getElementById('encountersTimeline');
         if (!box) return;
         if (!patientId) {
             box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">patient_id не задан</div>';
             return;
         }
-        BotMaxAuth.authFetch('GET', '/api/encounters?patient_id=' + encodeURIComponent(patientId))
-            .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-            .then(function(data){ renderEncountersTimeline(data.items || []); })
+
+        var f = encState.lastFilters || {};
+        var qs = new URLSearchParams();
+        qs.set('patient_id', patientId);
+        qs.set('limit', String(encState.limit || 20));
+        qs.set('offset', String(encState.offset || 0));
+        if (f.kind) qs.set('kind', f.kind);
+        if (f.status) qs.set('status', f.status);
+        if (f.specialty) qs.set('specialty', f.specialty);
+        if (f.from) qs.set('from', f.from);
+        if (f.to) qs.set('to', f.to);
+
+        box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">Загрузка…</div>';
+
+        BotMaxAuth.authFetch('GET', '/api/encounters?' + qs.toString())
+            .then(function(r){
+                if (!r.ok) {
+                    return r.json().catch(function(){ return {}; }).then(function(e){
+                        throw new Error((e && e.error) || ('HTTP ' + r.status));
+                    });
+                }
+                return r.json();
+            })
+            .then(function(data){
+                encState.total = (typeof data.total === 'number') ? data.total : null;
+                renderEncountersTimeline(data.items || [], {
+                    total: encState.total,
+                    offset: encState.offset,
+                    limit: encState.limit,
+                    count: data.count || (data.items ? data.items.length : 0)
+                });
+                renderPager();
+            })
             .catch(function(err){
                 var b = document.getElementById('encountersTimeline');
                 if (b) b.innerHTML = '<div style="color:#f56565;padding:20px;text-align:center;">Ошибка загрузки: ' + escapeHtml(err.message) + '</div>';
+                var p = document.getElementById('encountersPager');
+                if (p) p.innerHTML = '';
             });
     }
 
-    function renderEncountersTimeline(items) {
+    // renderPager — заготовка (B29.2.3 заполнит).
+    function renderPager() {}
+
+    function renderEncountersTimeline(items, meta) {
         var box = document.getElementById('encountersTimeline');
         var label = document.getElementById('encountersCountLabel');
         if (!box) return;
-        if (label) label.textContent = items.length + ' записей';
+        meta = meta || { total: null, offset: 0, limit: items.length, count: items.length };
+        var total = (typeof meta.total === 'number') ? meta.total : null;
+        var shownFrom = items.length ? (meta.offset + 1) : 0;
+        var shownTo = meta.offset + items.length;
+        if (label) {
+            label.textContent = total !== null
+                ? ('показано ' + shownFrom + '–' + shownTo + ' из ' + total)
+                : (items.length + ' записей');
+        }
+        var totalEl = document.getElementById('encFiltersTotal');
+        if (totalEl) {
+            totalEl.textContent = total !== null ? ('Найдено: ' + total) : '';
+        }
         if (!items.length) {
             box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">Приёмов пока нет</div>';
             return;
