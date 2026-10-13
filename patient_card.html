@@ -927,6 +927,7 @@
 </div>
 
 <script src="auth.js"></script>
+<script src="pager.js"></script>
 <script>
     // Шаг 6.7: guard — без токена → login.html
     if (typeof BotMaxAuth !== 'undefined') BotMaxAuth.requireAuth();
@@ -1450,6 +1451,7 @@
                     patientData = p;
                     console.log('🌐 Загружено с сервера:', patientId);
                     renderPatientHeader();
+                    initEncounterFilters();   // B29.5.3-fix: фильтры из URL + обработчики (были пропущены в server-пути)
                     loadPatientEncounters();
                     loadCardData();
                     loadVitals();
@@ -1531,131 +1533,40 @@
         };
     }
 
-    // loadPatientEncounters — точка входа (вызывается при init и по кнопке "Применить").
-    // Сбрасывает offset на 0 и запускает выборку.
-    function loadPatientEncounters() {
-        encState.offset = 0;
-        encState.lastFilters = readEncounterFilters();
-        encState.limit = encState.lastFilters.limit;
-        fetchEncounters();
-    }
+    // ---------- B29.5.3: lazy-init общего pager'а ----------
+    var encountersPager = null;
 
-    // fetchEncounters — сетевой вызов с текущими фильтрами и offset.
-    function fetchEncounters() {
-        var patientId = currentPatientId();
-        var box = document.getElementById('encountersTimeline');
-        if (!box) return;
-        if (!patientId) {
-            box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">patient_id не задан</div>';
-            return;
-        }
-
-        var f = encState.lastFilters || {};
-        var qs = new URLSearchParams();
-        qs.set('patient_id', patientId);
-        qs.set('limit', String(encState.limit || 20));
-        qs.set('offset', String(encState.offset || 0));
-        if (f.kind) qs.set('kind', f.kind);
-        if (f.status) qs.set('status', f.status);
-        if (f.specialty) qs.set('specialty', f.specialty);
-        if (f.from) qs.set('from', f.from);
-        if (f.to) qs.set('to', f.to);
-
-        box.innerHTML = '<div style="color:#a0aec0;padding:20px;text-align:center;">Загрузка…</div>';
-
-        BotMaxAuth.authFetch('GET', '/api/encounters?' + qs.toString())
-            .then(function(r){
-                if (!r.ok) {
-                    return r.json().catch(function(){ return {}; }).then(function(e){
-                        throw new Error((e && e.error) || ('HTTP ' + r.status));
-                    });
-                }
-                return r.json();
-            })
-            .then(function(data){
-                encState.total = (typeof data.total === 'number') ? data.total : null;
-                renderEncountersTimeline(data.items || [], {
-                    total: encState.total,
-                    offset: encState.offset,
-                    limit: encState.limit,
-                    count: data.count || (data.items ? data.items.length : 0)
-                });
-                renderPager();
-            })
-            .catch(function(err){
+    function ensureEncountersPager() {
+        if (encountersPager) return encountersPager;
+        encountersPager = BotMaxPager.create({
+            endpoint:    '/api/encounters',
+            fixedParams: { patient_id: currentPatientId() },
+            getFilters:  function () { return encState.lastFilters || {}; },
+            onItems: function (items, meta) {
+                encState.total  = meta.total;
+                encState.offset = meta.offset;
+                renderEncountersTimeline(items, meta);
+            },
+            onError: function (err) {
                 var b = document.getElementById('encountersTimeline');
-                if (b) b.innerHTML = '<div style="color:#f56565;padding:20px;text-align:center;">Ошибка загрузки: ' + escapeHtml(err.message) + '</div>';
+                if (b) b.innerHTML = '<div style="color:#f56565;padding:20px;text-align:center;">Ошибка загрузки: '
+                    + escapeHtml(err.message) + '</div>';
                 var p = document.getElementById('encountersPager');
                 if (p) p.innerHTML = '';
-            });
+            },
+            urlSync: false   // URL-синхронизация — вручную через writeFiltersToURL (B29.2.4)
+        });
+        return encountersPager;
     }
 
-    // renderPager — рисует кнопки навигации по страницам.
-    // Использует encState (offset/limit/total).
-    function renderPager() {
-        var pager = document.getElementById('encountersPager');
-        if (!pager) return;
-
-        var limit = encState.limit || 20;
-        var offset = encState.offset || 0;
-        var total = encState.total;
-
-        if (total === null && offset === 0) {
-            pager.innerHTML = '';
-            return;
-        }
-
-        var canPrev = offset > 0;
-        var canNext;
-        if (total !== null) {
-            canNext = (offset + limit) < total;
-        } else {
-            canNext = true;
-        }
-
-        if (!canPrev && !canNext) {
-            pager.innerHTML = '';
-            return;
-        }
-
-        var info;
-        if (total !== null) {
-            var from = offset + 1;
-            var to = Math.min(offset + limit, total);
-            info = from + '–' + to + ' из ' + total;
-        } else {
-            info = 'стр. ' + (Math.floor(offset / limit) + 1);
-        }
-
-        var btnStyle = 'padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-weight:600;'
-                     + 'background:linear-gradient(135deg,#667eea,#764ba2);color:white;';
-        var btnDisabledStyle = 'padding:6px 14px;border-radius:20px;border:none;cursor:not-allowed;font-weight:600;'
-                             + 'background:rgba(255,255,255,0.08);color:#718096;';
-
-        var html = '';
-        html += '<button id="encPagePrev" type="button" '
-             +  (canPrev ? 'style="' + btnStyle + '"' : 'disabled style="' + btnDisabledStyle + '"')
-             +  '>← Назад</button>';
-        html += '<span style="color:#a0aec0;font-size:0.9em;">' + escapeHtml(info) + '</span>';
-        html += '<button id="encPageNext" type="button" '
-             +  (canNext ? 'style="' + btnStyle + '"' : 'disabled style="' + btnDisabledStyle + '"')
-             +  '>Вперёд →</button>';
-        pager.innerHTML = html;
-
-        var prev = document.getElementById('encPagePrev');
-        var next = document.getElementById('encPageNext');
-        if (prev && canPrev) {
-            prev.addEventListener('click', function(){
-                encState.offset = Math.max(0, (encState.offset || 0) - limit);
-                fetchEncounters();
-            });
-        }
-        if (next && canNext) {
-            next.addEventListener('click', function(){
-                encState.offset = (encState.offset || 0) + limit;
-                fetchEncounters();
-            });
-        }
+    // loadPatientEncounters — точка входа (вызывается при init и по кнопке "Применить").
+    // Сбрасывает offset на 0 и запускает выборку через общий pager.
+    function loadPatientEncounters() {
+        encState.lastFilters = readEncounterFilters();
+        encState.limit = encState.lastFilters.limit;
+        var p = ensureEncountersPager();
+        if (!p) return;
+        return p.reload();
     }
 
     // ---------- B29.2.4: обработчики фильтров + URL-синхронизация ----------
@@ -1699,9 +1610,9 @@
     function applyEncountersFilters() {
         encState.lastFilters = readEncounterFilters();
         encState.limit = encState.lastFilters.limit;
-        encState.offset = 0;
         writeFiltersToURL(encState.lastFilters);
-        fetchEncounters();
+        var p = ensureEncountersPager();
+        if (p) p.reload();
     }
 
     // resetEncountersFilters — очищает DOM-поля и перезагружает без фильтров.
@@ -1713,11 +1624,11 @@
         });
         var lim = document.getElementById('encFilterLimit');
         if (lim) lim.value = '20';
-        encState.offset = 0;
         encState.limit = 20;
         encState.lastFilters = {};
         writeFiltersToURL({});
-        fetchEncounters();
+        var p = ensureEncountersPager();
+        if (p) p.reload();
     }
 
     // initEncounterFilters — привязка обработчиков (один раз).
