@@ -995,6 +995,47 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.47 (B29.6-ui-fix) — ЗАКРЫТО (2026-10-13)
+
+**Статус:** уточнение UI-feedback после §6.46. 1 подпатч.
+
+**Коммит:** `c2c1a13` — fix(ui): серые рамки по умолчанию,
+фиолетовые при фокусе.
+
+**Контекст:** в §6.46 (B29.6.8) было сделано «все рамки — фиолетовые»
+по умолчанию. Заказчик уточнил: правильно — **серые по умолчанию,
+фиолетовые при фокусе**. Откатили, сохранив токен `--border-accent`
+для фокусного состояния.
+
+**Сделано:**
+- **Откат по умолчанию (серые):**
+  - `.header`, `.section` → `var(--bg-card-border)`.
+  - `.field-textarea`, `.mkb-input-wrapper input`, `.vital-item input`,
+    `.bp-inputs input` → `var(--bg-input-border)`.
+  - `.edit-card-modal-content` → `var(--bg-modal-border)`.
+- **Focus → `var(--border-accent)`** (вместо `#667eea` / `#9f7aea`):
+  `.field-textarea:focus`, `.mkb-input-wrapper input:focus`,
+  `.vital-item input:focus`, `.bp-inputs select:focus`,
+  `.bp-inputs input:focus`.
+- **Универсальное правило** (для inline-стилизованных полей фильтров):
+  `input:focus, textarea:focus, select:focus {
+   border-color: var(--border-accent) !important; }`.
+
+**Автопроверки:**
+- `gofmt -l` пусто, `go vet`, `go build`, `go test -count=1` — зелёные.
+- `--border-accent`: 2 определения + 6 применений (`:focus`).
+- Серые border'ы восстановлены: `--bg-card-border` × 2,
+  `--bg-input-border` × 4, `--bg-modal-border` × 1.
+- Баланс скобок CSS 128/128.
+- HTTP 200, 144508b.
+
+**Урок:** UI-фидбек уточняется итеративно. `--border-accent` (уже был
+заведён в §6.46) переиспользован как **фокусный** цвет.
+⚠️ `!` в `git commit -m "..."` в bash → history-expansion: сообщение
+обрезается. Использовать `-m '...'` (одинарные кавычки) или `-F <файл>`.
+
+---
+
 ### 6.46 (B29.6-ui) — ЗАКРЫТО (2026-10-13)
 
 **Статус:** UI-доработка после визуального смоука темы.
