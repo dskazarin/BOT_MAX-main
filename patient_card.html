@@ -1589,8 +1589,73 @@
             });
     }
 
-    // renderPager — заготовка (B29.2.3 заполнит).
-    function renderPager() {}
+    // renderPager — рисует кнопки навигации по страницам.
+    // Использует encState (offset/limit/total).
+    function renderPager() {
+        var pager = document.getElementById('encountersPager');
+        if (!pager) return;
+
+        var limit = encState.limit || 20;
+        var offset = encState.offset || 0;
+        var total = encState.total;
+
+        if (total === null && offset === 0) {
+            pager.innerHTML = '';
+            return;
+        }
+
+        var canPrev = offset > 0;
+        var canNext;
+        if (total !== null) {
+            canNext = (offset + limit) < total;
+        } else {
+            canNext = true;
+        }
+
+        if (!canPrev && !canNext) {
+            pager.innerHTML = '';
+            return;
+        }
+
+        var info;
+        if (total !== null) {
+            var from = offset + 1;
+            var to = Math.min(offset + limit, total);
+            info = from + '–' + to + ' из ' + total;
+        } else {
+            info = 'стр. ' + (Math.floor(offset / limit) + 1);
+        }
+
+        var btnStyle = 'padding:6px 14px;border-radius:20px;border:none;cursor:pointer;font-weight:600;'
+                     + 'background:linear-gradient(135deg,#667eea,#764ba2);color:white;';
+        var btnDisabledStyle = 'padding:6px 14px;border-radius:20px;border:none;cursor:not-allowed;font-weight:600;'
+                             + 'background:rgba(255,255,255,0.08);color:#718096;';
+
+        var html = '';
+        html += '<button id="encPagePrev" type="button" '
+             +  (canPrev ? 'style="' + btnStyle + '"' : 'disabled style="' + btnDisabledStyle + '"')
+             +  '>← Назад</button>';
+        html += '<span style="color:#a0aec0;font-size:0.9em;">' + escapeHtml(info) + '</span>';
+        html += '<button id="encPageNext" type="button" '
+             +  (canNext ? 'style="' + btnStyle + '"' : 'disabled style="' + btnDisabledStyle + '"')
+             +  '>Вперёд →</button>';
+        pager.innerHTML = html;
+
+        var prev = document.getElementById('encPagePrev');
+        var next = document.getElementById('encPageNext');
+        if (prev && canPrev) {
+            prev.addEventListener('click', function(){
+                encState.offset = Math.max(0, (encState.offset || 0) - limit);
+                fetchEncounters();
+            });
+        }
+        if (next && canNext) {
+            next.addEventListener('click', function(){
+                encState.offset = (encState.offset || 0) + limit;
+                fetchEncounters();
+            });
+        }
+    }
 
     function renderEncountersTimeline(items, meta) {
         var box = document.getElementById('encountersTimeline');
