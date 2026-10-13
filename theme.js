@@ -121,6 +121,9 @@
         try { saved = localStorage.getItem(KEY); } catch (e) { /* ignore */ }
         if (!VALID[saved]) {
             saved = VALID[opts.default] ? opts.default : DEFAULT;
+            // B29.6.12: зафиксировать дефолт в localStorage,
+            // чтобы тема пережила закрытие браузера.
+            _write(saved);
         }
         _apply(saved);
         if (opts.button) {
