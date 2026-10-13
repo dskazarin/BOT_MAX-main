@@ -951,6 +951,93 @@
 
 <!-- B27_SNAPSHOT_APPLIED -->
 
+### 6.42 (B29.5) — ЗАКРЫТО (2026-10-13)
+
+**Статус:** B29.5 (backlog-фикс: регресс `limit` 100→20 в `doctor_cabinet.html`
++ унификация пагинации) — закрыто, 3 подпатча + автотесты + ручной смоук.
+
+**Контекст:** смена default `limit` в B29.1 (encounters.go:47,
+`encounterListLimitDefault = 20`) сломала `doctor_cabinet.html` — голый
+`GET /api/encounters?doctor_id=...` без `limit` получал 20 записей вместо 100,
+без пагинации и без возможности дойти до остальных. Вместо точечного
+`?limit=100` сделана **унификация**: единый модуль `pager.js` для обеих
+страниц истории (`patient_card.html` и `doctor_cabinet.html`).
+
+**Коммиты:**
+- `54e3f17` — B29.5.1 — `pager.js`: общий модуль пагинации (`window.BotMaxPager`).
+- `c0f6c5d` — B29.5.2 — `doctor_cabinet.html`: подключение pager'а, `#encountersPager`, lazy-init `ensureEncountersPager`. Фикс регресса.
+- `4e89898` — B29.5.3 — `patient_card.html`: удалены дубли `fetchEncounters`/`renderPager`, добавлен `ensureEncountersPager`; **bugfix B29.2.4** — в server-пути не вызывался `initEncounterFilters()`.
+
+**B29.5.1 — pager.js (новый файл в корне репо):**
+- IIFE, `'use strict'`, экспорт `window.BotMaxPager` (паттерн `auth.js`).
+- 343 строки / 14175 байт. Отдаётся `backend/main.go:508`
+  (`http.FileServer(http.Dir(rootDir))`) с `Content-Type: text/javascript; charset=utf-8`.
+- API:
+  - `create(opts)` → `{ reload, reset, fetch, next, prev, setOffset, setLimit, getState, render }`
+  - `buildQuery(params)` — детерминированная сериализация (sorted keys, skip `''`/`null`/`undefined`).
+  - `computePagerMeta(state)` → `{ from, to, total, canPrev, canNext, label }`.
+  - `readFiltersFromURL(keys)`, `syncFiltersToURL(filters, keys, extra)`.
+- `create(opts)`:
+  - `endpoint` (default `/api/encounters`), `fixedParams` (`{doctor_id}` | `{patient_id}`)
+  - `getFilters()` — возвращает актуальный набор фильтров (kind/status/specialty/from/to/limit)
+  - `onItems(items, meta)`, `onError(err)`, `onAfterFetch(meta)`
+  - `pagerEl` (default `encountersPager`), `urlSync` (default true), `urlKeys`
+- Рисует в `#encountersPager`: кнопки `#encPagePrev`/`#encPageNext` + label
+  «N–M из TOTAL» (или «стр. K» при `total=null`).
+- `urlSync` через `history.replaceState`; `offset=0` не пишется в URL.
+
+**B29.5.2 — `doctor_cabinet.html`:**
+- Подключён `<script src="pager.js">` после `auth.js` (строка 728).
+- Добавлен `<div id="encountersPager">` рядом с `#encountersTableBody` (строка 511).
+- `loadMyEncounters` → `ensureEncountersPager` (lazy) + `pager.reload()`.
+- `renderEncountersTable(items, meta)` — сигнатура расширена (meta пока не используется).
+- `fixedParams: { doctor_id: currentDoctorId }`, `urlSync: false` (без URL-фильтров в кабинете).
+- **Регресс вылечен:** при 25 приёмах видны «1–20 из 25» + кнопки «←/→», переход даёт «21–25 из 25».
+- Размер: 144587 → 145443 байт (+856).
+
+**B29.5.3 — `patient_card.html`:**
+- Подключён `<script src="pager.js">` после `auth.js` (строка 930).
+- Удалены дубли: `fetchEncounters` (~49 строк), `renderPager` (~68 строк).
+- Добавлен `ensureEncountersPager` (lazy, `fixedParams: { patient_id: currentPatientId() }`).
+- Все три точки входа переписаны на `pager.reload()`:
+  `loadPatientEncounters`, `applyEncountersFilters`, `resetEncountersFilters`.
+- `getFilters` возвращает `encState.lastFilters` (UI-концепция «применённые фильтры» сохранена).
+- `urlSync: false` — URL-синхронизация остаётся за `writeFiltersToURL` (B29.2.4), без двойного `replaceState`.
+- **Bugfix B29.2.4:** в server-пути `loadPatient → then(...)` пропущен вызов
+  `initEncounterFilters()` — фильтры из URL не подхватывались, обработчики
+  Apply/Reset/Enter/change не навешивались. Исправлено в обоих путях (server и fallback).
+- Размер: 140850 → 137465 байт (−3385); строки: 3390 → 3307 (−83).
+
+**Автопроверки:**
+- Backend: `gofmt -l backend/` пусто, `go vet ./...`, `go build -o /tmp/botmax_server ./backend`, `go test -count=1 ./backend/...` — зелёные.
+- HTTP: `pager.js` → `200 OK`, `text/javascript; charset=utf-8`, `Content-Length: 14175`, `Accept-Ranges: bytes`.
+- Post-patch sanity: `doctor_cabinet` — `pager.js` (1), `#encountersPager` (1), `BotMaxPager.create` (1), старый `fetchEncounters` = 0;
+  `patient_card` — `fetchEncounters`/`renderPager` = 0, `BotMaxPager.create` = 1, `ensureEncountersPager` = 4, `initEncounterFilters` = 2.
+- API-контракт (curl, DOC-001):
+  - `?doctor_id=DOC-001&limit=20&offset=0` → `count: 20, total: 25`
+  - `?doctor_id=DOC-001&limit=20&offset=20` → `count: 5, total: 25`
+  - `?patient_id=PAT-...&status=finished&limit=5` → `count: 5, total: 8`
+
+**Ручной UI-смоук (2026-10-13, БД `/tmp/b295_smoke.db`, DOC-001):**
+- `doctor_cabinet.html`: 25 приёмов, «1–20 из 25», «Вперёд →» → «21–25 из 25», ←/→ активны/disabled корректно.
+- `patient_card.html`: 25 приёмов, timeline, панель фильтров, «показано 1–20 из 25», счётчик «Найдено: 25».
+- `patient_card.html?status=finished`: селект `status` = `finished` (bugfix B29.2.4 подтверждён), timeline = 8 finished, «показано 1–8 из 8», «Найдено: 8».
+- `patient_card.html` с `limit=50` через UI: «показано 1–25 из 25».
+
+**Итоги волны:**
+- Единый источник правды для пагинации: `pager.js` используется обеими страницами.
+- `patient_card.html` −83 строки.
+- Устранён скрытый баг B29.2.4 (server-путь не инициализировал фильтры).
+- Регресс B29.1 закрыт для UI.
+
+**Backlog из смоука → см. §6.43:**
+- Локализация опций `kind`/`status` на русский.
+- Специальность → выпадающий список.
+- Календарь (from/to) контрастнее.
+- Сортировка приёмов ASC/DESC.
+
+<!-- B29_5_SNAPSHOT_APPLIED -->
+
 ### 6.41 (B29.2) — ЗАКРЫТО (2026-10-13)
 
 **Статус:** B29.2 (frontend: панель фильтров + пагинация в `patient_card.html`) — закрыто, 4 подпатча + смоук.
