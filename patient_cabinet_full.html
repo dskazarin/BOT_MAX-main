@@ -76,13 +76,13 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-body);
             min-height: 100vh;
             padding: 20px;
         }
         .container { max-width: 1400px; margin: 0 auto; }
         .header {
-            background: white;
+            background: var(--bg-card);
             border-radius: 20px;
             padding: 20px 30px;
             margin-bottom: 20px;
@@ -91,7 +91,7 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-card);
         }
         .user-info { display: flex; align-items: center; gap: 15px; }
         .avatar {
@@ -124,7 +124,7 @@
             cursor: pointer;
         }
         .current-date {
-            background: white;
+            background: var(--bg-card);
             border-radius: 20px;
             padding: 15px 25px;
             margin-bottom: 20px;
@@ -133,10 +133,10 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-card);
         }
-        .date-display { font-size: 1.1em; color: #2d3748; }
-        .date-label { font-weight: 600; color: #667eea; }
+        .date-display { font-size: 1.1em; color: var(--text-primary); }
+        .date-label { font-weight: 600; color: var(--text-heading); }
         .sync-status { font-size: 0.8em; padding: 5px 10px; border-radius: 20px; background: #c6f6d5; color: #22543d; }
         .computer-link {
             background: #4299e1;
@@ -151,11 +151,11 @@
         }
         .computer-link:hover { background: #3182ce; }
         .combined-section {
-            background: white;
+            background: var(--bg-card);
             border-radius: 20px;
             padding: 25px;
             margin-bottom: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-card);
         }
         .qr-voice-row {
             display: flex;
@@ -165,13 +165,13 @@
             align-items: flex-start;
         }
         .qr-box {
-            background: #f7fafc;
+            background: var(--bg-subtle);
             border-radius: 15px;
             padding: 15px;
             text-align: center;
         }
         .computer-box {
-            background: #f7fafc;
+            background: var(--bg-subtle);
             border-radius: 15px;
             padding: 15px;
             text-align: center;
@@ -182,7 +182,7 @@
         .symptom-section textarea {
             width: 100%;
             padding: 12px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--border-subtle);
             border-radius: 10px;
             resize: vertical;
             font-family: inherit;
@@ -195,11 +195,11 @@
             flex-wrap: wrap;
         }
         .card {
-            background: white;
+            background: var(--bg-card);
             border-radius: 20px;
             padding: 25px;
             margin-bottom: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow-card);
         }
         .card-header {
             display: flex;
@@ -208,7 +208,7 @@
             margin-bottom: 20px;
             cursor: pointer;
         }
-        .card-header h2 { color: #667eea; font-size: 1.3em; }
+        .card-header h2 { color: var(--text-heading); font-size: 1.3em; }
         .toggle-icon { font-size: 1.2em; transition: transform 0.3s; display: inline-block; }
         .toggle-icon.collapsed { transform: rotate(-90deg); }
         .card-content { transition: all 0.3s; overflow: hidden; }
@@ -219,15 +219,15 @@
             gap: 15px;
         }
         .info-item {
-            background: #f7fafc;
+            background: var(--bg-subtle);
             padding: 15px;
             border-radius: 12px;
         }
-        .info-label { font-weight: 600; color: #4a5568; font-size: 0.8em; text-transform: uppercase; }
-        .info-value { font-size: 1.1em; color: #2d3748; margin-top: 5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .info-label { font-weight: 600; color: var(--text-secondary); font-size: 0.8em; text-transform: uppercase; }
+        .info-value { font-size: 1.1em; color: var(--text-primary); margin-top: 5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .edit-icon {
             cursor: pointer;
-            background: #e2e8f0;
+            background: var(--bg-icon);
             padding: 5px 10px;
             border-radius: 20px;
             font-size: 0.7em;
@@ -236,10 +236,10 @@
         .edit-icon:hover { background: #cbd5e0; transform: scale(1.05); }
         .select-control {
             padding: 8px 12px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--border-subtle);
             border-radius: 8px;
             font-size: 0.9em;
-            background: white;
+            background: var(--bg-card);
         }
         .weight-control, .height-control {
             display: flex;
@@ -252,7 +252,7 @@
             font-size: 0.7em;
             padding: 5px 10px;
         }
-        .age-category { font-size: 0.7em; color: #718096; margin-left: 5px; }
+        .age-category { font-size: 0.7em; color: var(--text-muted); margin-left: 5px; }
         .growth-table {
             margin-top: 15px;
             overflow-x: auto;
@@ -263,7 +263,7 @@
             font-size: 0.8em;
         }
         .growth-table th, .growth-table td {
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--border-subtle);
             padding: 8px;
             text-align: center;
         }
@@ -287,7 +287,7 @@
         .btn-info { background: #4299e1; }
         .btn-success { background: #48bb78; }
         .medication-item, .symptom-item, .allergy-item, .vaccination-item, .diagnosis-item, .file-item {
-            background: #f7fafc;
+            background: var(--bg-subtle);
             padding: 15px;
             border-radius: 12px;
             margin-bottom: 10px;
@@ -301,7 +301,7 @@
         }
         .medication-name { font-size: 1.1em; font-weight: bold; }
         .dose-item {
-            background: white;
+            background: var(--bg-card);
             padding: 10px;
             border-radius: 8px;
             margin-top: 8px;
@@ -328,7 +328,7 @@
             align-items: center;
             margin-top: 15px;
             padding: 15px;
-            background: #f7fafc;
+            background: var(--bg-subtle);
             border-radius: 15px;
         }
         .modal {
@@ -338,13 +338,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: var(--modal-overlay);
             z-index: 1000;
             justify-content: center;
             align-items: center;
         }
         .modal-content {
-            background: white;
+            background: var(--bg-card);
             border-radius: 20px;
             padding: 30px;
             max-width: 500px;
@@ -353,10 +353,10 @@
             overflow-y: auto;
         }
         .modal-buttons { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
-        .times-list { margin: 10px 0; padding: 10px; background: #f7fafc; border-radius: 10px; min-height: 50px; }
+        .times-list { margin: 10px 0; padding: 10px; background: var(--bg-subtle); border-radius: 10px; min-height: 50px; }
         .time-chip {
             display: inline-block;
-            background: #e2e8f0;
+            background: var(--bg-icon);
             padding: 5px 10px;
             border-radius: 20px;
             margin: 5px;
@@ -394,6 +394,7 @@
             --bg-card: white;
             --bg-subtle: #f7fafc;
             --bg-icon: #e2e8f0;
+            --border-subtle: #e2e8f0;
             --text-primary: #2d3748;
             --text-secondary: #4a5568;
             --text-muted: #718096;
@@ -407,6 +408,7 @@
             --bg-card: #2d3748;
             --bg-subtle: #1a202c;
             --bg-icon: #4a5568;
+            --border-subtle: #4a5568;
             --text-primary: #e2e8f0;
             --text-secondary: #cbd5e0;
             --text-muted: #a0aec0;
