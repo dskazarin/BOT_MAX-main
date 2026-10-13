@@ -335,6 +335,16 @@
             color: #1a1a1a;
             background: #ffffff;
         }
+        /* B29.6.3: контрастный календарь (тёмная тема по умолчанию) */
+        input[type="date"] { color-scheme: dark; }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(1.4);
+            cursor: pointer;
+            opacity: 0.9;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+        [data-theme="light"] input[type="date"] { color-scheme: light; }
+        [data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator { filter: none; }
     </style>
 </head>
 <body>
