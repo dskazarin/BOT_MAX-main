@@ -951,6 +951,67 @@
 
 <!-- B27_SNAPSHOT_APPLIED -->
 
+### 6.40 (B29.1) — ЗАКРЫТО (2026-10-13)
+
+**Статус:** B29.1 (backend: фильтры + пагинация + масштабирование) — закрыто, 6 подпатчей + правки тестов.
+
+**Коммиты:**
+- `631093a` — B29.1.1 — индекс `idx_enc_patient_kind(patient_id, kind, started_at DESC)`.
+- `a1de28a` — B29.1.2 — `EncounterFilter` + `parseEncounterFilter` + cursor helpers.
+- `9047d3c` — B29.1.3 — SQL-сборщик WHERE + keyset + `listEncountersFiltered`/`countEncounters`.
+- `7694a2e` — B29.1.4 — 10 repository-тестов list (фильтры, offset, keyset, count).
+- `6a1513f` — B29.1.5 — 3 EXPLAIN QUERY PLAN теста (`idx_enc_patient_kind` в offset и keyset).
+- `d523198` — B29.1.6 — 13 HTTP-тестов list (400/200/RBAC/no_total/next_cursor).
+
+**Итого:** 32 теста B29.1 PASS, полный `go test ./backend/...` зелёный.
+
+**Контракт `GET /api/encounters` (актуальный):**
+- Скоуп (обязателен): `patient_id | doctor_id | clinic_id`.
+- Фильтры (все опц.): `kind` ∈ {consultation, study, procedure, lab, followup};
+  `status` ∈ {draft, finished}; `specialty` (точное совпадение);
+  `from`, `to` — RFC3339, включительно, `from ≤ to`.
+- Пагинация: `limit` ∈ [1..200] (default **20**, было 100); `offset` ∈ [0..10000] (default 0);
+  `cursor` — opaque keyset, `base64url(startedAt|id)`; при заданном `cursor` offset игнорируется.
+- `no_total=1` (или `true`) — не считать COUNT(*).
+- Ответ: `{items, limit, offset, count, total?, next_cursor?}`.
+  - `total` — отсутствует при `no_total=1`.
+  - `next_cursor` — присутствует только если страница не последняя (`LIMIT limit+1`).
+
+**Реализация:**
+- `EncounterFilter` + `parseEncounterFilter(q url.Values)` — вся валидация, 400 с человекочитаемым `error`.
+- `buildEncounterWhere(f)` — динамический WHERE с `?`-плейсхолдерами.
+- `listEncountersFiltered(db, f)` — offset- или keyset-режим, `LIMIT limit+1`, `next_cursor`.
+- `countEncounters(db, f)` — COUNT(*) без cursor/offset/limit.
+- `scanEncounter` — единая точка scan (`encounterSelectCols`).
+- Удалены `listEncountersByPatient` / `listEncountersByDoctor` / `listEncounters`.
+- `handleEncountersList` переписан поверх `listEncountersFiltered`; RBAC сохранён
+  (doctor → только `doctor_id=me`; admin → своя клиника; superadmin → любые).
+
+**Тесты:**
+- `encounters_filter_test.go` — 6 тестов (`parseEncounterFilter` OK/Errors/Defaults,
+  cursor round-trip/empty/bad).
+- `encounters_list_test.go` — 10 repository-тестов (kind/status/specialty/from-to/combined,
+  offset, keyset, next="", count, keyset stable under insert).
+- `encounters_plan_test.go` — 3 EXPLAIN-теста (idx используется для offset и keyset,
+  без `SCAN encounters`; для запроса без kind — `idx_enc_patient`).
+- `encounters_http_test.go` — 13 HTTP-тестов (bad kind/status, from>to, limit>200,
+  offset>10000, no scope, doctor patient list + total, no_total, next_cursor,
+  doctor foreign doctor_id → 403, admin foreign clinic → 403, admin own clinic).
+
+**Изменение поведения (важно для B29.2 UI):**
+- Default `limit` уменьшен 100 → 20. Фронт должен явно передавать `limit`,
+  если нужны большие страницы.
+- В ответе появились `total` (по умолчанию) и `next_cursor` (на неполных страницах).
+- 400-ответы теперь `{"error":"<detail>"}` от `json.NewEncoder`, с HTML-экранированием
+  (`>` → `\u003e` в сыром теле; после `Unmarshal` — нормально).
+
+**Открытые вопросы для B29.2 (UI):**
+1. Фронт передаёт `limit` явно? Дефолт 20 может «обрезать» старые сценарии.
+2. Использовать ли `next_cursor` на UI или жить на offset?
+3. Отображать ли `total` в интерфейсе (счётчик «N приёмов»)?
+
+**Следующий шаг:** B29.2 — Frontend: панель фильтров в `patient_card.html`.
+
 ### 6.39 (B29) — ПЛАН (в работе, checkpoint 2026-10-09)
 
 **Статус:** запланировано, к реализации.
