@@ -1686,8 +1686,8 @@
             var e = items[i];
             var finished = (e.status === 'finished');
             var badge = finished
-                ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">finished</span>'
-                : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">draft</span>';
+                ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('finished') + '</span>'
+                : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('draft') + '</span>';
             var border = finished ? '#48bb78' : '#ed8936';
             html += '<div class="encounter-row" data-id="' + escapeHtml(e.id || '') + '" '
                  +  'style="border-left:3px solid ' + border + ';padding:10px 15px;margin:8px 0;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;">'
@@ -1696,7 +1696,7 @@
                  +  '<span style="color:#a0aec0;font-size:0.85em;">' + escapeHtml(e.specialty || '') + '</span></div>'
                  +  '<div>' + badge + '</div></div>'
                  +  '<div style="color:#a0aec0;font-size:0.8em;margin-top:4px;">'
-                 +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(e.kind || '—')
+                 +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(encounterKindRu(e.kind))
                  +  (e.complaint ? ' · ' + escapeHtml(e.complaint) : '')
                  +  '</div></div>';
         }
@@ -1720,12 +1720,12 @@
                 if (!body) return;
                 var finished = (e.status === 'finished');
                 var badge = finished
-                    ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">finished</span>'
-                    : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">draft</span>';
+                    ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('finished') + '</span>'
+                    : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('draft') + '</span>';
                 var html = '';
                 html += '<div style="margin-bottom:10px;"><strong>' + escapeHtml(e.title || '(без названия)') + '</strong> ' + badge + '</div>';
                 html += '<div style="color:#a0aec0;font-size:0.85em;margin-bottom:15px;">'
-                     +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(e.kind || '—')
+                     +  escapeHtml(e.started_at || '—') + ' · ' + escapeHtml(encounterKindRu(e.kind))
                      +  (e.specialty ? ' · ' + escapeHtml(e.specialty) : '')
                      +  '</div>';
                 function row(label, val) {
@@ -2876,6 +2876,22 @@
         return html;
     }
 
+    // B29.6.1: локализация kind/status (label != value; API/URL — англ.)
+    var ENCOUNTER_KIND_RU = {
+        consultation: 'Консультация',
+        study:        'Исследование',
+        procedure:    'Процедура',
+        lab:          'Анализы',
+        followup:     'Повторный приём'
+    };
+    function encounterKindRu(kind) { return ENCOUNTER_KIND_RU[kind] || kind || '—'; }
+
+    var ENCOUNTER_STATUS_RU = {
+        draft:    'Черновик',
+        finished: 'Завершён'
+    };
+    function encounterStatusRu(status) { return ENCOUNTER_STATUS_RU[status] || status || '—'; }
+
     function escapeHtml(text) {
         return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
@@ -3182,19 +3198,19 @@
                 Тип (kind)
                 <select id="encFilterKind" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
                     <option value="">— все —</option>
-                    <option value="consultation">consultation</option>
-                    <option value="study">study</option>
-                    <option value="procedure">procedure</option>
-                    <option value="lab">lab</option>
-                    <option value="followup">followup</option>
+                    <option value="consultation">Консультация</option>
+                    <option value="study">Исследование</option>
+                    <option value="procedure">Процедура</option>
+                    <option value="lab">Анализы</option>
+                    <option value="followup">Повторный приём</option>
                 </select>
             </label>
             <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">
                 Статус (status)
                 <select id="encFilterStatus" style="margin-top:4px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.25);color:#e2e8f0;">
                     <option value="">— все —</option>
-                    <option value="draft">draft</option>
-                    <option value="finished">finished</option>
+                    <option value="draft">Черновик</option>
+                    <option value="finished">Завершён</option>
                 </select>
             </label>
             <label style="display:flex;flex-direction:column;font-size:0.85em;color:#a0aec0;">

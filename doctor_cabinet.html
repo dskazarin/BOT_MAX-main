@@ -2047,6 +2047,13 @@
     };
     function encounterKindRu(kind) { return ENCOUNTER_KIND_RU[kind] || kind || '—'; }
 
+    // B29.6.1: локализация статуса
+    var ENCOUNTER_STATUS_RU = {
+        draft:    'Черновик',
+        finished: 'Завершён'
+    };
+    function encounterStatusRu(status) { return ENCOUNTER_STATUS_RU[status] || status || '—'; }
+
     // ---------- B28.4.4: список специальностей ----------
     var SPECIALTY_LIST = [
         'ЛОР', 'Терапевт', 'Хирург', 'Педиатр', 'Невролог',
@@ -2172,8 +2179,8 @@
             var e = items[i];
             var finished = (e.status === 'finished');
             var badge = finished
-                ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">finished</span>'
-                : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">draft</span>';
+                ? '<span style="background:rgba(72,187,120,0.2);color:#48bb78;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('finished') + '</span>'
+                : '<span style="background:rgba(237,137,54,0.2);color:#ed8936;padding:2px 8px;border-radius:6px;font-size:0.75em;">' + encounterStatusRu('draft') + '</span>';
             html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">'
                  +  '<td style="padding:10px;">' + (e.started_at || '—') + '</td>'
                  +  '<td style="padding:10px;">' + (e.patient_id || '—') + '</td>'
