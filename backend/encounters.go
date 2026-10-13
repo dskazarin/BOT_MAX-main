@@ -47,6 +47,11 @@ const (
 	encounterListLimitDefault = 20
 	encounterListOffsetMax    = 10000
 	encounterListOffsetMin    = 0
+
+	// B29.6.4a: сортировка списка приёмов.
+	encounterOrderAsc     = "asc"
+	encounterOrderDesc    = "desc"
+	encounterOrderDefault = encounterOrderDesc
 )
 
 // EncounterFilter — разобранные параметры GET /api/encounters.
@@ -67,6 +72,7 @@ type EncounterFilter struct {
 	Offset  int
 	Cursor  string // opaque; если задан — offset игнорируется
 	NoTotal bool
+	Order   string // B29.6.4a: "asc" | "desc"; default desc
 }
 
 // parseEncounterFilter — разбирает и валидирует query-параметры.
@@ -131,6 +137,19 @@ func parseEncounterFilter(q url.Values) (*EncounterFilter, error) {
 	}
 	if f.From != nil && f.To != nil && f.From.After(*f.To) {
 		return nil, fmt.Errorf("from > to")
+	}
+
+	// B29.6.4a: order (asc|desc), default desc.
+	// keyset (cursor) поддерживает только desc — см. проверку ниже.
+	f.Order = strings.ToLower(strings.TrimSpace(q.Get("order")))
+	if f.Order == "" {
+		f.Order = encounterOrderDefault
+	}
+	if f.Order != encounterOrderAsc && f.Order != encounterOrderDesc {
+		return nil, fmt.Errorf("invalid order: %q", f.Order)
+	}
+	if f.Cursor != "" && f.Order != encounterOrderDesc {
+		return nil, fmt.Errorf("order=%s is not supported with cursor (keyset)", f.Order)
 	}
 
 	if v := strings.TrimSpace(q.Get("no_total")); v == "1" || v == "true" {
@@ -442,13 +461,19 @@ func listEncountersFiltered(db *sql.DB, f *EncounterFilter) ([]*Encounter, strin
 		args = append(args, curStart, curStart, curID)
 	}
 
-	q := "SELECT " + encounterSelectCols + " FROM encounters " + where +
-		" ORDER BY started_at DESC, id DESC LIMIT ?"
-
+	// B29.6.4a: keyset — только DESC; offset — order из фильтра (default desc).
+	var q string
 	if f.Cursor != "" {
+		q = "SELECT " + encounterSelectCols + " FROM encounters " + where +
+			" ORDER BY started_at DESC, id DESC LIMIT ?"
 		args = append(args, f.Limit+1)
 	} else {
-		q += " OFFSET ?"
+		dir := "DESC"
+		if f.Order == encounterOrderAsc {
+			dir = "ASC"
+		}
+		q = "SELECT " + encounterSelectCols + " FROM encounters " + where +
+			" ORDER BY started_at " + dir + ", id " + dir + " LIMIT ? OFFSET ?"
 		args = append(args, f.Limit+1, f.Offset)
 	}
 

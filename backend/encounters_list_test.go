@@ -306,3 +306,45 @@ func TestListEncounters_KeysetStableUnderInsert(t *testing.T) {
 		}
 	}
 }
+
+// --- B29.6.4a: order asc/desc ---
+func TestListEncounters_OrderAscDesc(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	seedPatientForEncounter(t, db, "P1", "D1")
+	seedEncounterList(t, db, "P1", "D1", 10)
+
+	desc, _ := mustList(t, db, &EncounterFilter{PatientID: "P1", Limit: 50, Order: "desc"})
+	if len(desc) != 10 {
+		t.Fatalf("desc: got %d, want 10", len(desc))
+	}
+	for i := 1; i < len(desc); i++ {
+		if desc[i-1].StartedAt < desc[i].StartedAt {
+			t.Errorf("desc order broken at %d: %q < %q", i, desc[i-1].StartedAt, desc[i].StartedAt)
+		}
+	}
+
+	asc, _ := mustList(t, db, &EncounterFilter{PatientID: "P1", Limit: 50, Order: "asc"})
+	if len(asc) != 10 {
+		t.Fatalf("asc: got %d, want 10", len(asc))
+	}
+	for i := 1; i < len(asc); i++ {
+		if asc[i-1].StartedAt > asc[i].StartedAt {
+			t.Errorf("asc order broken at %d: %q > %q", i, asc[i-1].StartedAt, asc[i].StartedAt)
+		}
+	}
+
+	if desc[0].ID != asc[len(asc)-1].ID || desc[len(desc)-1].ID != asc[0].ID {
+		t.Errorf("asc/desc not mirrored: desc[0]=%s asc[last]=%s", desc[0].ID, asc[len(asc)-1].ID)
+	}
+
+	def, _ := mustList(t, db, &EncounterFilter{PatientID: "P1", Limit: 50})
+	if len(def) != len(desc) {
+		t.Fatalf("default len %d != desc len %d", len(def), len(desc))
+	}
+	for i := range def {
+		if def[i].ID != desc[i].ID {
+			t.Errorf("default != desc at %d: %s vs %s", i, def[i].ID, desc[i].ID)
+		}
+	}
+}

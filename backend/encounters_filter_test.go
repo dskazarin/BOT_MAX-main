@@ -24,6 +24,9 @@ func TestParseEncounterFilter_Defaults(t *testing.T) {
 	if f.From != nil || f.To != nil {
 		t.Errorf("from/to default should be nil")
 	}
+	if f.Order != encounterOrderDesc {
+		t.Errorf("order default = %q, want %q", f.Order, encounterOrderDesc)
+	}
 }
 
 func TestParseEncounterFilter_OK(t *testing.T) {
@@ -37,6 +40,7 @@ func TestParseEncounterFilter_OK(t *testing.T) {
 	q.Set("limit", "50")
 	q.Set("offset", "10")
 	q.Set("no_total", "1")
+	q.Set("order", "asc")
 
 	f, err := parseEncounterFilter(q)
 	if err != nil {
@@ -45,6 +49,9 @@ func TestParseEncounterFilter_OK(t *testing.T) {
 	if f.PatientID != "PAT-1" || f.Kind != "consultation" || f.Status != "finished" ||
 		f.Specialty != "cardio" || f.Limit != 50 || f.Offset != 10 || !f.NoTotal {
 		t.Errorf("bad parse: %+v", f)
+	}
+	if f.Order != encounterOrderAsc {
+		t.Errorf("order = %q, want %q", f.Order, encounterOrderAsc)
 	}
 	if f.From == nil || f.To == nil {
 		t.Fatalf("from/to nil")
@@ -71,6 +78,11 @@ func TestParseEncounterFilter_Errors(t *testing.T) {
 		{"from > to", url.Values{
 			"from": {"2026-06-01T00:00:00Z"},
 			"to":   {"2026-01-01T00:00:00Z"},
+		}},
+		{"bad order", url.Values{"order": {"xyz"}}},
+		{"asc + cursor", url.Values{
+			"order":  {"asc"},
+			"cursor": {"bm9waXBl"},
 		}},
 	}
 	for _, c := range cases {
@@ -108,5 +120,45 @@ func TestDecodeCursor_Bad(t *testing.T) {
 	}
 	if _, _, err := decodeEncounterCursor("bm9waXBl"); err == nil { // "nopipe"
 		t.Errorf("want err for no pipe")
+	}
+}
+
+// B29.6.4a: order (asc|desc) в parseEncounterFilter.
+func TestParseEncounterFilter_Order(t *testing.T) {
+	cases := []struct {
+		name, order, cursor string
+		wantErr             bool
+		wantOrder           string
+	}{
+		{"empty -> desc", "", "", false, encounterOrderDesc},
+		{"asc", "asc", "", false, encounterOrderAsc},
+		{"ASC (case-insens)", "ASC", "", false, encounterOrderAsc},
+		{"Desc (case-insens)", "Desc", "", false, encounterOrderDesc},
+		{"bogus", "xyz", "", true, ""},
+		{"asc + cursor", "asc", "bm9waXBl", true, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			q := url.Values{}
+			if c.order != "" {
+				q.Set("order", c.order)
+			}
+			if c.cursor != "" {
+				q.Set("cursor", c.cursor)
+			}
+			f, err := parseEncounterFilter(q)
+			if c.wantErr {
+				if err == nil {
+					t.Errorf("want error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if f.Order != c.wantOrder {
+				t.Errorf("order = %q, want %q", f.Order, c.wantOrder)
+			}
+		})
 	}
 }
