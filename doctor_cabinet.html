@@ -508,6 +508,7 @@
                     <tr><td colspan="7" style="text-align:center;padding:40px;color:#a0aec0;">Загрузка…</td></tr>
                 </tbody>
             </table>
+            <div id="encountersPager" style="display:flex;justify-content:center;align-items:center;gap:12px;padding:10px 0 4px;flex-wrap:wrap;"></div>
         </div>
     </div>
 
@@ -724,6 +725,7 @@
 </div>
 
 <script src="auth.js"></script>
+<script src="pager.js"></script>
 <script>
     // Шаг 6.7: guard — без токена → login.html
     if (typeof BotMaxAuth !== 'undefined') BotMaxAuth.requireAuth();
@@ -2128,18 +2130,36 @@
             .catch(function(err){ alert('Ошибка удаления: ' + (err && err.message ? err.message : 'unknown')); });
     }
 
-    // ---------- B28.4.2: раздел «Приёмы» ----------
-    function loadMyEncounters() {
-        if (typeof currentDoctorId === 'undefined' || !currentDoctorId) return;
-        return apiRequest('GET', '/api/encounters?doctor_id=' + encodeURIComponent(currentDoctorId))
-            .then(function(data){ renderEncountersTable((data && data.items) || []); })
-            .catch(function(err){
+    // ---------- B28.4.2 / B29.5.2: раздел «Приёмы» (пагинация через BotMaxPager) ----------
+    var encountersPager = null;
+
+    // Ленивая инициализация pager'а: currentDoctorId уже установлен
+    // к моменту первого вызова loadMyEncounters() (см. блок инициализации).
+    function ensureEncountersPager() {
+        if (encountersPager) return encountersPager;
+        if (typeof currentDoctorId === 'undefined' || !currentDoctorId) return null;
+        encountersPager = BotMaxPager.create({
+            endpoint:    '/api/encounters',
+            fixedParams: { doctor_id: currentDoctorId },
+            getFilters:  function () { return {}; },
+            onItems:     renderEncountersTable,
+            onError:     function (err) {
                 var tbody = document.getElementById('encountersTableBody');
-                if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#f56565;">Ошибка загрузки: ' + (err && err.message ? err.message : 'unknown') + '</td></tr>';
-            });
+                if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#f56565;">Ошибка загрузки: '
+                    + (err && err.message ? err.message : 'unknown') + '</td></tr>';
+            },
+            urlSync:     false
+        });
+        return encountersPager;
     }
 
-    function renderEncountersTable(items) {
+    function loadMyEncounters() {
+        var p = ensureEncountersPager();
+        if (!p) return;
+        return p.reload();
+    }
+
+    function renderEncountersTable(items, meta) {
         var tbody = document.getElementById('encountersTableBody');
         if (!tbody) return;
         if (!items || !items.length) {
