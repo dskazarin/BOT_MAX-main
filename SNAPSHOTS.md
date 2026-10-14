@@ -995,6 +995,64 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.58 (B30) — ПЛАН (не начат, checkpoint 2026-10-14)
+- **Тема:** синхронизация patient → doctor через backend, с consent-механизмом.
+- **Проблема (найдена при смоке B29.8):**
+  - `patient_cabinet_full.html` не делает **ни одного** API-запроса
+    к `/api/patients/*`. Всё, что вводит пациент (vitals, симптомы,
+    аллергии, препараты, вакцинации, диагнозы, файлы, ФИО, рост/вес,
+    дата рождения), живёт только в `localStorage` — см.
+    `saveToLocalStorage()` (`patient_cabinet_full.html:827`),
+    `loadFromLocalStorage()` (`:835`).
+  - `patientId = patientData.patientId || 'PAT-001'` (`:15`) — литерал,
+    не связан с БД; аутентификации пациента нет.
+  - Врач в `patient_card.html` видит **только** то, что сам ввёл через
+    `PUT /api/patients/{id}/vitals` (`:1474`); каналы не пересекаются.
+  - На бэкенде: `vitals` / `vitals_history` есть (`backend/db.go:125,135`),
+    обработчики `/{id}/vitals` есть (`backend/patients.go:122,245`);
+    таблиц под symptoms/allergies/vaccinations/medications/diagnoses
+    **нет**.
+  - `clinics` **уже есть** (`backend/db.go:37`): `doctors.clinic_id` и
+    `patients.clinic_id` — FK на `clinics(id)` (`:50,60,69,88`),
+    `vitals_history.clinic_id NOT NULL` (`:158,164`). Отдельной
+    many-to-many `doctor_clinics` нет — у врача **один** `clinic_id`
+    (1:N). Для consent на клинику используем существующий FK.
+- **Решения (зафиксированы):**
+  - Логин пациента: **email + пароль** (`POST /api/patient-auth/*`,
+    отдельная таблица `patient_accounts`, привязка к `patients.id`).
+  - Consent: **два типа** — `grantee_type ∈ {'doctor','clinic'}`.
+    `grantee_id` для `'doctor'` — `doctors.id`, для `'clinic'` —
+    `clinics.id` (взять из `patients.clinic_id`). Пациент выбирает,
+    кому выдаёт. Модель `consents(id, patient_id, grantee_type,
+    grantee_id, scopes, granted, expires, revoked)` + audit log
+    `consents_audit`.
+  - Данные: **upsert по `id`** (не «только новое»). У всех сущностей
+    в `patientData` уже есть `id` (`Date.now()`) — используем как
+    якорь. Добавляем `updated_at` и `deleted_at` (soft delete),
+    конфликты — server-wins + уведомление пациенту.
+  - Миграция localStorage → backend: **одноразовая при первом логине**,
+    флаг `migrated_at` в localStorage. Существующие данные **не теряются**.
+  - Курсовые препараты: **врач видит и может редактировать** —
+    полноценный CRUD у врача, без read-only.
+  - Файлы: **BLOB в SQLite, лимит 5 MB/файл** (пересмотр на этапе 3,
+    при превышении — FS или S3).
+- **Объём:** ~18–25 подпатчей, 3 этапа:
+  - **Этап 1 (MVP, ~5–6 подпатчей):** `patient_accounts` +
+    `consents` + `consents_audit` (миграция); `POST /api/patient-auth/*`;
+    запрос/одобрение/отзыв consent (эндпоинты + UI у пациента + UI
+    у врача); запись vitals/birthdate/height/weight пациентом на сервер;
+    индикатор sync в карте врача. Результат: пациент записал
+    температуру → врач видит её.
+  - **Этап 2 (~8–10 подпатчей):** symptoms, allergies, vaccinations,
+    diagnoses + scopes в consent (разрешение по категориям) + UI
+    списков в карте врача.
+  - **Этап 3 (~5–7 подпатчей):** constantMedications, courseMedications
+    (CRUD у врача), files (BLOB) + file storage.
+- **Не начато.** Требует отдельной сессии с дизайном схемы БД
+  (миграции, ключи, индексы) и с UI consent-экрана у пациента.
+- **Не в этой сессии.** B29.8 закрыт, эта волна — отдельный большой проект.
+
+
 ### 6.57 (B29.8) — ЗАКРЫТО (2026-10-14)
 - **Тема:** backlog §6.56 — infantGrowth null, temp regex, time sync fallback.
 - **Коммиты:**
