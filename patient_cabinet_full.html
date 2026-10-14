@@ -992,6 +992,10 @@
     function updateInfantGrowthTable() {
         let months = getAgeInMonths();
         let tbody = document.querySelector('#growthTable tbody');
+        if (!tbody) {
+            if (!window.__infantGrowthWarned) { window.__infantGrowthWarned = true; console.warn("[infantGrowth] #growthTable tbody не найден — пропускаем рендер"); }
+            return;
+        }
         tbody.innerHTML = '';
         infantNorms.forEach(norm => {
             let weightClass = patientData.weight >= norm.weightMin && patientData.weight <= norm.weightMax ? 'normal-value' : 'alert-value';
