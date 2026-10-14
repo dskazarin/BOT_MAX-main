@@ -62,3 +62,6 @@ bot_max.db-wal
 .env.*
 # ...но шаблон оставляем
 !.env.example
+
+# Go build artifact из корня репо (go build ./... без -o)
+/backend/backend
