@@ -2446,23 +2446,36 @@
                 labels: labels,
                 datasets: datasets
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { labels: { color: '#e2e8f0' } }
-                },
-                scales: {
-                    y: {
-                        ticks: { color: '#a0aec0' },
-                        grid: { color: 'rgba(255,255,255,0.1)' }
+            options: (function () {
+                var c = BotMaxTheme.getChartColors(BotMaxTheme.current());
+                return {
+                    responsive: true,
+                    plugins: {
+                        legend: { labels: { color: c.legend } }
                     },
-                    x: {
-                        ticks: { color: '#a0aec0' },
-                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    scales: {
+                        y: {
+                            ticks: { color: c.text },
+                            grid:  { color: c.grid }
+                        },
+                        x: {
+                            ticks: { color: c.text },
+                            grid:  { color: c.grid }
+                        }
                     }
-                }
-            }
+                };
+            })()
         });
+
+        // B29.7.2: одна подписка на всю жизнь страницы.
+        // Коллбэк читает window.vitalsChartInstance в момент вызова
+        // (инстанс пересоздаётся в showChart).
+        if (!window.__vitalsThemeBound) {
+            window.__vitalsThemeBound = true;
+            BotMaxTheme.onChange(function (theme) {
+                BotMaxTheme.applyChartTheme(window.vitalsChartInstance, theme);
+            });
+        }
     }
 
     function closeChart() {
