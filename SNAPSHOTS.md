@@ -2576,3 +2576,59 @@ regulatory_reports.
 - Перед завершением подпатча — запись в этом файле: что сделано + следующий номер.
 - Никогда не коммитить без зелёных `go vet ./...`, `go build ./backend`, `go test ./backend/...`.
 - Никогда не пушить в prod без проверки на localhost.
+
+
+## §6.59 — B30.1 + B30.2: инфраструктура auth пациента (14.10.2026)
+
+### Что сделано
+
+**B30.1 — схема (коммит `909843a`):**
+- `patient_accounts` — аккаунт пациента (login, password_hash, FK на patients)
+- `consents` — согласие patient ↔ doctor (scope, status pending/approved/revoked)
+- `consents_audit` — append-only журнал согласий, без FK (переживает удаление consent)
+- 6 индексов, все FK с CASCADE на DELETE
+
+**B30.2 — auth-контур пациента (коммит `b629ef2`):**
+- `patient_refresh_tokens` — отдельная таблица (FK на `patient_accounts`, не на `patients`)
+- `RolePatient Role = "patient"` — добавлен в `auth.go` + `Valid()`
+- `cookies.go`: `botmax_pat_access` / `botmax_pat_refresh` + `setPatientCookies` / `clearPatientCookies`
+- `backend/patient_auth.go` (новый файл, ~450 строк):
+  - `handlePatientLogin` / `handlePatientRefresh` / `handlePatientLogout`
+  - `patientAuthMiddleware` — hard-mode всегда (soft-режим запрещён)
+  - `patientIDFromCtx`, `withPatientID`, `ctxKeyPatientID`
+  - Модель `PatientAccount`, CRUD на `patient_refresh_tokens`
+- `main.go`: `registerPatientAuthRoutes()` (3 роута)
+- `auth.go`: `isAuthWhitelist` расширен на `/api/patient-auth/*`
+
+### Зафиксированные архитектурные решения
+
+- **Consent — отдельная таблица, не audit_log.** `consents_audit` append-only, без FK.
+- **`Claims.DoctorID` = subjectID.** Поле исторически называется `doctorID`, для пациента = `patientAccountID`. Не переименовываем — сломает `authMiddleware`, `impersonation`, `requireRole`.
+- **Auth-events пациента — только slog, не в audit_log.** Audit_log — врачебный журнал. Если понадобится аудит пациента — отдельная таблица `patient_audit`.
+- **Patient-middleware — hard-mode всегда.** Soft-режим недопустим (пациент иначе прочитает чужие данные).
+- **`patient_refresh_tokens` — отдельная таблица.** Не переиспользуем `refresh_tokens` (там FK на `doctors.id`).
+- **Cookies пациента отделены от врачебных.** Врач и пациент могут быть залогинены в одном браузере.
+
+### Что осталось в B30
+
+- **B30.2b — регистрация пациента:** миграция `patients.doctor_id → NULL` + `POST /api/patient-auth/register` (пациент вводит `patient_id` от врача + свой login/password).
+- **B30.3 — consent-flow:** миграция `consents` (+ `requested_by`, `denied_at`, `expires_at`) + 5 роутов (`request`, `approve`, `deny`, `revoke`, `list`) + врачебный UI для запроса consent.
+- **B30.4 — sync:** `GET /api/patients/{id}/sync` — врач получает vitals_history при approved consent, с учётом scope.
+- **B30.5 — UI пациента:** личный кабинет (ведёт свои vitals) + индикатор sync у врача.
+
+### Точка входа для следующей сессии
+
+```bash
+git log --oneline -3
+# ожидаем:
+#   <hash> docs(snapshots): 6.59 — B30.1 + B30.2 закрыты
+#   06eac41 chore(gitignore): ...
+#   b629ef2 feat(auth): B30.2 — auth-контур пациента ...
+
+git status -sb
+# ожидаем: ## main...origin/main
+
+# напомни: стоим на старте B30.2b (регистрация) или B30.3 (consent),
+# оба — большие волны с миграцией существующих таблиц.
+# Перед началом — БЭКАП bot_max.db (make backup).
+
