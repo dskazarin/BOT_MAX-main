@@ -204,6 +204,63 @@ func InitDB(path string) (*sql.DB, error) {
 		`CREATE INDEX IF NOT EXISTS idx_audit_ts     ON audit_log(ts DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_doctor ON audit_log(doctor_id, ts DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, ts DESC);`,
+
+		// === B30.1: аккаунты пациентов (надстройка над patients) ===
+		// Пациент — самостоятельный субъект с логином/паролем.
+		// Один patients -> максимум один patient_accounts (UNIQUE).
+		`CREATE TABLE IF NOT EXISTS patient_accounts (
+			id            TEXT PRIMARY KEY,
+			patient_id    TEXT NOT NULL UNIQUE,
+			login         TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL,
+			status        TEXT NOT NULL DEFAULT 'active',
+			created       TEXT NOT NULL,
+			updated       TEXT NOT NULL,
+			last_login    TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
+		);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_patient_accounts_login   ON patient_accounts(login);`,
+		`CREATE        INDEX IF NOT EXISTS idx_patient_accounts_patient ON patient_accounts(patient_id);`,
+
+		// === B30.1: согласия patient <-> doctor ===
+		// status: pending | approved | revoked
+		// scope:  vitals_read (расширяемо значениями TEXT в будущем)
+		// UNIQUE(patient_id, doctor_id, scope) — одно активное согласие
+		// на пару+scope; история переходов — в consents_audit.
+		`CREATE TABLE IF NOT EXISTS consents (
+			id           TEXT PRIMARY KEY,
+			patient_id   TEXT NOT NULL,
+			doctor_id    TEXT NOT NULL,
+			scope        TEXT NOT NULL DEFAULT 'vitals_read',
+			status       TEXT NOT NULL DEFAULT 'pending',
+			requested_at TEXT NOT NULL,
+			approved_at  TEXT,
+			revoked_at   TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(doctor_id)  REFERENCES doctors(id)  ON DELETE CASCADE,
+			UNIQUE(patient_id, doctor_id, scope)
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_consents_doctor_status  ON consents(doctor_id, status);`,
+		`CREATE INDEX IF NOT EXISTS idx_consents_patient_status ON consents(patient_id, status);`,
+
+		// === B30.1: append-only аудит согласий ===
+		// Без FK на consents — запись должна пережить удаление consent.
+		// action:     request | approve | revoke
+		// actor_type: patient | doctor | admin
+		`CREATE TABLE IF NOT EXISTS consents_audit (
+			id         TEXT PRIMARY KEY,
+			consent_id TEXT NOT NULL,
+			patient_id TEXT NOT NULL,
+			doctor_id  TEXT NOT NULL,
+			action     TEXT NOT NULL,
+			actor_type TEXT NOT NULL,
+			actor_id   TEXT,
+			ip         TEXT,
+			user_agent TEXT,
+			created    TEXT NOT NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_consents_audit_consent ON consents_audit(consent_id, created DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_consents_audit_patient ON consents_audit(patient_id, created DESC);`,
 	}
 
 	for _, stmt := range schema {
