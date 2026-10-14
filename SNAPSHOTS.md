@@ -995,6 +995,44 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.56 (B29.7.3) — ЗАКРЫТО (2026-10-14)
+- **Тема:** Chart.js реактивно к теме — добивка (statusChart + temperatureChart).
+- **Коммиты:**
+  - `d121075` feat(charts): B29.7.3.1 — temperatureChart реагирует на смену темы
+  - `3766f88` feat(charts): B29.7.3.2 — statusChart реагирует на смену темы
+- **Файлы:**
+  - `patient_cabinet_full.html` — `showTemperatureChart()`: `options.scales`
+    через `BotMaxTheme.getChartColors(BotMaxTheme.current())`; guard-подписка
+    `window.__tempChartThemeBound` + `BotMaxTheme.onChange`, коллбэк читает
+    `temperatureChart` по замыканию.
+  - `doctor_cabinet.html` — подключён `<script src="theme.js"></script>` **без**
+    `BotMaxTheme.init` (своя `toggleTheme()` сохранена); после создания
+    `statusChart` — `applyChartTheme(statusChart, current())`; в `toggleTheme()`
+    после `setAttribute('data-theme', next)` — `applyChartTheme(statusChart, next)`.
+- **Проверки:** `gofmt -l` чисто; `go vet`/`go build`/`go test` — зелёные.
+  Ручной smoke:
+  - `patient_cabinet_full.html`: модалка «📊 Динамика температуры» — оси/ticks/сетка
+    в текущей теме; переключение темы при открытой модалке — мгновенно; закрыть →
+    сменить → открыть — корректно; guard не дублирует подписку.
+  - `doctor_cabinet.html`: донат «СТАТУСЫ» рисуется в текущей теме, легенда/сегменты
+    без регресса; переключение темы при открытом донате — tooltip перекрашивается;
+    F5 сохраняет тему; консоль чистая (ошибки `BotMaxTheme`/`getChartColors` — нет).
+- **Замечания:**
+  - `doctor_cabinet.html` использует `theme.js` пассивно (без `init`) — своя
+    `toggleTheme()` пишет в тот же ключ `localStorage.theme`, конфликта нет.
+- **Backlog (не наши тикеты, обнаружены при smoke):**
+  - `updateInfantGrowthTable` падает на `null.innerHTML` (`patient_cabinet_full.html:995`);
+    вызывается из `updateGender → updatePatientInfo → updateAll` — у младенцев
+    может отсутствовать ожидаемый DOM-элемент.
+  - `syncTimeWithInternet` → `GET https://worldtimeapi.org/api/timezone/Europe/Moscow`
+    даёт `net::ERR_CONNECTION_RESET` (`patient_cabinet_full.html:869`) — нужен
+    fallback или таймаут.
+  - `showTemperatureChart` regex `/Температура:\s*([\d.,]+)/i` требует строгий
+    формат `Температура: <число>`; свободный текст («08 июня температура») не
+    парсится → пустой график.
+  - На странице несколько модалок «История X» (SpO2/АД/рост-вес) — не Chart.js,
+    просто список; к B29.7.3 отношения не имеют.
+
 ### 6.55 (B29.7) — ЗАКРЫТО (2026-10-14)
 - **Тема:** Chart.js реактивно к теме (B29.7.1–2).
 - **Проблема:** графики витальных показателей в `patient_card.html`
