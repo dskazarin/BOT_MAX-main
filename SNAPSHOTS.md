@@ -995,6 +995,54 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.57 (B29.8) — ЗАКРЫТО (2026-10-14)
+- **Тема:** backlog §6.56 — infantGrowth null, temp regex, time sync fallback.
+- **Коммиты:**
+  - `ea28259` fix(ui): B29.8.1 — guard в updateInfantGrowthTable (backlog §6.56)
+  - `05a2775` fix(ui): B29.8.2 — showTemperatureChart: regex [+-], запятые→точки, guard canvas
+  - `1e1b7c0` fix(ui): B29.8.3 — syncTimeWithInternet: guard statusDiv, response.ok, fallback на локальные часы
+- **Файлы:**
+  - `patient_cabinet_full.html`
+    - `updateInfantGrowthTable()` — ранний `return` при отсутствии
+      `#growthTable tbody`; однократный `console.warn('[infantGrowth] …')`
+      через `window.__infantGrowthWarned`. До фикса: `null.innerHTML` валил
+      весь `updateAll()`, когда таблица роста не отрендерена.
+    - `showTemperatureChart()` — regex `[+\-–]?` (опциональный знак),
+      нормализация всех запятых → точки, отсев `NaN` через `isFinite`,
+      guard `#temperatureChart` canvas перед `getContext`. До фикса:
+      `+36.6` / `36,6°C` тихо давали `NaN` на оси Y, отсутствующий
+      canvas — падение на `.getContext` от `null`.
+    - `syncTimeWithInternet()` — guard `#syncStatus` во всех трёх
+      обращениях, `response.ok`-проверка, флаг `__timeSource`
+      (`"local"` / `"remote"`), фолбэк на `new Date()` в `catch`,
+      однократный `console.warn('[time] worldtimeapi недоступен …')`.
+      До фикса: `ERR_CONNECTION_RESET` от worldtimeapi.org приводил
+      к отсутствию fallback и логу только в UI.
+- **Закрывает backlog §6.56 (SNAPSHOTS.md):**
+  - `SNAPSHOTS.md:1024` — `updateInfantGrowthTable` null.innerHTML;
+  - `SNAPSHOTS.md:1027` — `syncTimeWithInternet` `ERR_CONNECTION_RESET`;
+  - `SNAPSHOTS.md:1030` — `showTemperatureChart` regex свободного текста.
+- **Проверки:**
+  - `curl -s http://localhost:8082/api/health` → `{"status":"ok"}`;
+    `patient_cabinet_full.html` — HTTP 200, 87604 bytes.
+  - Баланс скобок `<script>`-блоков (curly/paren/bracket): все `depth=0`.
+  - Ручной smoke:
+    - `updateInfantGrowthTable` при отсутствии `#growthTable tbody` — ранний
+      выход без исключения, `updateAll()` завершается, в консоли — ровно один
+      `[infantGrowth]` warn.
+    - `showTemperatureChart`: значения `36.6`, `+38,5`, мусор `н/д` — записи
+      с `NaN` не пушатся, ось Y остаётся в `[35..42]`.
+    - `syncTimeWithInternet`: `fetch` бросает `TypeError: Failed to fetch`
+      (эмулирован) — `__timeSource === "local"`, `#syncStatus` не падает,
+      UI показывает «❌ Ошибка синхронизации (локальное время)».
+- **Замечания:**
+  - `worldtimeapi.org` из контейнера devcontainer недоступен (нет egress) —
+    фикс не «чинит» сеть, а делает недоступность безопасной. При появлении
+    egress — поведение автоматически станет `__timeSource === "remote"`.
+  - Perl- и sed-подходы при патчинге: `git apply` с heredoc-диффами
+    падал на кириллице; рабочий метод — точечная замена диапазона строк
+    через `sed -i 'N,Mc\ …'` с `LC_ALL=C.UTF-8`.
+
 ### 6.56 (B29.7.3) — ЗАКРЫТО (2026-10-14)
 - **Тема:** Chart.js реактивно к теме — добивка (statusChart + temperatureChart).
 - **Коммиты:**
