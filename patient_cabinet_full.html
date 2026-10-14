@@ -861,22 +861,34 @@
     });
 
     // ========== АВТОСИНХРОНИЗАЦИЯ ВРЕМЕНИ ==========
+    let __timeSource = "local";
     async function syncTimeWithInternet() {
-        let statusDiv = document.getElementById('syncStatus');
-        statusDiv.innerHTML = '🌐 Синхронизация времени...';
-        statusDiv.style.background = '#fefcbf';
+        let statusDiv = document.getElementById("syncStatus");
+        if (statusDiv) {
+            statusDiv.innerHTML = "🌐 Синхронизация времени...";
+            statusDiv.style.background = "#fefcbf";
+        }
         try {
-            let response = await fetch('https://worldtimeapi.org/api/timezone/Europe/Moscow');
+            let response = await fetch("https://worldtimeapi.org/api/timezone/Europe/Moscow");
+            if (!response.ok) throw new Error("HTTP " + response.status);
             let data = await response.json();
             currentSystemDate = new Date(data.datetime);
+            __timeSource = "remote";
             updateDateTimeDisplay();
-            statusDiv.innerHTML = '✅ Время синхронизировано';
-            statusDiv.style.background = '#c6f6d5';
-            setTimeout(() => { if(statusDiv) statusDiv.innerHTML = '🌐 Синхронизировано'; }, 3000);
+            if (statusDiv) {
+                statusDiv.innerHTML = "✅ Время синхронизировано";
+                statusDiv.style.background = "#c6f6d5";
+                setTimeout(function () { if (statusDiv) statusDiv.innerHTML = "🌐 Синхронизировано"; }, 3000);
+            }
         } catch(e) {
-            statusDiv.innerHTML = '❌ Ошибка синхронизации';
-            statusDiv.style.background = '#fed7d7';
-            setTimeout(() => { if(statusDiv) statusDiv.innerHTML = '🌐 Офлайн режим'; }, 3000);
+            __timeSource = "local";
+            currentSystemDate = new Date();
+            if (statusDiv) {
+                statusDiv.innerHTML = "❌ Ошибка синхронизации (локальное время)";
+                statusDiv.style.background = "#fed7d7";
+                setTimeout(function () { if (statusDiv) statusDiv.innerHTML = "🌐 Офлайн режим"; }, 3000);
+            }
+            console.warn("[time] worldtimeapi недоступен, используем локальные часы:", e && e.message);
         }
         updateAll();
     }
