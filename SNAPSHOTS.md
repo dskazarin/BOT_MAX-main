@@ -995,6 +995,65 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.54 (B29.6-ui-fix8) — ЗАКРЫТО (2026-10-14)
+
+**Статус:** рамки блоков в `patient_cabinet_full.html`. 1 подпатч.
+
+**Проблема:** в `patient_card.html` все блоки (`.section`, `.header`,
+`.card` и т.д.) получили серые рамки. В `patient_cabinet_full.html`
+блоки остались **без рамок** — только фоны. Визуально несогласованно.
+
+**Сделано:** `border: 1px solid var(--border-subtle);` в 8 классов:
+- `.header`, `.current-date`, `.combined-section`
+- `.card`, `.info-item`
+- `.qr-box`, `.computer-box`
+- `.modal-content`
+
+Фокус полей ввода уже работал (B29.6.7).
+
+**Токены:** dark `#718096`; light `#cbd5e0`.
+
+**Автопроверки:**
+- `gofmt -l` пусто, `go vet`, `go build`, `go test -count=1` — зелёные.
+- Баланс скобок CSS 87/87.
+- HTTP 200, 85392b.
+- `border: 1px solid var(--border-subtle)` = 12 (было 4).
+
+---
+
+### 6.53 (B29.6-ui-fix7) — ЗАКРЫТО (2026-10-14)
+
+**Статус:** добить хардкод-бордеры после B29.6.5a. 1 подпатч.
+
+**Проблема:** при разборе «рамок нет у textarea в светлой теме»
+(§6.51–6.52) выяснилось: в `patient_card.html` **два** правила
+`.field-textarea`.
+- стр. 108 — нормальное, `border: var(--bg-input-border)`.
+- стр. 396 — с `background: transparent !important` (поверх
+  `.spell-highlight-layer`) и **хардкод-бордером**
+  `border: 1px solid rgba(255,255,255,0.1)`.
+
+Второе правило **перебивает** первое. В светлой теме
+`rgba(255,255,255,0.1)` = почти прозрачный белый на белом.
+
+**Диагностика:** Console `getComputedStyle(#field_anamnesis).borderColor`
+= `rgb(255,255,255,0.1)` — белый вместо ожидаемого `rgba(0,0,0,0.55)`.
+
+**B29.6.15 — `.field-textarea`:**
+- `border: 1px solid rgba(255,255,255,0.1)` → `var(--bg-input-border)`.
+
+**B29.6.16 — `.chart-menu-content`:**
+- `border: 1px solid rgba(255,255,255,0.1)` → `var(--bg-modal-border)`.
+
+**Не тронуто:** `.spell-tooltip-actions` border-top — разделитель
+внутри тёмного тултипа орфографии.
+
+**Урок:** в файле могут быть **дублирующиеся правила** одного селектора.
+Токенизация «по grep литералов» их не ловит. Console `getComputedStyle`
+быстрее всего указывает источник.
+
+---
+
 ### 6.52 (B29.6-ui-fix6) — ЗАКРЫТО (2026-10-13)
 
 **Статус:** финальный контраст рамок в светлой теме. 1 подпатч.
