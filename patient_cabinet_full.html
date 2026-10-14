@@ -1233,11 +1233,17 @@
     function showTemperatureChart() {
         let data = [];
         patientData.symptoms.forEach(s => {
-            let m = s.text.match(/Температура:\s*([\d.,]+)/i);
-            if(m) data.push({ date: s.date, temp: parseFloat(m[1].replace(',','.')) });
+            let m = s.text.match(/Температура:\s*([+\-–]?\s*\d+(?:[.,]\d+)?)/i);
+            if (!m) return;
+            let raw = m[1].replace(/\s+/g, "").replace(/,/g, ".").replace(/[–−]/g, "-");
+            let temp = parseFloat(raw);
+            if (!isFinite(temp)) { console.warn("[tempChart] пропуск значения:", s.text); return; }
+            data.push({ date: s.date, temp: temp });
         });
         data.sort((a,b) => new Date(a.date) - new Date(b.date));
-        let ctx = document.getElementById('temperatureChart').getContext('2d');
+        let canvas = document.getElementById("temperatureChart");
+        if (!canvas) { console.warn("[tempChart] canvas #temperatureChart не найден"); return; }
+        let ctx = canvas.getContext("2d");
         if(temperatureChart) temperatureChart.destroy();
         var __c = BotMaxTheme.getChartColors(BotMaxTheme.current());
         temperatureChart = new Chart(ctx, {
