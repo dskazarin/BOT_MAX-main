@@ -995,6 +995,34 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
+### 6.55 (B29.7) — ЗАКРЫТО (2026-10-14)
+- **Тема:** Chart.js реактивно к теме (B29.7.1–2).
+- **Проблема:** графики витальных показателей в `patient_card.html`
+  при переключении темы не перерисовывались — canvas не понимает
+  CSS `var(--…)`, цвета осей/легенды/сетки оставались от старой темы.
+- **Коммиты:**
+  - `7024c55` feat(charts): B29.7.1 — CHART_THEME + applyChartTheme в theme.js
+  - `7cd5c3e` fix(ui): B29.7.2 — витальные графики реагируют на смену темы
+- **Файлы:**
+  - `theme.js` — `CHART_THEME` (палитры dark/light), `getChartColors(theme)`
+    (fallback → dark), `applyChartTheme(chart, theme)` — обновляет
+    scales/plugins + `chart.update('none')`. Экспорт через `window.BotMaxTheme`.
+  - `patient_card.html` — `options` собираются через
+    `BotMaxTheme.getChartColors(BotMaxTheme.current())`; одна подписка
+    `BotMaxTheme.onChange` на страницу (guard `window.__vitalsThemeBound`),
+    коллбэк читает `window.vitalsChartInstance` в момент вызова.
+- **Проверки:** `gofmt -l` чисто; `go vet`/`go build`/`go test` — зелёные.
+  Ручной smoke (4/4 ✅): 1) график сразу в текущей теме; 2) смена темы
+  при открытом графике — мгновенно; 3) закрыть → сменить → открыть —
+  корректно; 4) повторные открытия не ломают подписку.
+- **Замечания:** при первом открытии после патча браузер отдавал
+  закэшированный `theme.js` → `getChartColors is not a function`;
+  лечится hard reload (Ctrl+Shift+R). На прод — рассмотреть
+  `Cache-Control` для статики.
+- **Backlog:** B29.7.3 — применить тот же паттерн в `doctor_cabinet.html`
+  (`statusChart`, круговой) и `patient_cabinet_full.html`
+  (`temperatureChart`, inline).
+
 ### 6.54 (B29.6-ui-fix8) — ЗАКРЫТО (2026-10-14)
 
 **Статус:** рамки блоков в `patient_cabinet_full.html`. 1 подпатч.
