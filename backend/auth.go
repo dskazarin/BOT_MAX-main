@@ -40,12 +40,15 @@ const (
 	// RoleRegistrar — медицинский регистратор (B27).
 	// Используется модулем sick_leave для оформления направлений на ЭЛН.
 	RoleRegistrar Role = "registrar"
+	// RolePatient — пациент (B30.2). Самостоятельный субъект
+	// со своим аккаунтом; врач получает доступ через consents.
+	RolePatient Role = "patient"
 )
 
 // Valid — true, если роль известна.
 func (r Role) Valid() bool {
 	switch r {
-	case RoleSuperadmin, RoleAdmin, RoleDoctor, RoleRegistrar:
+	case RoleSuperadmin, RoleAdmin, RoleDoctor, RoleRegistrar, RolePatient:
 		return true
 	}
 	return false
@@ -978,6 +981,9 @@ func isAuthWhitelist(path string) bool {
 	switch path {
 	case "/api/health", "/api/metrics", "/api/auth/login", "/api/auth/refresh",
 		"/api/auth/password-reset/request", "/api/auth/password-reset/confirm":
+		return true
+	// B30.2: patient-auth — публичные пути (аналог /api/auth/*).
+	case "/api/patient-auth/login", "/api/patient-auth/refresh", "/api/patient-auth/logout":
 		return true
 	}
 	if !strings.HasPrefix(path, "/api/") {

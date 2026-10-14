@@ -261,6 +261,20 @@ func InitDB(path string) (*sql.DB, error) {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_consents_audit_consent ON consents_audit(consent_id, created DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_consents_audit_patient ON consents_audit(patient_id, created DESC);`,
+		// === B30.2: refresh-токены пациентов (по образцу refresh_tokens) ===
+		// FK на patient_accounts (не на patients) — токен принадлежит
+		// аккаунту, не карте. Удалили аккаунт — токены не нужны.
+		`CREATE TABLE IF NOT EXISTS patient_refresh_tokens (
+			jti         TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			issued_at   TEXT NOT NULL,
+			expires_at  TEXT NOT NULL,
+			revoked_at  TEXT,
+			replaced_by TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patient_accounts(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_patient_refresh_patient ON patient_refresh_tokens(patient_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_patient_refresh_expires ON patient_refresh_tokens(expires_at);`,
 	}
 
 	for _, stmt := range schema {

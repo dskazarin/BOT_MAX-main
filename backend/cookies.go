@@ -22,6 +22,14 @@ const (
 
 	cookiePathAccess  = "/api"
 	cookiePathRefresh = "/api/auth"
+
+	// B30.2: cookies пациента. Отдельные имена — чтобы врач и пациент
+	// могли быть залогинены в одном браузере без коллизии.
+	cookieNamePatientAccess  = "botmax_pat_access"
+	cookieNamePatientRefresh = "botmax_pat_refresh"
+
+	cookiePathPatientAccess  = "/api"
+	cookiePathPatientRefresh = "/api/patient-auth"
 )
 
 // setAuthCookies ставит access+refresh cookie.
@@ -82,4 +90,52 @@ func clearAuthCookies(w http.ResponseWriter) {
 		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 	})
+}
+
+// setPatientCookies — аналог setAuthCookies для пациента (B30.2).
+func setPatientCookies(w http.ResponseWriter, access, refresh string) {
+	if currentEnv == nil {
+		return
+	}
+	secure := currentEnv.CookieSecure
+
+	if access != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     cookieNamePatientAccess,
+			Value:    access,
+			Path:     cookiePathPatientAccess,
+			MaxAge:   int(AccessTTL / time.Second),
+			HttpOnly: true,
+			Secure:   secure,
+			SameSite: http.SameSiteStrictMode,
+		})
+	}
+	if refresh != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     cookieNamePatientRefresh,
+			Value:    refresh,
+			Path:     cookiePathPatientRefresh,
+			MaxAge:   int(RefreshTTL / time.Second),
+			HttpOnly: true,
+			Secure:   secure,
+			SameSite: http.SameSiteStrictMode,
+		})
+	}
+}
+
+// clearPatientCookies снимает patient-cookies.
+func clearPatientCookies(w http.ResponseWriter) {
+	for _, c := range []struct{ name, path string }{
+		{cookieNamePatientAccess, cookiePathPatientAccess},
+		{cookieNamePatientRefresh, cookiePathPatientRefresh},
+	} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     c.name,
+			Value:    "",
+			Path:     c.path,
+			MaxAge:   -1,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		})
+	}
 }
