@@ -734,6 +734,7 @@
     </div>
 </div>
 
+<script src="theme.js"></script>
 <script src="auth.js"></script>
 <script src="pager.js"></script>
 <script>
@@ -2748,6 +2749,10 @@
                     }
                 }
             });
+
+            if (window.BotMaxTheme) {
+                BotMaxTheme.applyChartTheme(statusChart, BotMaxTheme.current());
+            }
         }
     }
 
@@ -2761,6 +2766,10 @@
         localStorage.setItem('theme', next);
         var btn = document.getElementById('themeToggle');
         if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
+        // B29.7.3.2: перекрасить график при смене темы
+        if (window.BotMaxTheme && statusChart) {
+            BotMaxTheme.applyChartTheme(statusChart, next);
+        }
     }
 
     // Применение темы при загрузке
