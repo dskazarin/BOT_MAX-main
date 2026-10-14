@@ -138,12 +138,66 @@
         return saved;
     }
 
+    // B29.7.1: Chart.js — цвета осей/легенды/сетки под тему.
+    // Canvas не понимает CSS var(), поэтому дублируем палитру в JS.
+    var CHART_THEME = {
+        dark: {
+            text:      '#a0aec0',
+            legend:    '#e2e8f0',
+            grid:      'rgba(255,255,255,0.1)',
+            tooltipBg: 'rgba(22,27,34,0.95)',
+            tooltipFg: '#e2e8f0'
+        },
+        light: {
+            text:      '#4a5568',
+            legend:    '#1f2328',
+            grid:      'rgba(31,35,40,0.12)',
+            tooltipBg: 'rgba(255,255,255,0.98)',
+            tooltipFg: '#1f2328'
+        }
+    };
+
+    function getChartColors(theme) {
+        var t = VALID[theme] ? theme : current();
+        return CHART_THEME[t] || CHART_THEME.dark;
+    }
+
+    function applyChartTheme(chart, theme) {
+        if (!chart || !chart.options) return;
+        var c = getChartColors(theme);
+
+        var scales = chart.options.scales || {};
+        for (var k in scales) {
+            if (!Object.prototype.hasOwnProperty.call(scales, k)) continue;
+            var s = scales[k];
+            if (s.ticks) s.ticks.color = c.text;
+            if (s.grid)  s.grid.color  = c.grid;
+            if (s.title) s.title.color = c.text;
+        }
+
+        var plugins = chart.options.plugins || {};
+        if (plugins.legend && plugins.legend.labels) {
+            plugins.legend.labels.color = c.legend;
+        }
+        if (plugins.tooltip) {
+            plugins.tooltip.backgroundColor = c.tooltipBg;
+            plugins.tooltip.titleColor      = c.tooltipFg;
+            plugins.tooltip.bodyColor       = c.tooltipFg;
+        }
+
+        chart.update('none');
+    }
+
     window.BotMaxTheme = {
         init:         init,
         toggle:       toggle,
         set:          set,
         current:      current,
         mountButton:  mountButton,
-        onChange:     onChange
+        onChange:     onChange,
+        // B29.7.1: Chart.js под тему
+        CHART_THEME:     CHART_THEME,
+        getChartColors:  getChartColors,
+        applyChartTheme: applyChartTheme
     };
 })();
