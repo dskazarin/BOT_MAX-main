@@ -1235,7 +1235,41 @@
         data.sort((a,b) => new Date(a.date) - new Date(b.date));
         let ctx = document.getElementById('temperatureChart').getContext('2d');
         if(temperatureChart) temperatureChart.destroy();
-        temperatureChart = new Chart(ctx, { type: 'line', data: { labels: data.map(d => d.date), datasets: [{ label: 'Температура (°C)', data: data.map(d => d.temp), borderColor: '#f56565', fill: true }] }, options: { responsive: true, scales: { y: { min: 35, max: 42 } } } });
+        var __c = BotMaxTheme.getChartColors(BotMaxTheme.current());
+        temperatureChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(function (d) { return d.date; }),
+                datasets: [{
+                    label: 'Температура (°C)',
+                    data: data.map(function (d) { return d.temp; }),
+                    borderColor: '#f56565',
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 35, max: 42,
+                        ticks: { color: __c.text },
+                        grid:  { color: __c.grid }
+                    },
+                    x: {
+                        ticks: { color: __c.text },
+                        grid:  { color: __c.grid }
+                    }
+                }
+            }
+        });
+
+        // B29.7.3.1: подписка на смену темы (одна на страницу).
+        if (!window.__tempChartThemeBound) {
+            window.__tempChartThemeBound = true;
+            BotMaxTheme.onChange(function (theme) {
+                BotMaxTheme.applyChartTheme(temperatureChart, theme);
+            });
+        }
         document.getElementById('tempChartModal').style.display = 'flex';
     }
     function closeTempChartModal() { document.getElementById('tempChartModal').style.display = 'none'; }
