@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -298,6 +299,14 @@ func InitDB(path string) (*sql.DB, error) {
 			db.Close()
 			return nil, fmt.Errorf("migrate %s.%s: %w", m.table, m.column, err)
 		}
+	}
+
+	// === B30.2b: patients.doctor_id → NULLABLE + ON DELETE SET NULL ===
+	// Пересоздание таблицы (SQLite не умеет ALTER COLUMN). Идемпотентно:
+	// если doctor_id уже nullable — no-op. См. migratePatientsDoctorIdNullable.
+	if err := migratePatientsDoctorIdNullable(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate patients.doctor_id: %w", err)
 	}
 
 	if err := db.Ping(); err != nil {
@@ -805,4 +814,171 @@ func ensureColumn(db *sql.DB, table, column, ddl string) error {
 		return fmt.Errorf("alter table: %w", err)
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------
+// B30.2b: patients.doctor_id → NULLABLE + ON DELETE SET NULL
+// ---------------------------------------------------------------
+//
+// Предыстория: до B30.2b схема patients имела doctor_id TEXT NOT NULL
+// и FK ON DELETE CASCADE. Удаление врача каскадно удаляло его пациентов,
+// а через дочерние FK (cards/encounters/vitals/consents/patient_accounts/
+// vitals_history, все ON DELETE CASCADE) — и всю медицинскую историю.
+//
+// После B30.2b: doctor_id NULLABLE, FK ON DELETE SET NULL. Удаление врача
+// «освобождает» пациентов (doctor_id = NULL), история сохраняется.
+//
+// SQLite не умеет ALTER COLUMN, поэтому единственный путь — пересоздание:
+//   CREATE patients_new → INSERT SELECT * → DROP patients → RENAME → reindex.
+// Порядок колонок patients_new 1:1 совпадает с patients — это позволяет
+// использовать INSERT ... SELECT * без перечисления колонок.
+//
+// КРИТИЧНО: PRAGMA foreign_keys=OFF выполняется на ОДНОМ соединении
+// (db.Conn), а не на db.Exec. Иначе PRAGMA применится к случайному
+// соединению пула, а транзакция пойдёт по другому — и с foreign_keys=ON
+// DROP TABLE patients упадёт из-за шести дочерних FK (или каскадно
+// снесёт все данные). Это тот же класс бага, что §6.60 (DSN).
+
+// migratePatientsDoctorIdNullable идемпотентно пересоздаёт patients
+// с doctor_id NULLABLE и FK ON DELETE SET NULL.
+//
+// Идемпотентность: если doctor_id уже nullable (PRAGMA table_info →
+// notnull == 0), функция возвращает nil, ничего не делая.
+func migratePatientsDoctorIdNullable(db *sql.DB) error {
+	ctx := context.Background()
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("db.Conn: %w", err)
+	}
+	defer conn.Close()
+
+	// Шаг 1: миграция уже применена?
+	applied, err := patientsDoctorIdIsNullable(ctx, conn)
+	if err != nil {
+		return err
+	}
+	if applied {
+		return nil // no-op
+	}
+
+	// Шаг 2: foreign_keys = OFF на ЭТОМ соединении.
+	// SQLite требует переключать этот PRAGMA вне транзакции.
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+		return fmt.Errorf("pragma foreign_keys=off: %w", err)
+	}
+
+	// Шаг 3: пересоздание в транзакции.
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() // no-op после Commit
+
+	steps := []struct {
+		name string
+		sql  string
+	}{
+		{"create patients_new", `CREATE TABLE patients_new (
+			id          TEXT PRIMARY KEY,
+			doctor_id   TEXT,
+			clinic_id   TEXT,
+			name        TEXT NOT NULL,
+			age         INTEGER,
+			age_months  INTEGER,
+			age_display TEXT,
+			birth_date  TEXT,
+			gender      TEXT,
+			height      REAL,
+			weight      REAL,
+			phone       TEXT,
+			email       TEXT,
+			status      TEXT,
+			diagnosis   TEXT,
+			symptoms    TEXT,
+			ai_checked  INTEGER DEFAULT 0,
+			ai_result   TEXT,
+			created     TEXT NOT NULL,
+			last_sync   TEXT,
+			FOREIGN KEY(doctor_id) REFERENCES doctors(id) ON DELETE SET NULL,
+			FOREIGN KEY(clinic_id) REFERENCES clinics(id) ON DELETE SET NULL
+		)`},
+		{"copy data", `INSERT INTO patients_new SELECT * FROM patients`},
+		{"drop old", `DROP TABLE patients`},
+		{"rename", `ALTER TABLE patients_new RENAME TO patients`},
+		{"index idx_patients_doctor", `CREATE INDEX idx_patients_doctor ON patients(doctor_id, status)`},
+		{"index idx_patients_clinic", `CREATE INDEX idx_patients_clinic ON patients(clinic_id, status)`},
+	}
+
+	for _, s := range steps {
+		if _, err := tx.ExecContext(ctx, s.sql); err != nil {
+			return fmt.Errorf("%s: %w", s.name, err)
+		}
+	}
+
+	// Шаг 4: foreign_key_check внутри транзакции (до Commit).
+	// Если после RENAME остались нарушения FK — откатываем всё.
+	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return fmt.Errorf("foreign_key_check: %w", err)
+	}
+	hasViolation := rows.Next()
+	rows.Close()
+	if hasViolation {
+		return fmt.Errorf("foreign_key_check: обнаружены нарушения после миграции")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	// Шаг 5: включить foreign_keys обратно на этом соединении.
+	// DSN всё равно включит его на всех новых соединениях пула, но
+	// текущее соединение вернётся в пул — пусть будет в известном состоянии.
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("pragma foreign_keys=on: %w", err)
+	}
+
+	slog.Info("migrate: patients.doctor_id → NULLABLE + ON DELETE SET NULL")
+	return nil
+}
+
+// patientsDoctorIdIsNullable возвращает true, если у patients.doctor_id
+// notnull == 0 (т.е. колонка nullable — миграция уже применена).
+//
+// Стиль и PRAGMA table_info — как у ensureColumn (B27.1).
+func patientsDoctorIdIsNullable(ctx context.Context, conn *sql.Conn) (bool, error) {
+	rows, err := conn.QueryContext(ctx, "PRAGMA table_info(patients)")
+	if err != nil {
+		return false, fmt.Errorf("pragma table_info(patients): %w", err)
+	}
+	defer rows.Close()
+
+	found := false
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notnull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return false, fmt.Errorf("scan table_info: %w", err)
+		}
+		if name == "doctor_id" {
+			found = true
+			if notnull == 0 {
+				return true, nil
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("rows.Err: %w", err)
+	}
+	if !found {
+		return false, fmt.Errorf("колонка patients.doctor_id не найдена")
+	}
+	return false, nil
 }
