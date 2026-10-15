@@ -2835,4 +2835,77 @@ NULL сейчас нет).
     make backup
     # далее — B30.2d (NullString для Patient/Encounter)
     #      или B30.2e (синхронизация DDL в db.go)
-    # обе — в разделе «Известные долги» §6.62```
+    # обе — в разделе «Известные долги» §6.62
+```
+
+---
+
+## 6.63 — B30.2d: COALESCE(doctor_id, '') в SELECT patients
+
+**Дата:** 2026-10-15
+**Коммит:** 805a10d
+**Контекст:** закрытие мины, оставшейся после §6.61 (B30.2b). Прямое
+продолжение §6.62 (B30.2c) — тем же паттерном, но для таблицы patients.
+
+### Что сделано
+
+- `getPatientsByDoctor` (`db.go:383`): `SELECT id, doctor_id, COALESCE(clinic_id, ...)`
+  → `SELECT id, COALESCE(doctor_id, ''), COALESCE(clinic_id, ...)`.
+- `getPatientByID` (`db.go:461`): та же замена.
+- `Patient.DoctorID` остаётся `string` (`patients.go:16`). Кастомный
+  `MarshalJSON` не вводится — симметрия с B30.2c важнее семантически
+  «честного» null в JSON.
+- Правка — 2 строки, 1 файл. `git diff` — 2 вставки, 2 удаления.
+
+### Почему не NullString + MarshalJSON
+
+Исходный брифинг предлагал `sql.NullString` + кастомный `MarshalJSON`.
+Отказались в пользу симметрии с B30.2c (`COALESCE(doctor_id, '')`):
+в проекте уже принят этот паттерн для encounters, вводить второй способ
+решения того же класса проблем — плодить зоопарк. Единый паттерн > «честный»
+null в JSON. Если когда-нибудь понадобится null в API — это отдельная задача
+(B30.3: унификация nullable-полей), сразу для Patient + Encounter + всех
+остальных.
+
+### Проверено на боевой БД (bot_max.db)
+
+- `SELECT COUNT(*) FROM patients WHERE doctor_id IS NULL` = **0** на момент
+  правки. Мина была заряжена, но не выстрелила.
+- `go build ./...` — чисто.
+- `go test ./...` — `ok BOT_MAX/backend 7.587s`.
+- Воспроизведение мины на копии БД (`/tmp/bot_max_test.db`):
+  `UPDATE patients SET doctor_id = NULL WHERE id = 'PAT-001';`
+  `SELECT id, COALESCE(doctor_id, ''), name FROM patients WHERE doctor_id IS NULL;`
+  → `PAT-001||Иванов Петр Александрович`.
+  До правки Go-драйвер на этой строке вернул бы
+  `converting NULL to string is unsupported` → 500 на `GET /api/patients`.
+  После — 200 с `"doctorId": ""`.
+
+### Закрытие B30.2d из §6.62
+
+Блок B30.2d в «Известных долгах» §6.62 помечен как ЗАКРЫТО — см. эту секцию.
+Приоритет «средний» снят: правка выполнена до первого реального удаления
+врача с пациентами.
+
+### Остаётся долг B30.2e
+
+Синхронизация DDL в `db.go:64, 93, 112` — всё ещё `doctor_id TEXT NOT NULL`
+и `ON DELETE RESTRICT`, хотя миграции пересоздают таблицы в NULLABLE+SET NULL.
+Приоритет низкий, косметика. Не блокер.
+
+### Откат
+
+`backups/bot_max_20261015_154007` — снимок перед этой сессией. Восстановление:
+`cp <backup> bot_max.db` при остановленном сервере. Правка — уровня SQL-строки,
+для отката достаточно `git revert 805a10d` — модель и JSON-контракт не затронуты.
+
+### Точка входа следующей сессии
+
+    cd /workspaces/BOT_MAX-main
+    git log --oneline -3
+    git status -sb
+    grep -n "6.63" SNAPSHOTS.md
+    make backup
+    # далее — B30.2e (синхронизация DDL в db.go:64, 93, 112)
+    #      или B30.3 (аудит остальных nullable-полей: Scan без COALESCE)
+    # B30.2d закрыт, см. §6.63
