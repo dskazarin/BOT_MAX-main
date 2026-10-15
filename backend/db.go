@@ -61,7 +61,7 @@ func InitDB(path string) (*sql.DB, error) {
 		// === Пациенты (владелец — врач, клиника опционально) ===
 		`CREATE TABLE IF NOT EXISTS patients (
 			id          TEXT PRIMARY KEY,
-			doctor_id   TEXT NOT NULL,
+			doctor_id   TEXT,
 			clinic_id   TEXT,
 			name        TEXT NOT NULL,
 			age         INTEGER,
@@ -80,7 +80,7 @@ func InitDB(path string) (*sql.DB, error) {
 			ai_result   TEXT,
 			created     TEXT NOT NULL,
 			last_sync   TEXT,
-			FOREIGN KEY(doctor_id) REFERENCES doctors(id) ON DELETE CASCADE,
+			FOREIGN KEY(doctor_id) REFERENCES doctors(id) ON DELETE SET NULL,
 			FOREIGN KEY(clinic_id) REFERENCES clinics(id) ON DELETE SET NULL
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_patients_doctor ON patients(doctor_id, status);`,
@@ -90,7 +90,7 @@ func InitDB(path string) (*sql.DB, error) {
 		`CREATE TABLE IF NOT EXISTS encounters (
 			id              TEXT PRIMARY KEY,
 			patient_id      TEXT NOT NULL,
-			doctor_id       TEXT NOT NULL,
+			doctor_id       TEXT,
 			clinic_id       TEXT,
 			specialty       TEXT NOT NULL DEFAULT '',
 			title           TEXT NOT NULL DEFAULT '',
@@ -109,7 +109,7 @@ func InitDB(path string) (*sql.DB, error) {
 			created_at      TEXT NOT NULL,
 			updated_at      TEXT NOT NULL,
 			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
-			FOREIGN KEY(doctor_id)  REFERENCES doctors(id)  ON DELETE RESTRICT,
+			FOREIGN KEY(doctor_id)  REFERENCES doctors(id)  ON DELETE SET NULL,
 			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_enc_patient ON encounters(patient_id, started_at DESC);`,
