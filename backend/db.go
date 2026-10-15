@@ -380,7 +380,7 @@ func seedDefaultDoctor(db *sql.DB) error {
 // getPatientsByDoctor возвращает всех пациентов врача, отсортированных по created DESC.
 func getPatientsByDoctor(db *sql.DB, doctorID string) ([]Patient, error) {
 	rows, err := db.Query(`
-		SELECT id, doctor_id, COALESCE(clinic_id, ''), name, COALESCE(age, 0),
+		SELECT id, COALESCE(doctor_id, ''), COALESCE(clinic_id, ''), name, COALESCE(age, 0),
 		       COALESCE(age_months, 0), COALESCE(age_display, ''), COALESCE(birth_date, ''),
 		       COALESCE(gender, ''), COALESCE(height, 0), COALESCE(weight, 0),
 		       COALESCE(phone, ''), COALESCE(email, ''), COALESCE(status, ''),
@@ -458,7 +458,7 @@ func getPatientByID(db *sql.DB, id string) (*Patient, error) {
 	var aiChecked int
 	var symptoms, aiResult string
 	err := db.QueryRow(`
-		SELECT id, doctor_id, COALESCE(clinic_id, ''), name, COALESCE(age, 0),
+		SELECT id, COALESCE(doctor_id, ''), COALESCE(clinic_id, ''), name, COALESCE(age, 0),
 		       COALESCE(age_months, 0), COALESCE(age_display, ''), COALESCE(birth_date, ''),
 		       COALESCE(gender, ''), COALESCE(height, 0), COALESCE(weight, 0),
 		       COALESCE(phone, ''), COALESCE(email, ''), COALESCE(status, ''),
