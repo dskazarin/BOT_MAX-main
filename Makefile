@@ -36,8 +36,11 @@ status:
 # Остановка сервера
 stop:
 	@echo "🛑 Остановка сервера..."
-	@fuser -k 8082/tcp 2>/dev/null || true
-	@pkill -f "/tmp/botmax_server" 2>/dev/null || true
+	@-pkill -TERM -f '^/tmp/botmax_server$$' 2>/dev/null || true
+	@-fuser -k -TERM 8082/tcp 2>/dev/null || true
+	@sleep 1
+	@-pkill -KILL -f '^/tmp/botmax_server$$' 2>/dev/null || true
+	@-fuser -k -KILL 8082/tcp 2>/dev/null || true
 	@echo "✅ Сервер остановлен"
 
 # Проверка работы
@@ -98,7 +101,7 @@ backup:
 		echo "❌ bot_max.db не найден"; \
 		exit 1; \
 	fi
-	@if pgrep -f /tmp/botmax_server > /dev/null 2>&1; then \
+	@if curl -sf http://localhost:8082/api/health > /dev/null 2>&1; then \
 		echo "⚠️  Сервер запущен. Для консистентного бэкапа лучше: make stop"; \
 	fi
 	@TS=$$(date +%Y%m%d_%H%M%S); \
