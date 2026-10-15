@@ -2909,3 +2909,65 @@ null в JSON. Если когда-нибудь понадобится null в AP
     # далее — B30.2e (синхронизация DDL в db.go:64, 93, 112)
     #      или B30.3 (аудит остальных nullable-полей: Scan без COALESCE)
     # B30.2d закрыт, см. §6.63
+
+---
+
+## 6.64 — B30.2e: синхронизация DDL patients/encounters с миграциями
+
+**Дата:** 2026-10-15
+**Коммит:** c31b0e6
+**Контекст:** последний долг из §6.62. DDL CREATE TABLE в `db.go`
+рассинхронизировался с фактическим состоянием после B30.2b/c.
+
+### Что сделано
+
+- `db.go:64`  patients.doctor_id:   `TEXT NOT NULL` → `TEXT`
+- `db.go:83`  patients FK:          `ON DELETE CASCADE` → `ON DELETE SET NULL`
+- `db.go:93`  encounters.doctor_id: `TEXT NOT NULL` → `TEXT`
+- `db.go:112` encounters FK:        `ON DELETE RESTRICT` → `ON DELETE SET NULL`
+
+4 строки в `backend/db.go`. Миграции оставлены как есть — на свежих БД
+они станут no-op благодаря PRAGMA table_info-идемпотентности.
+
+### Сюрприз: строка 83 (patients FK)
+
+Брифинг §6.62 упоминал 64/93/112, но пропустил строку 83 —
+`patients` FK был `ON DELETE CASCADE`, хотя в боевой БД после B30.2b стоит
+`ON DELETE SET NULL`. Без правки свежая инсталляция получила бы
+**каскадное удаление пациентов** при удалении врача. Обнаружено при
+сверке `.schema patients` с боевой БД. Урок: DDL-аудит нужно делать по
+фактической схеме, а не по списку из брифинга.
+
+### Проверено
+
+- `go build ./...` + `go test ./...` — `ok BOT_MAX/backend 7.341s`.
+- Свежая БД: `BOTMAX_DB_PATH=/tmp/bot_max_fresh.db /tmp/botmax_server`.
+  Лог: `msg="SQLite готова" dbPath=/tmp/bot_max_fresh.db`,
+  seed DOC-001/SUPER-001/ADMIN-001, graceful shutdown.
+- `diff` .schema с боевой:
+  - `patients` — расхождение только `IF NOT EXISTS` (теряется при rebuild);
+  - `encounters` — то же + двойные пробелы в тексте индексов.
+  - **doctor_id и FK — идентичны** в обеих.
+- Итог: DDL на свежей БД даёт схему, эквивалентную миграциям B30.2b/c.
+  Миграции станут no-op на новых инсталляциях.
+
+### B30.2e закрыт
+
+После B30.2e все долги из §6.62 закрыты. Остаётся не-долг из обсуждения:
+B30.3 — аудит остальных nullable-полей (`Scan` без `COALESCE`) в других
+таблицах. Страховка, не мина. Приоритет — низкий.
+
+### Откат
+
+`git revert c31b0e6` — правка изолирована, модель/JSON не затронуты.
+
+### Точка входа следующей сессии
+
+    cd /workspaces/BOT_MAX-main
+    git log --oneline -3
+    git status -sb
+    grep -n "6.64" SNAPSHOTS.md
+    make backup
+    # далее — B30.3 (аудит остальных nullable-полей: Scan без COALESCE)
+    #      или новая задача
+    # все долги §6.62 закрыты
