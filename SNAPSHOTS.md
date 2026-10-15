@@ -2766,3 +2766,73 @@ git status -sb
 - `bot_max.db` **не тронута** миграцией (работали на копиях).
 - Smoke-инфраструктура готова: `smoke_migration_test.go`, `//go:build smoke`.
 - В `/tmp/botmax_rollback_point/bot_max.db` — эталон отката, `integrity_check=ok`.
+
+## 6.62 — B30.2c: encounters.doctor_id → NULLABLE + ON DELETE SET NULL
+
+**Дата:** 2026-10-15
+**Коммит:** 9b268f4
+**Контекст:** прямое продолжение §6.61 (B30.2b). Тот же класс миграции
+для таблицы encounters — эпизоды приёмов больше не блокируют удаление врача.
+
+### Что сделано
+
+- `migrateEncountersDoctorIdNullable` — rebuild таблицы encounters:
+  `doctor_id TEXT` (было NOT NULL), FK `ON DELETE SET NULL` (было RESTRICT).
+  Паттерн 1:1 с B30.2b: PRAGMA foreign_keys OUTSIDE транзакции на выделенном
+  conn; rebuild в tx; foreign_key_check до Commit; идемпотентность через
+  PRAGMA table_info.
+- `encountersDoctorIdIsNullable` — проверка notnull == 0.
+- Вызов в `Open()` сразу после `migratePatientsDoctorIdNullable` (`db.go:315`).
+- `encounters.go`: 3 read-запроса переведены на `COALESCE(doctor_id, '')`:
+  - `getEncounterByID` (стр. 343)
+  - `encounterSelectCols` (стр. 371)
+  - `getLatestEncounterForPrefill` (стр. 702)
+- Индексы idx_enc_patient, idx_enc_doctor, idx_enc_clinic,
+  idx_enc_patient_kind пересозданы в шаге rebuild.
+
+### Проверено на боевой БД (bot_max.db)
+
+- `.schema encounters`: `doctor_id TEXT,` (без NOT NULL);
+  FK `doctor_id → doctors(id) ON DELETE SET NULL`.
+- `PRAGMA foreign_key_check` до и после — пусто.
+- `PRAGMA integrity_check` — ok.
+- `PRAGMA index_list(encounters)` — 4 индекса idx_enc_* + autoindex PK.
+- Внешних FK на encounters нет (§6.61 прогноз подтверждён).
+- Триггеров на encounters нет.
+- Идемпотентность: повторный `make run` — миграция no-op, схема не меняется.
+
+### Известные долги (не блокеры)
+
+**B30.2d — NullString для Patient/Encounter.**
+B30.2b и B30.2c применили миграцию на уровне SQL, но Go-модели
+(`Patient.DoctorID`, `Encounter.DoctorID`) остались `string`. Реальный NULL
+из БД читается через `COALESCE(doctor_id, '')` в SQL. Правильное решение —
+`sql.NullString` + кастомный `MarshalJSON` с сохранением JSON-контракта
+(`"doctor_id": ""` при NULL). Триггер долга: первое реальное удаление врача
+с привязанными пациентами или encounters. Приоритет — средний (данных с
+NULL сейчас нет).
+
+**B30.2e — синхронизация DDL в `db.go`.**
+В `db.go:64, 93, 112` DDL CREATE TABLE всё ещё объявляет
+`doctor_id TEXT NOT NULL` (и `ON DELETE RESTRICT` для encounters), хотя
+миграции пересоздают таблицы в NULLABLE+SET NULL. Для свежей БД схема
+корректна после миграции, но «источник истины» (DDL) рассинхронизирован с
+фактическим состоянием. Нужно обновить DDL до NULLABLE+SET NULL, чтобы
+миграции стали no-op на новых инсталляциях. Приоритет — низкий.
+
+### Откат
+
+`backups/bot_max_20261015_135947` — снимок до миграции B30.2c.
+`PRAGMA integrity_check` — ok. Восстановление: `cp backups/bot_max_20261015_135947 bot_max.db`
+при остановленном сервере.
+
+### Точка входа следующей сессии
+
+    cd /workspaces/BOT_MAX-main
+    git log --oneline -3
+    git status -sb
+    grep -n "6.62" SNAPSHOTS.md
+    make backup
+    # далее — B30.2d (NullString для Patient/Encounter)
+    #      или B30.2e (синхронизация DDL в db.go)
+    # обе — в разделе «Известные долги» §6.62```

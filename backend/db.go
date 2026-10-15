@@ -309,6 +309,14 @@ func InitDB(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("migrate patients.doctor_id: %w", err)
 	}
 
+	// === B30.2c: encounters.doctor_id → NULLABLE + ON DELETE SET NULL ===
+	// Тот же паттерн, что B30.2b (см. §6.61 / §6.62). Идемпотентно: если
+	// doctor_id уже nullable — no-op. См. migrateEncountersDoctorIdNullable.
+	if err := migrateEncountersDoctorIdNullable(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate encounters.doctor_id: %w", err)
+	}
+
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("ping: %w", err)
@@ -979,6 +987,164 @@ func patientsDoctorIdIsNullable(ctx context.Context, conn *sql.Conn) (bool, erro
 	}
 	if !found {
 		return false, fmt.Errorf("колонка patients.doctor_id не найдена")
+	}
+	return false, nil
+}
+
+// migrateEncountersDoctorIdNullable идемпотентно пересоздаёт encounters
+// с doctor_id NULLABLE и FK ON DELETE SET NULL.
+//
+// Паттерн — 1:1 с migratePatientsDoctorIdNullable (B30.2b, §6.61/§6.62):
+// PRAGMA foreign_keys управляется ВНЕ транзакции на выделенном conn;
+// rebuild в tx; foreign_key_check до Commit.
+//
+// Идемпотентность: если doctor_id уже nullable (PRAGMA table_info →
+// notnull == 0), функция возвращает nil, ничего не делая.
+func migrateEncountersDoctorIdNullable(db *sql.DB) error {
+	ctx := context.Background()
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("db.Conn: %w", err)
+	}
+	defer conn.Close()
+
+	// Шаг 1: миграция уже применена?
+	applied, err := encountersDoctorIdIsNullable(ctx, conn)
+	if err != nil {
+		return err
+	}
+	if applied {
+		return nil // no-op
+	}
+
+	// Шаг 2: foreign_keys = OFF на ЭТОМ соединении.
+	// SQLite требует переключать этот PRAGMA вне транзакции.
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+		return fmt.Errorf("pragma foreign_keys=off: %w", err)
+	}
+
+	// Шаг 3: пересоздание в транзакции.
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() // no-op после Commit
+
+	steps := []struct {
+		name string
+		sql  string
+	}{
+		{"create encounters_new", `CREATE TABLE encounters_new (
+			id              TEXT PRIMARY KEY,
+			patient_id      TEXT NOT NULL,
+			doctor_id       TEXT,
+			clinic_id       TEXT,
+			specialty       TEXT NOT NULL DEFAULT '',
+			title           TEXT NOT NULL DEFAULT '',
+			kind            TEXT NOT NULL DEFAULT 'consultation',
+			started_at      TEXT NOT NULL,
+			finished_at     TEXT,
+			status          TEXT NOT NULL DEFAULT 'draft',
+			complaint       TEXT NOT NULL DEFAULT '',
+			anamnesis       TEXT NOT NULL DEFAULT '',
+			examination     TEXT NOT NULL DEFAULT '',
+			diagnosis_text  TEXT NOT NULL DEFAULT '',
+			diagnosis_icd10 TEXT NOT NULL DEFAULT '',
+			recommendations TEXT NOT NULL DEFAULT '',
+			common_json     TEXT NOT NULL DEFAULT '{}',
+			specialty_json  TEXT NOT NULL DEFAULT '{}',
+			created_at      TEXT NOT NULL,
+			updated_at      TEXT NOT NULL,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(doctor_id)  REFERENCES doctors(id)  ON DELETE SET NULL,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		)`},
+		{"copy data", `INSERT INTO encounters_new (
+			id, patient_id, doctor_id, clinic_id, specialty, title, kind,
+			started_at, finished_at, status, complaint, anamnesis, examination,
+			diagnosis_text, diagnosis_icd10, recommendations, common_json,
+			specialty_json, created_at, updated_at
+		) SELECT
+			id, patient_id, doctor_id, clinic_id, specialty, title, kind,
+			started_at, finished_at, status, complaint, anamnesis, examination,
+			diagnosis_text, diagnosis_icd10, recommendations, common_json,
+			specialty_json, created_at, updated_at
+		FROM encounters`},
+		{"drop old", `DROP TABLE encounters`},
+		{"rename", `ALTER TABLE encounters_new RENAME TO encounters`},
+		{"index idx_enc_patient", `CREATE INDEX idx_enc_patient ON encounters(patient_id, started_at DESC)`},
+		{"index idx_enc_doctor", `CREATE INDEX idx_enc_doctor ON encounters(doctor_id, started_at DESC)`},
+		{"index idx_enc_clinic", `CREATE INDEX idx_enc_clinic ON encounters(clinic_id, started_at DESC)`},
+		{"index idx_enc_patient_kind", `CREATE INDEX idx_enc_patient_kind ON encounters(patient_id, kind, started_at DESC)`},
+	}
+
+	for _, s := range steps {
+		if _, err := tx.ExecContext(ctx, s.sql); err != nil {
+			return fmt.Errorf("%s: %w", s.name, err)
+		}
+	}
+
+	// Шаг 4: foreign_key_check внутри транзакции (до Commit).
+	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return fmt.Errorf("foreign_key_check: %w", err)
+	}
+	hasViolation := rows.Next()
+	rows.Close()
+	if hasViolation {
+		return fmt.Errorf("foreign_key_check: обнаружены нарушения после миграции")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	// Шаг 5: включить foreign_keys обратно на этом соединении.
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("pragma foreign_keys=on: %w", err)
+	}
+
+	slog.Info("migrate: encounters.doctor_id → NULLABLE + ON DELETE SET NULL")
+	return nil
+}
+
+// encountersDoctorIdIsNullable возвращает true, если у encounters.doctor_id
+// notnull == 0 (т.е. колонка nullable — миграция уже применена).
+//
+// Стиль и PRAGMA table_info — 1:1 с patientsDoctorIdIsNullable.
+func encountersDoctorIdIsNullable(ctx context.Context, conn *sql.Conn) (bool, error) {
+	rows, err := conn.QueryContext(ctx, "PRAGMA table_info(encounters)")
+	if err != nil {
+		return false, fmt.Errorf("pragma table_info(encounters): %w", err)
+	}
+	defer rows.Close()
+
+	found := false
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notnull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return false, fmt.Errorf("scan table_info: %w", err)
+		}
+		if name == "doctor_id" {
+			found = true
+			if notnull == 0 {
+				return true, nil
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("rows.Err: %w", err)
+	}
+	if !found {
+		return false, fmt.Errorf("колонка encounters.doctor_id не найдена")
 	}
 	return false, nil
 }

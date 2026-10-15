@@ -340,7 +340,7 @@ func getEncounterByID(db *sql.DB, id string) (*Encounter, error) {
 	if id == "" {
 		return nil, fmt.Errorf("empty encounter id")
 	}
-	const q = `SELECT id, patient_id, doctor_id, COALESCE(clinic_id, ''),
+	const q = `SELECT id, patient_id, COALESCE(doctor_id, ''), COALESCE(clinic_id, ''),
 		specialty, title, kind, started_at, COALESCE(finished_at, ''),
 		status, complaint, anamnesis, examination, diagnosis_text, diagnosis_icd10,
 		recommendations, common_json, specialty_json, created_at, updated_at
@@ -368,7 +368,7 @@ func getEncounterByID(db *sql.DB, id string) (*Encounter, error) {
 // B29.1.3 — SQL-сборщик WHERE + keyset-пагинация
 // ---------------------------------------------------------------
 
-const encounterSelectCols = `id, patient_id, doctor_id, COALESCE(clinic_id, ''),
+const encounterSelectCols = `id, patient_id, COALESCE(doctor_id, ''), COALESCE(clinic_id, ''),
 	specialty, title, kind, started_at, COALESCE(finished_at, ''),
 	status, complaint, anamnesis, examination, diagnosis_text, diagnosis_icd10,
 	recommendations, common_json, specialty_json, created_at, updated_at`
@@ -699,7 +699,7 @@ func handleEncounters(w http.ResponseWriter, r *http.Request) {
 func getLatestEncounterForPrefill(db *sql.DB, patientID string) (*Encounter, error) {
 	var enc Encounter
 	err := db.QueryRow(
-		`SELECT id, patient_id, doctor_id, COALESCE(clinic_id,''), specialty, title, kind,
+		`SELECT id, patient_id, COALESCE(doctor_id, ''), COALESCE(clinic_id,''), specialty, title, kind,
 		        started_at, COALESCE(finished_at,''), status, complaint, anamnesis,
 		        examination, diagnosis_text, diagnosis_icd10, recommendations,
 		        common_json, specialty_json, created_at, updated_at
