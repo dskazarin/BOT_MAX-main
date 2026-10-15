@@ -13,23 +13,18 @@ import (
 // InitDB открывает SQLite-базу и создаёт схему, если её нет.
 // Безопасно вызывать при каждом старте сервера (CREATE TABLE IF NOT EXISTS).
 func InitDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	// PRAGMA-параметры передаются через DSN: modernc.org/sqlite применяет их
+	// к КАЖДОМУ новому соединению пула. Через db.Exec PRAGMA сработал бы
+	// только на одном соединении из пула — остальные открылись бы
+	// с дефолтными настройками (foreign_keys=OFF).
+	const dsnParams = "?_pragma=foreign_keys(1)" +
+		"&_pragma=journal_mode(WAL)" +
+		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=busy_timeout(5000)"
+
+	db, err := sql.Open("sqlite", path+dsnParams)
 	if err != nil {
 		return nil, fmt.Errorf("sql.Open: %w", err)
-	}
-
-	// PRAGMA применяются на каждое соединение — выполняем сразу.
-	pragmas := []string{
-		"PRAGMA foreign_keys = ON;",
-		"PRAGMA journal_mode = WAL;",
-		"PRAGMA synchronous = NORMAL;",
-		"PRAGMA busy_timeout = 5000;",
-	}
-	for _, p := range pragmas {
-		if _, err := db.Exec(p); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("pragma %q: %w", p, err)
-		}
 	}
 
 	schema := []string{
