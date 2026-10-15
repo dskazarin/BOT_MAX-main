@@ -2669,3 +2669,100 @@ git status -sb
   FK дочерних таблиц перепривязываются корректно.
 - `bot_max.db` не менялась с 14.10 11:57 — «холодная» БД для миграции.
 - Бэкап: `backups/bot_max_20261015_061824` (252K).
+
+## 6.61 — B30.2b: patients.doctor_id → NULLABLE + ON DELETE SET NULL
+
+### Сделано
+
+- **feat(db):** `migratePatientsDoctorIdNullable` — идемпотентная миграция
+  пересоздания таблицы `patients`:
+  - `doctor_id TEXT NOT NULL` → `doctor_id TEXT` (nullable)
+  - FK `ON DELETE CASCADE` → `ON DELETE SET NULL`
+  - Порядок колонок 1:1 → `INSERT INTO patients_new SELECT *` безопасен.
+  - Через `db.Conn(ctx)` — **единое** соединение. `PRAGMA foreign_keys = OFF`
+    per-connection, на `db.Exec` применилось бы к случайному соединению пула
+    (§6.60).
+  - `PRAGMA foreign_key_check` **внутри** транзакции → Rollback при нарушениях.
+  - Идемпотентность: `PRAGMA table_info(patients).doctor_id.notnull == 0` → no-op.
+
+- **Семантика:** удаление врача больше не сносит пациентов каскадом.
+  Раньше `CASCADE` → удалялись patients + вся история через 6 дочерних таблиц
+  (`cards`, `encounters`, `vitals`, `vitals_history`, `consents`,
+  `patient_accounts`). Теперь `SET NULL` → `patients.doctor_id = NULL`,
+  история сохраняется.
+
+- **Тесты (backend/db_test.go):**
+  - `TestInitDB_CascadeDeleteOnDoctor` → `TestInitDB_SetNullOnDoctorDelete`
+    (ассерция обратной семантики).
+  - +5 новых `TestMigrate_DoctorIdNullable_*` — Applied / Idempotent /
+    DataPreserved / FKOnDeleteSetNull / IndexesRecreated.
+  - Через новый хелпер `newFileTestDB` (файловая БД в `t.TempDir()`),
+    т.к. `:memory:` несовместим с `db.Conn(ctx)` — каждое соединение пула
+    видит свою независимую БД.
+  - `TestInitDB_ForeignKeysOnAllConns` — регрессия §6.60 не сломана.
+
+- **Smoke-тест** `backend/smoke_migration_test.go` (`//go:build smoke`) —
+  прогон миграции на **копии** реальной `bot_max.db`.
+  Запуск: `SMOKE_DB=/tmp/bot_max.smoke.db go test -tags smoke -run TestSmoke -v`.
+  Обычный `go test ./...` его не видит.
+
+### Проверки
+
+- `go test ./...` — ok (7.6s).
+- Целевой прогон 7 тестов — все PASS.
+- Smoke на копии `bot_max.db`:
+  - `doctor_id` → nullable ✅
+  - FK `ON DELETE SET NULL` в `.schema patients` ✅
+  - 7/7 пациентов сохранены ✅
+  - `foreign_key_check` — пусто ✅
+  - Индексы `idx_patients_doctor`, `idx_patients_clinic` пересозданы ✅
+  - Удаление доктора при FK=ON → все 7 пациентов `doctor_id = NULL`,
+    дочерние таблицы не тронуты ✅
+
+### Побочно вскрыто
+
+- **`sqlite3` CLI по умолчанию `PRAGMA foreign_keys = OFF`.**
+  Первая проверка семантики на копии показала висячие ссылки
+  (пациенты с `doctor_id='DOC-001'` после `DELETE FROM doctors`).
+  Причина: новое соединение CLI, FK не активирован. **Правильно:**
+  всегда `PRAGMA foreign_keys = ON;` первой строкой в `sqlite3`-сеансе.
+  Это не баг миграции, но важно для будущих CLI-смоуков.
+
+- **`encounters.doctor_id` имеет `ON DELETE RESTRICT`** (db.go:111).
+  Из-за этого `DELETE FROM doctors` падает с
+  `FOREIGN KEY constraint failed (19)`, пока есть encounters.
+  У нас в копии: 1 encounters → удаление доктора **блокируется**.
+  `patients` освобождаются только если encounters не мешают.
+
+### Следующая задача — B30.2c
+
+- **`encounters.doctor_id → NULLABLE + ON DELETE SET NULL`** — по образцу
+  B30.2b. Сейчас `RESTRICT` — эпизоды приёмов **блокируют** удаление врача.
+  Логично: врач уволился → encounters остаётся историей, просто без врача.
+  Паттерн отлажен (§6.61), ждём только применения.
+
+### Технические заметки
+
+- `patients_new` DDL — копия оригинального DDL с двумя изменениями
+  (`doctor_id TEXT` без `NOT NULL`, FK `SET NULL`). Остальные 19 колонок
+  **байт-в-байт** — иначе `SELECT *` не скомпилируется семантически.
+- FK-ссылки **дочерних** таблиц (`cards`, `encounters`, `vitals`,
+  `vitals_history`, `consents`, `patient_accounts`) на `patients.id`
+  **не пересоздаются** — `ALTER TABLE patients_new RENAME TO patients`
+  сохраняет их валидность по имени.
+- `sqlite_autoindex_patients_1` (от PRIMARY KEY) пересоздаётся автоматически
+  вместе с таблицей.
+- `patients` не имеет `AUTOINCREMENT` → `sqlite_sequence` не затрагивается.
+
+### Точка входа на следующую сессию
+
+    cd /workspaces/BOT_MAX-main
+    git log --oneline -3                    # должен быть merge B30.2b в main
+    git status -sb
+    grep -n "6.61" SNAPSHOTS.md             # этот раздел
+    make backup                             # фикс из 6.60 — уже работает
+    # далее — B30.2c: encounters.doctor_id → NULLABLE + ON DELETE SET NULL
+
+- `bot_max.db` **не тронута** миграцией (работали на копиях).
+- Smoke-инфраструктура готова: `smoke_migration_test.go`, `//go:build smoke`.
+- В `/tmp/botmax_rollback_point/bot_max.db` — эталон отката, `integrity_check=ok`.
