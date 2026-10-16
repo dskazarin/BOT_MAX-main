@@ -622,7 +622,8 @@ type VitalsRecord struct {
 // Если записи нет — возвращает sql.ErrNoRows (фронт → fallback на localStorage).
 func getVitals(db *sql.DB, patientID string) (bp string, temp float64, spo2 int, updated string, err error) {
 	row := db.QueryRow(
-		`SELECT bp, temp, spo2, updated FROM vitals WHERE patient_id = ?`,
+		`SELECT COALESCE(bp,''), COALESCE(temp,0), COALESCE(spo2,0), COALESCE(updated,'')
+		FROM vitals WHERE patient_id = ?`,
 		patientID,
 	)
 	err = row.Scan(&bp, &temp, &spo2, &updated)
@@ -670,7 +671,7 @@ func getVitalsHistory(db *sql.DB, patientID string, limit int) ([]VitalsRecord, 
 		limit = 50
 	}
 	rows, err := db.Query(`
-		SELECT id, patient_id, bp, temp, spo2, recorded
+		SELECT id, patient_id, COALESCE(bp,''), COALESCE(temp,0), COALESCE(spo2,0), COALESCE(recorded,'')
 		FROM vitals_history
 		WHERE patient_id = ?
 		ORDER BY recorded DESC
@@ -701,7 +702,7 @@ func getVitalsHistory(db *sql.DB, patientID string, limit int) ([]VitalsRecord, 
 // Если записи нет — sql.ErrNoRows (фронт → localStorage).
 func getCard(db *sql.DB, patientID string) (data string, updated string, err error) {
 	row := db.QueryRow(
-		`SELECT data, updated FROM cards WHERE patient_id = ?`,
+		`SELECT COALESCE(data,''), COALESCE(updated,'') FROM cards WHERE patient_id = ?`,
 		patientID,
 	)
 	err = row.Scan(&data, &updated)
