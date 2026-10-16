@@ -219,7 +219,7 @@ func InitDB(path string) (*sql.DB, error) {
 		`CREATE        INDEX IF NOT EXISTS idx_patient_accounts_patient ON patient_accounts(patient_id);`,
 
 		// === B30.1: согласия patient <-> doctor ===
-		// status: pending | approved | revoked
+		// status: pending | approved | denied | revoked
 		// scope:  vitals_read (расширяемо значениями TEXT в будущем)
 		// UNIQUE(patient_id, doctor_id, scope) — одно активное согласие
 		// на пару+scope; история переходов — в consents_audit.
@@ -232,6 +232,7 @@ func InitDB(path string) (*sql.DB, error) {
 			requested_at TEXT NOT NULL,
 			approved_at  TEXT,
 			revoked_at   TEXT,
+			expires_at   TEXT,
 			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
 			FOREIGN KEY(doctor_id)  REFERENCES doctors(id)  ON DELETE CASCADE,
 			UNIQUE(patient_id, doctor_id, scope)
@@ -241,7 +242,7 @@ func InitDB(path string) (*sql.DB, error) {
 
 		// === B30.1: append-only аудит согласий ===
 		// Без FK на consents — запись должна пережить удаление consent.
-		// action:     request | approve | revoke
+		// action:     request | approve | deny | revoke
 		// actor_type: patient | doctor | admin
 		`CREATE TABLE IF NOT EXISTS consents_audit (
 			id         TEXT PRIMARY KEY,
@@ -293,6 +294,7 @@ func InitDB(path string) (*sql.DB, error) {
 		{"doctors", "password_changed_at", "TEXT"},
 		{"doctors", "failed_login_count", "INTEGER NOT NULL DEFAULT 0"},
 		{"doctors", "locked_until", "TEXT"},
+		{"consents", "expires_at", "TEXT"},
 	}
 	for _, m := range migrations {
 		if err := ensureColumn(db, m.table, m.column, m.ddl); err != nil {
