@@ -2971,3 +2971,73 @@ B30.3 — аудит остальных nullable-полей (`Scan` без `COAL
     # далее — B30.3 (аудит остальных nullable-полей: Scan без COALESCE)
     #      или новая задача
     # все долги §6.62 закрыты
+
+## 6.65 — B30.3: аудит nullable-полей в Scan без COALESCE
+
+**Статус:** ✅ закрыт (2026-10-16)
+
+**Коммиты:**
+- `cac3a1b` — fix(db): COALESCE для nullable-полей в vitals/vitals_history/cards
+- `acf1213` — test(patient_auth): B30.3 — регрессия на nullable-поля в Scan
+
+**Что сделано:**
+Проведён аудит всех 16 мест `Scan(` в `backend/` на предмет сканирования
+nullable-колонок в примитивные Go-типы (`string`/`int`/`float64`) без
+защиты. Найдено 3 дефекта, все исправлены:
+
+| Место | Проблема | Фикс |
+|---|---|---|
+| `db.go:625` getVitals | `vitals.bp/temp/spo2/updated` — все nullable | `COALESCE(...,'')` / `,0` |
+| `db.go:673` getVitalsHistory | `vitals_history.bp/temp/spo2/recorded` — все nullable | то же |
+| `db.go:704` getCard | `cards.data/updated` — оба nullable | `COALESCE(...,'')` |
+
+**Уже безопасны (не трогали):**
+- `patient_auth.go:89, 109` — `LastLogin sql.NullString` (штатный паттерн)
+- `password_reset.go:88` — `usedAt sql.NullString`
+- `password_reset.go:268` — `lockedUntil sql.NullString`
+- `doctors.go:263` — `phone/clinicID/created/lastLogin sql.Null*`
+- `audit.go:185` — `entity/entityID/ip/detail sql.NullString`
+- `refresh.go:72` — `revoked_at sql.NullString`
+- `encounters.go` — `COALESCE(doctor_id,'')`, `COALESCE(clinic_id,'')`, `COALESCE(finished_at,'')` в SQL
+- `db.go:467` — `patients` — все nullable через `COALESCE` (B30.2e)
+- `db.go:753, 770` — `doctors` узкий SELECT, колонки NOT NULL
+- `auth.go:959` — `must_change_password INTEGER NOT NULL DEFAULT 0` (ALTER из `db.go:292`)
+
+**Тесты:**
+`backend/patient_auth_test.go` — 7/7 PASS:
+- `TestGetVitals_NullFields` / `_NoRows`
+- `TestGetVitalsHistory_NullFields` / `_Empty`
+- `TestGetCard_NullFields` / `_NoRows`
+- `TestGetPatientAccountByLogin_NullLastLogin`
+
+**Проверка:**
+    go test ./backend/ → ok BOT_MAX/backend 7.557s
+    gofmt -l backend/ → пусто
+    go build -o /dev/null ./backend → ok
+
+**Методологическая заметка:**
+При аудите nullable недостаточно грепа `Scan(` — нужно смотреть тип Go-поля:
+- `string` / `int` / `float64` + nullable-колонка → 🔴 дефект
+- `sql.NullString` / `sql.NullInt*` / `sql.NullFloat64` → ✅ безопасно (независимо от SQL)
+- `COALESCE` в SQL → ✅ безопасно даже для примитива
+
+Ложные срабатывания: `patient_auth.go` изначально был помечен 🔴
+(`LastLogin` — по грепу без тела), но по факту `sql.NullString`.
+
+Урок сессии: `git diff --stat` пустой → правок нет. Не полагаться на
+молчаливый `go build` как признак применённых изменений.
+
+**Откат:**
+- `git revert cac3a1b` — фикс (3 SQL-запроса).
+- `git revert acf1213` — тесты (отдельный файл, безопасно).
+
+**Точка входа следующей сессии:**
+
+    cd /workspaces/BOT_MAX-main
+    git log --oneline -3
+    git status -sb
+    grep -n "6.65" SNAPSHOTS.md
+    make backup
+    # далее — новая задача
+
+**Долги:** пусто. B30.3 закрыт. Аудит nullable завершён полностью.
