@@ -2617,6 +2617,8 @@ regulatory_reports.
 - Nullable в Scan: смотреть тип Go-поля, не греп. sql.Null* — ок;
   string/int/float64 + nullable-колонка — дефект; COALESCE в SQL — ок.
 
+- **B30.4 (sync):** формат timestamp'ов в проекте — `"2006-01-02 15:04:05"` (`tsLayout`), НЕ RFC3339. Для TEXT-колонок `sql.NullTime` не подходит — брать `sql.NullString` + `time.Parse(tsLayout, ...)`. Ошибка парсинга → 500, не 403. Тесты — прямой вызов handler'а через `httptest.NewRequest(...).WithContext(withDoctorID(...))`, без `NewServer` (образец `consent_test.go`).
+
 ## §6.59 — B30.1 + B30.2: инфраструктура auth пациента (14.10.2026)
 
 ### Что сделано
@@ -3179,3 +3181,89 @@ B выбран потому, что A даёт скрытый pending (не от
 saved := db; db = newTestDB(t); t.Cleanup(func(){ db = saved }).
 Оформлено как хелпер setupConsentDB(t) без возврата — работаем
 через пакетную db (симметрия с doctors_test.go).
+
+## 6.67 — B30.4: sync (approved consent + scope)
+
+**Дата:** 2026-10-16
+**Коммит:** `8e80da9` feat(sync): B30.4 — GET /api/patients/{id}/sync
+**Предшественник:** §6.66 (B30.3 consent-flow закрыт)
+
+### Что сделано
+
+`GET /api/patients/{id}/sync` — врач получает `vitals_history` пациента
+при наличии `approved` consent со `scope='vitals_read'`. Consent-контур
+B30.3 переиспользуется без изменений.
+
+**Файлы:**
+- `backend/sync.go` (new, ~145 строк) — `handlePatientSync`,
+  `parseSyncLimit`, `findApprovedConsent`, `checkConsentExpired`.
+- `backend/sync_test.go` (new, ~200 строк) — 10 тестов, httptest, прямой
+  вызов handler'а (стиль 1:1 с `consent_test.go`).
+- `backend/patients.go` (+5 строк) — `case "sync":` в `handlePatientByID`
+  рядом с `vitals`/`cards`.
+
+### Контракт
+
+    GET /api/patients/{id}/sync?limit=N   (doctor-only)
+
+    200 {"patientId":...,"consentId":...,"limit":N,"records":[...]}
+    403 {"error":"doctor only"}       — нет doctor-контекста
+    403 {"error":"consent_required"}  — нет approved consent / чужой scope
+    403 {"error":"consent_expired"}   — expires_at < now()
+    400 {"error":"invalid limit"}     — limit не число / <1 / >500
+    405 {"error":"method not allowed"}
+
+### Решения сессии
+
+1. **Scope — строго `vitals_read`.** Не префикс. UNIQUE на
+   `(patient_id, doctor_id, scope)` в B30.3 фиксирует модель «один scope =
+   одна связка»; префикс — преждевременно.
+2. **Нет consent → 403 `consent_required`** (не 404). Не палим
+   существование пациента. Существование `patients` специально не
+   проверяем — экономия SELECT, FK не нужен.
+3. **`expires_at` — TEXT, layout `"2006-01-02 15:04:05"`** (`tsLayout`,
+   как в `consent.go:73,325,353`). НЕ RFC3339. NULL → бессрочный.
+   Не парсится → 500 `internal` (коррапт, не пропускаем).
+4. **TTL не выставляется.** `upsertConsentRequest` (B30.3) не трогает
+   `expires_at` — все текущие consents имеют NULL. Проверка в sync —
+   заготовка. Тест `TestSync_ConsentExpired` — через ручной UPDATE.
+5. **Лимиты:** дефолт `50` (совместим с `getVitalsHistory`), max `500`.
+   `?limit=abc / 0 / -5 / 9999` → 400 `invalid limit`.
+6. **Аудит:**
+   - 403 (нет consent или expired) → `consents_audit`, action `read_denied`,
+     actor `doctor` — это событие consent-контура.
+   - 200 → общий `audit`, action `vitals.read`, entity `patient`.
+
+### Отложено
+
+- `?offset=`, `?from=&to=` — пагинация и диапазон. `getVitalsHistory`
+  умеет только `limit`. Добавим, когда появится реальный потребитель
+  (UI врача или B30.5).
+- Префиксный scope (`vitals_read%`) — если появится `vitals_read_write`.
+
+### Тесты (10/10 PASS)
+
+| Тест | Что проверяет |
+|---|---|
+| `TestSync_HappyPath` | doctor + approved + 3 vitals → 200, records=3, DESC |
+| `TestSync_NoConsent` | нет consent → 403 `consent_required` |
+| `TestSync_ConsentPending` | status='pending' → 403 `consent_required` |
+| `TestSync_ConsentRevoked` | approved→revoked → 403 `consent_required` |
+| `TestSync_ConsentExpired` | expires_at в прошлом → 403 `consent_expired` |
+| `TestSync_WrongScope` | scope='other_scope' → 403 `consent_required` |
+| `TestSync_NonDoctor` | нет doctor-ctx → 403 `doctor only` |
+| `TestSync_BadLimit` | limit=abc/0/-5/9999 → 400 `invalid limit` |
+| `TestSync_LimitApplied` | ?limit=2 при 5 записях → 200, records=2 |
+| `TestSync_MethodNotAllowed` | POST → 405 |
+
+### Проверка
+
+- `go test ./backend/ -run TestSync -v` → 10/10 PASS
+- `go test ./backend/` → ok, 7.434s
+- `go build -o /tmp/botmax ./backend/` → OK
+- `go vet ./...` → OK
+- `gofmt -l backend/` → пусто
+
+**Урок сессии:** timestamp-формат проекта — `"2006-01-02 15:04:05"`,
+не RFC3339. Проверять через `grep -n "Format(" backend/*.go` до
+написания парсера.
