@@ -67,6 +67,7 @@
     // Синхронизация при загрузке + каждые 5 сек
     document.addEventListener('DOMContentLoaded', function() {
         setTimeout(syncToDoctorCabinet, 1000);
+        bootstrapVitalsFromServer();   // B30.5
     });
     setInterval(syncToDoctorCabinet, 5000);
 
@@ -1300,6 +1301,7 @@
         patientData.symptoms.push({ id: Date.now(), text: `Температура: ${temp}°C`, date: new Date().toISOString() });
         saveToLocalStorage();
         updateSymptomsList();
+        syncVitalsToServer();   // B30.5: temp → backend vitals
         showNotification(`✅ Температура ${temp}°C записана!`, 'success');
     }
 
@@ -1354,15 +1356,82 @@
     function updateBP() {
         patientData.bpHistory.push({systolic:parseInt(document.getElementById('bpSystolicSelect').value), diastolic:parseInt(document.getElementById('bpDiastolicSelect').value), date: new Date().toLocaleString()});
         saveToLocalStorage();
+        syncVitalsToServer();   // B30.5
     }
     function updateSpO2() {
         patientData.spo2History.push({value:parseInt(document.getElementById('spo2Select').value), date: new Date().toLocaleString()});
         saveToLocalStorage();
+        syncVitalsToServer();   // B30.5
     }
 
     function showWeightHistory() { showHistory("История роста/веса", patientData.heightWeightHistory.map(h=>`${h.date}: ${h.height} см / ${h.weight} г`)); }
     function showBPHistory() { showHistory("История АД", patientData.bpHistory.map(h=>`${h.date}: ${h.systolic}/${h.diastolic}`)); }
     function showSpO2History() { showHistory("История сатурации", patientData.spo2History.map(h=>`${h.date}: ${h.value}%`)); }
+    // === B30.5: backend self-vitals (fallback на localStorage) ===
+    // PUT /api/patient/vitals — тихо, без редиректов. При 401/сети —
+    // молча остаёмся на localStorage (пациент может быть не залогинен).
+    function syncVitalsToServer() {
+        try {
+            var bp = (document.getElementById('bpSystolicSelect').value || '') + '/' +
+                     (document.getElementById('bpDiastolicSelect').value || '');
+            var spo2 = parseInt(document.getElementById('spo2Select').value, 10) || 0;
+            var tempEl = document.getElementById('tempSelect');
+            var temp = tempEl ? (parseFloat(tempEl.value) || 0) : 0;
+
+            fetch('/api/patient/vitals', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ bp: bp, temp: temp, spo2: spo2 })
+            }).then(function(r) {
+                if (!r.ok && r.status !== 401) {
+                    console.warn('vitals sync: HTTP ' + r.status);
+                }
+            }).catch(function(err) {
+                console.warn('vitals sync: ' + err.message);
+            });
+        } catch (e) {
+            console.warn('vitals sync: ' + e.message);
+        }
+    }
+
+    // Bootstrap: подтянуть текущие vitals с backend.
+    // 200 → подставляем в селекты (localStorage не трогаем).
+    // 401/0/ошибка → молча остаёмся на localStorage.
+    function bootstrapVitalsFromServer() {
+        fetch('/api/patient/vitals', { credentials: 'same-origin' })
+            .then(function(r) {
+                if (!r.ok) return null;
+                return r.json();
+            })
+            .then(function(v) {
+                if (!v) return;
+                if (v.bp && v.bp.indexOf('/') > 0) {
+                    var parts = v.bp.split('/');
+                    var sEl = document.getElementById('bpSystolicSelect');
+                    var dEl = document.getElementById('bpDiastolicSelect');
+                    if (sEl && parts[0]) sEl.value = parts[0];
+                    if (dEl && parts[1]) dEl.value = parts[1];
+                }
+                if (v.spo2) {
+                    var o2El = document.getElementById('spo2Select');
+                    if (o2El) o2El.value = v.spo2;
+                }
+                if (v.temp) {
+                    var tEl = document.getElementById('tempSelect');
+                    if (tEl) {
+                        var best = null, bestDiff = Infinity;
+                        for (var i = 0; i < tEl.options.length; i++) {
+                            var diff = Math.abs(parseFloat(tEl.options[i].value) - v.temp);
+                            if (diff < bestDiff) { bestDiff = diff; best = tEl.options[i].value; }
+                        }
+                        if (best !== null) tEl.value = best;
+                    }
+                }
+            })
+            .catch(function() { /* тихо */ });
+    }
+
     function showHistory(title, items) {
         document.getElementById('historyTitle').innerHTML = title;
         document.getElementById('historyList').innerHTML = items.map(i=>`<div style="padding:8px; border-bottom:1px solid var(--border-subtle);">${i}</div>`).join('');
