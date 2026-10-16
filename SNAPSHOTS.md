@@ -3041,3 +3041,75 @@ nullable-колонок в примитивные Go-типы (`string`/`int`/`f
     # далее — новая задача
 
 **Долги:** пусто. B30.3 закрыт. Аудит nullable завершён полностью.
+
+## 6.66 — B30.3: consent-flow (вариант B)
+
+**Статус:** в работе (2026-10-16)
+**Предшественник:** §6.65 (B30.3-audit закрыт, долги пусто)
+**Основание:** §6.59, строки 2614–2617 — план серии B30
+
+**Цель:** consent-контур patient ↔ doctor. Пациент даёт/отзывает
+согласие на чтение vitals, врач запрашивает. 5 роутов, append-only
+аудит в consents_audit, enum расширен под deny.
+
+**Решения (вариант B):**
+- 1a: повторный request после denied → UPSERT в pending,
+  approved_at/revoked_at обнуляются (SET NULL).
+- 2a: revoke — обе стороны (пациент всегда, врач — отказ от доступа).
+  revoke возможен только из approved (иначе 409).
+- 3a: expires_at TEXT nullable — колонка есть, логики TTL нет (YAGNI).
+
+**Обоснование выбора B (а не A):**
+По скорости работы A ≡ B: тот же индекс B-tree, те же запросы,
+тот же размер строки. Разница только в скорости разработки.
+B выбран потому, что A даёт скрытый pending (не отличить отказ от
+молчания) и дыру в аудите (deny не фиксируется). Схема B30.1 уже
+предполагала actor_type patient|doctor|admin — то есть двусторонность.
+
+**Декомпозиция:**
+
+    #   Шаг              Файл                 Артефакт
+    1   Схема-дельта     backend/db.go        status +denied, action +deny, expires_at
+    2   Миграция         backend/db.go        ALTER-safe, паттерн B30.2b/c
+    3   Функция аудита   backend/consent.go   consentAudit() по образцу auditLog
+    4   Модель           backend/consent.go   Consent struct, JSON-теги
+    5   Роуты (5)        backend/consent.go   request/approve/deny/revoke/list
+    6   Регистратор      consent.go + main.go registerConsentRoutes()
+    7   Тесты            backend/consent_test.go  по образцу patient_auth_test.go
+    8   UI врача         doctor_cabinet.html  запрос consent (возможно → B30.5)
+
+**Роуты:**
+
+    POST /api/consents/request        врач     → pending    audit=request
+    POST /api/consents/{id}/approve   пациент  pending→approved  audit=approve
+    POST /api/consents/{id}/deny      пациент  pending→denied    audit=deny
+    POST /api/consents/{id}/revoke    обе      approved→revoked  audit=revoke
+    GET  /api/consents                обе      список (свои)
+
+**Роль — через существующие хелперы (новых обёрток не плодим):**
+    patientIDFromCtx(r)  — patient_auth.go:57
+    doctorIDFromCtx(r)   — auth.go:358
+
+**Установленные факты (разведка 2026-10-16):**
+- Файла consent.go нет. Consent-роутов/хендлеров нет вообще.
+- Схема consents + consents_audit готова (db.go:222–259, B30.1).
+- auditLog() переиспользовать нельзя — пишет в audit_log с doctor_id,
+  без actor_type. Нужна своя consentAudit() по образцу.
+- registerConsentRoutes() встанет после registerPatientAuthRoutes()
+  в main.go (стиль: registerXxxRoutes по группам).
+- requirePatient/requireDoctor в проекте отсутствуют — это осознанный
+  стиль; роль определяется через *IDFromCtx.
+
+**Открытый вопрос (решён):** approved_at/revoked_at обнулять при
+повторном request (SET NULL), чтобы не было артефактов старого цикла.
+
+**Точка входа следующей сессии:**
+
+    cd /workspaces/BOT_MAX-main
+    git log --oneline -3
+    git status -sb
+    grep -n "6.66" SNAPSHOTS.md
+    make backup
+    # далее — подшаг 1: схема-дельта в db.go
+
+**Долги:** пусто.
