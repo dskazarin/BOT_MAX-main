@@ -2578,6 +2578,45 @@ regulatory_reports.
 - Никогда не пушить в prod без проверки на localhost.
 
 
+## Уроки сессий (рабочая память)
+
+Раздел накапливается. Сверяться перед началом каждой сессии.
+
+### bash / git / python
+
+- Heredoc в интерактиве: мелкие куски по 3–8 строк, делимитер в кавычках
+  (<<'EOF'). Крупный heredoc — риск залипания, отменять нельзя.
+- `cat >` пишет пробелы, `gofmt -w` возвращает табы. Прогонять после
+  каждого нового .go-файла.
+- Python-правки: `assert s.count(old) == N` перед replace — ловит
+  «нашёл не то» до записи. Спасал дважды (пробелы vs табы, неверный якорь).
+- После правок номера строк сдвигаются. Ориентир — содержимое (grep -n),
+  не номера.
+- `git diff --stat` пустой = правок нет. Молчаливый go build —
+  не доказательство. Смотреть diff глазами.
+- `git diff` открывается в пейджере (двоеточие внизу). `q` — выход,
+  или `git --no-pager diff` для коротких.
+- Отступы в Go — табы (gofmt). Python-паттерн должен использовать \t,
+  не пробелы, иначе count == 0.
+
+### Тесты
+
+- Хендлеры читают пакетную db (main.go:382). В тестах подменять:
+  saved := db; db = newTestDB(t); t.Cleanup(func(){ db = saved }).
+  Паттерн — doctors_test.go:TestHandleDoctorsList_RoleFilter.
+- Хелпер подмены — без возврата: setupConsentDB(t). Работаем через
+  пакетную db (симметрия с doctors_test.go).
+- Стиль HTTP-тестов: httptest.NewRequest(...).WithContext(ctx) +
+  httptest.NewRecorder() + h.ServeHTTP.
+- Роль в контекст: withDoctorID(ctx, id, RoleDoctor) — 3 аргумента,
+  withPatientID(ctx, id) — 2 аргумента.
+- gofmt -l backend/ и go vet ./backend/ — молчание = чисто.
+
+### Аудит данных
+
+- Nullable в Scan: смотреть тип Go-поля, не греп. sql.Null* — ок;
+  string/int/float64 + nullable-колонка — дефект; COALESCE в SQL — ок.
+
 ## §6.59 — B30.1 + B30.2: инфраструктура auth пациента (14.10.2026)
 
 ### Что сделано
