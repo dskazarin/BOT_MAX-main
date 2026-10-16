@@ -139,6 +139,11 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 				handleCardByID(w, r, id)
 				return
 			}
+		case "sync":
+			if len(parts) == 2 {
+				handlePatientSync(w, r, id)
+				return
+			}
 		}
 		http.NotFound(w, r)
 		return
