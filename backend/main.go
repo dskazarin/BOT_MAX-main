@@ -493,6 +493,7 @@ func main() {
 	// Аутентификация (Шаг 6): POST /api/auth/login
 	registerAuthRoutes()
 	registerPatientAuthRoutes()
+	registerPatientVitalsRoutes() // B30.5: self-vitals
 	registerConsentRoutes()
 
 	// Impersonation (B20): /api/impersonation/{start,stop}
