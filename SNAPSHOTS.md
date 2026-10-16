@@ -3267,3 +3267,155 @@ B30.3 переиспользуется без изменений.
 **Урок сессии:** timestamp-формат проекта — `"2006-01-02 15:04:05"`,
 не RFC3339. Проверять через `grep -n "Format(" backend/*.go` до
 написания парсера.
+
+## 6.68 — B30.5: UI пациента (self-vitals) + sync-индикатор у врача
+
+**Дата:** 2026-10-16
+**Коммиты:** `6560603` feat(patient-vitals), `a2621ec` feat(patient-cabinet),
+`c14defe` feat(doctor-cabinet)
+**Предшественник:** §6.67 (B30.4 sync закрыт)
+
+### Что сделано
+
+Пациент ведёт свои vitals через backend (self-endpoints). Врач видит
+индикатор sync на карте пациента.
+
+**Backend — self-vitals (`6560603`):**
+- `backend/patient_vitals.go` (new, ~140 строк) — `handlePatientVitals`
+  (GET/PUT), `handlePatientVitalsHistory` (GET), `resolvePatientIDForSelf`,
+  `registerPatientVitalsRoutes`.
+- `backend/patient_vitals_test.go` (new, ~230 строк) — 9 тестов, httptest,
+  прямой вызов handler'а (стиль 1:1 с `consent_test.go`).
+- `backend/main.go` (+1 строка) — `registerPatientVitalsRoutes()` рядом
+  с `registerPatientAuthRoutes()`.
+
+**UI пациента (`a2621ec`):**
+- `patient_cabinet_full.html` (+69 строк) — `syncVitalsToServer()`,
+  `bootstrapVitalsFromServer()`, вызовы в `updateBP`, `updateSpO2`,
+  `addTemperatureFromSelect`, `DOMContentLoaded`.
+
+**UI врача (`c14defe`):**
+- `doctor_cabinet.html` (+38 строк) — `<span id="syncBadge">`,
+  `updateSyncBadge(patientId)`, вызов в `selectPatient`, сброс в
+  `deletePatient`.
+
+### Контракт
+
+    GET  /api/patient/vitals                      (patient-only)
+    PUT  /api/patient/vitals                      (patient-only)
+    GET  /api/patient/vitals/history?limit=N      (patient-only)
+
+    GET 200 {"bp":"...","temp":...,"spo2":...,"updated":"..."}
+    PUT 200 {"ok":true}
+    GET history 200 [{id,patientId,bp,temp,spo2,recorded}, ...] DESC
+    404 {"error":"patient account not found"}  — нет аккаунта / нет ctx
+    400 "invalid json: ..."                    — PUT с битым телом
+    405 "method not allowed"
+
+### Решения сессии
+
+1. **Резолв patientID — двухшаговый.** `patientIDFromCtx(r)` возвращает
+   `patient_accounts.id` (subjectID). `getPatientAccountByID` даёт
+   `acc.PatientID` (`patients.id`). Vitals-таблицы работают с `patients.id`.
+   Три уровня контекста: `Claims.DoctorID` (историческое имя, = subjectID),
+   `patient_accounts.id`, `patients.id` — не путать.
+2. **Формат времени — RFC3339, не `tsLayout`.** `db.go:upsertVitals` /
+   `appendVitalsHistory` пишут `time.RFC3339`. Урок B30.4 про
+   `"2006-01-02 15:04:05"` относится к `consents.expires_at`, не к vitals.
+   Ошибки парсинга тут не бывает — строку прокидываем как есть.
+3. **GET без записи → 200 + пустой объект,** не 404. Фронт сам решает,
+   показывать ли fallback. `getVitals` использует `COALESCE(...)`, поэтому
+   `sql.ErrNoRows` — только при полном отсутствии строки.
+4. **`limit` в history: default 50, cap 500.** Симметрия с B30.4.
+   (`getVitalsHistory` тоже default 50.)
+5. **Middleware — `patientAuthMiddleware` (hard-mode),** как в B30.2.
+   Whitelist не нужен: `registerPatientVitalsRoutes` оборачивает хендлеры
+   сразу, `patient-auth/*` остаётся отдельно.
+6. **UI пациента — fallback на localStorage.** `patient_cabinet_full.html`
+   пока без экрана логина, поэтому backend-синк «мягкий»: 401/сеть → тихо
+   остаёмся на localStorage. Экран логина — отдельная задача (B30.5b).
+7. **Temp через DOM, не через `patientData.tempHistory`.** В модели
+   пациента нет числового temp. `addTemperatureFromSelect` дописан
+   `syncVitalsToServer()` — значение `tempSelect.value` уходит в backend,
+   текстовая запись в `patientData.symptoms` остаётся (для графика).
+8. **Индикатор sync — через `BotMaxAuth.authFetch`,** не голый `fetch`.
+   Bearer + refresh 401, как в остальных вызовах `doctor_cabinet.html`.
+9. **`limit=500` в бейдже + суффикс `+`.** `sync.go:parseSyncLimit`
+   возвращает 400 при `limit > 500` (не cap). Показываем полный набор до
+   500 и `500+` при упоре.
+
+### Бейдж sync — состояния
+
+| Источник | Бейдж |
+|---|---|
+| `200`, `records.length < 500` | зелёный «sync: N записей» |
+| `200`, `records.length === 500`, `limit === 500` | зелёный «sync: 500+ записей» |
+| `403 consent_required` | красный «нет согласия» |
+| `403 consent_expired` | жёлтый «согласие истекло» |
+| `401 / 404 / 5xx / сеть` | пусто (тихо) |
+
+### Отложено
+
+- **Коммит 2b:** `showBPHistory` / `showSpO2History` / `showTemperatureChart`
+  всё ещё на localStorage. Перевод на `GET /api/patient/vitals/history`.
+- **B30.5b:** экран логина пациента (если `patient_cabinet_full.html`
+  должен работать только авторизованным).
+- **Кнопка «запросить consent»** в `doctor_cabinet.html` при бейдже
+  «нет согласия» — backlog.
+- **Smoke E2E в браузере** — отложен (backend-тесты зелёные, 9/9).
+- **`offset` / `from&to`** для self-history — наследуется из отложенного
+  B30.4.
+
+### Тесты (9/9 PASS, backend)
+
+| Тест | Что проверяет |
+|---|---|
+| `TestPatientVitals_GetEmpty` | нет записи → 200 пустой объект |
+| `TestPatientVitals_PutGet` | PUT → GET: значения сохранились |
+| `TestPatientVitals_History` | PUT×2 → history 2 записи, DESC |
+| `TestPatientVitals_HistoryLimit` | ?limit=1 → одна запись |
+| `TestPatientVitals_AccountNotFound` | чужой accID → 404 |
+| `TestPatientVitals_NoCtx` | нет accID в ctx → 404 |
+| `TestPatientVitals_PutBadJSON` | битый JSON → 400 |
+| `TestPatientVitals_MethodNotAllowed` | DELETE → 405 |
+| `TestPatientVitalsMiddleware_NoToken` | нет cookie → 401 |
+
+### Проверка
+
+- `go vet ./backend/` — чисто.
+- `go test ./backend/` — PASS, 7.4s.
+- `gofmt -l backend/` — пусто.
+
+### Точка входа следующей сессии
+
+```bash
+cd /workspaces/BOT_MAX-main
+git log --oneline -5
+git status -sb
+grep -n "6.68\|B30.5\|B30.6" SNAPSHOTS.md | head
+make backup
+# далее — smoke B30.5 в браузере, затем B30.5b (экран логина пациента)
+# или B30.6 (см. §6.58 — план B30)
+```
+
+### Уроки сессии
+
+- **Три уровня контекста пациента.** `patient_accounts.id` (subjectID,
+  кладётся в ctx как `patientIDFromCtx`), `patients.id` (`acc.PatientID`,
+  используется в vitals-таблицах), `Claims.DoctorID` (историческое имя,
+  для пациента = `patientAccountID`). Путаница здесь ловится тестом
+  `TestPatientVitals_AccountNotFound`.
+- **`sync.go:parseSyncLimit` не делает cap.** `limit > 500` → 400, не «тихо
+  режем до 500». Поэтому в бейдже `limit=500` — единственный способ
+  получить максимум. Если когда-нибудь поменяем на cap — упростить бейдж.
+- **HTML-файлы — пробелы, не табы.** Python-скрипт с таб-символом в якорях
+  даёт `count == 0`. Для `.html` использовать 4 пробела. Урок из сессий
+  подтвердился.
+- **`grep -c` считает строки, не вхождения.** `grep -c "updateSyncBadge"`
+  дало 3, а не 4 — потому что `function updateSyncBadge(patientId)` — одна
+  строка. При проверке якорей ориентироваться на число строк.
+- **`cat <<'EOF'` с блоком ` ``` ` внутри — не использовать.**
+  Закрывающий `EOF` легко «съедается» в интерактиве (залипание на `>`).
+  Markdown-блоки с код-фенсами дописывать в файл **построчно через python
+  `open(p, "a").write(line + "\n")`** или через `printf '%s\n' …`,
+  короткими кусками по 3–8 строк. В §6.68 это стоило двух залипаний.
