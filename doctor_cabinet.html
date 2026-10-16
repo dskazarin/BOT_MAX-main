@@ -442,6 +442,7 @@
             <div class="card-header">
                 <h2>🧠 ИИ-диагностика</h2>
                 <span id="selectedPatientName" style="color:#a0aec0;font-size:0.9em;">Выберите пациента</span>
+                <span id="syncBadge" style="margin-left:10px;font-size:0.85em;"></span>
             </div>
 
             <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px;">
@@ -1494,6 +1495,41 @@
         return 'PAT-' + stamp + '-' + rnd;
     }
 
+    // === B30.5: sync-индикатор у врача ===
+    // GET /api/patients/{id}/sync (B30.4) — doctor-only, approved consent + scope.
+    // 200 → "sync: N записей" (500+ при упоре в лимит);
+    // 403 consent_required / consent_expired → статус;
+    // иначе (401/404/5xx) — бейдж очищается.
+    function updateSyncBadge(patientId) {
+        var el = document.getElementById('syncBadge');
+        if (!el) return;
+        el.innerHTML = '';
+        if (!patientId) return;
+
+        BotMaxAuth.authFetch('GET',
+            '/api/patients/' + encodeURIComponent(patientId) + '/sync?limit=500'
+        ).then(function(res) {
+            if (res.status === 200) {
+                return res.json().then(function(data) {
+                    var recs = (data && data.records) || [];
+                    var n = recs.length;
+                    var suffix = (n === 500 && data && data.limit === 500) ? '+' : '';
+                    el.innerHTML = '<span style="background:#22543d;color:#9ae6b4;padding:2px 8px;border-radius:10px;">sync: ' + n + suffix + ' записей</span>';
+                });
+            }
+            if (res.status === 403) {
+                return res.json().then(function(err) {
+                    if (err && err.error === 'consent_required') {
+                        el.innerHTML = '<span style="background:#742a2a;color:#feb2b2;padding:2px 8px;border-radius:10px;">нет согласия</span>';
+                    } else if (err && err.error === 'consent_expired') {
+                        el.innerHTML = '<span style="background:#744210;color:#faf089;padding:2px 8px;border-radius:10px;">согласие истекло</span>';
+                    }
+                }).catch(function() { /* тихо */ });
+            }
+            // 401/404/5xx — бейдж остаётся пустым
+        }).catch(function() { /* тихо */ });
+    }
+
     function selectPatient(id) {
         window.open("patient_card.html?id=" + encodeURIComponent(id), "_blank");
         selectedPatientId = id;
@@ -1501,6 +1537,7 @@
         if (!patient) return;
 
         document.getElementById('selectedPatientName').textContent = patient.name;
+        updateSyncBadge(id);   // B30.5: индикатор sync
 
         var syms = patient.symptoms || {};
         LOR_SYMPTOMS.forEach(function(s) {
@@ -1528,6 +1565,7 @@
         if (selectedPatientId === id) {
             selectedPatientId = null;
             document.getElementById('selectedPatientName').textContent = 'Выберите пациента';
+            updateSyncBadge(null);   // B30.5: сброс индикатора
             document.getElementById('aiResult').classList.remove('show');
         }
         savePatientsToStorage();
