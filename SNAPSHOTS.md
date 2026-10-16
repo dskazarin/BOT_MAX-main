@@ -3113,3 +3113,30 @@ B выбран потому, что A даёт скрытый pending (не от
     # далее — подшаг 1: схема-дельта в db.go
 
 **Долги:** пусто.
+
+**Итог (закрыто 2026-10-16):**
+
+| # | Подшаг | Артефакт |
+|---|---|---|
+| 1 | Схема-дельта | e83eba7 |
+| 2 | Миграция | e83eba7 |
+| 3 | consentAudit | 1334120 |
+| 4 | Модель Consent | 1334120 |
+| 5 | 5 роутов | 1334120 |
+| 6 | registerConsentRoutes + вызов | 1334120 |
+| 7 | Тесты (13/13 PASS) | 80967e1 |
+| 8 | UI врача | отложено (B30.5) |
+
+**Коммиты:**
+- 7a86943 docs(snapshots): §6.66 — план и решения
+- e83eba7 feat(db): consents.expires_at + enum denied/deny
+- 1334120 feat(consent): 5 роутов
+- 80967e1 test(consent): 13 тестов (httptest)
+
+**Урок сессии (подмена глобальной db в тестах):**
+Хендлеры consent.go читают пакетную db (main.go:382), которая
+инициализируется только в main(). В тестах её надо подменять:
+паттерн doctors_test.go:TestHandleDoctorsList_RoleFilter —
+saved := db; db = newTestDB(t); t.Cleanup(func(){ db = saved }).
+Оформлено как хелпер setupConsentDB(t) без возврата — работаем
+через пакетную db (симметрия с doctors_test.go).
