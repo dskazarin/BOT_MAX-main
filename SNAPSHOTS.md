@@ -3558,3 +3558,21 @@ refresh-retry контрактно OK (login 200 → PUT 401 → refresh 200 →
 Бэкап снят по новому регламенту (make stop перед make backup) — без
 WAL-предупреждения, bot_max.db консистентен. Первый бэкап без ⚠️:
 backups/bot_max_20261020_065516 (260K), ротация 10/10.
+
+## B30.5b — followup: refresh 400→401 (2026-10-20, a446b88)
+Бэклог-пункт 1 закрыт. `handlePatientRefresh` (backend/patient_auth.go:339):
+отсутствие refresh-токена теперь `401 Unauthorized` вместо `400 Bad Request`.
+Семантика: "нет аутентификации" ≠ "кривой запрос". Остальные ветки функции
+(ParseToken, wrong role, revoked) уже отдавали 401 — цепочка консистентна.
+apiFetch-поведение не меняется (`!rr.ok → redirect`), но 401 чище.
+
+Проверки:
+- `curl -i -X POST /api/patient-auth/refresh` без cookie → **401** (было 400);
+- `-d '{"refreshToken":"garbage"}'` → **401** (ветка ParseToken);
+- позитив (валидный refresh → 200) — в smoke, регресс `smoke_b30_5.sh` → **6/6**;
+- `gofmt -l` пусто, `go build -o /tmp/botmax-build-check ./...` OK, `go vet ./...` OK.
+
+Не тронуто (корректные 400): 223 (invalid json login), 228 (пустые login/password),
+314 (dev-hash empty password). Бэкап: patient_auth.go.bak.b30_5b_refresh.
+Коммит: a446b88 (1 file, 1 insertion, 1 deletion).
+
