@@ -3522,3 +3522,15 @@ currentEnv.IsProd).
   на переходный период; удалить после подтверждения стабильной cookie-сессии.
 - **Регламент бэкапа:** перед `make backup` останавливать сервер (`make stop`),
   чтобы bot_max.db не попадал в WAL-состояние (-wal/-shm не в бэкапе).
+
+## B30.5b — smoke (2026-10-20)
+- backend smoke `smoke_b30_5.sh`: 6/6 HTTP 200; PUT `bp` строкой,
+  GET/history round-trip `"bp":"120/80"` — OK (`OK: bp round-trip 120/80`).
+- Фикс smoke: было `bp_sys`/`bp_dia` (мёртвые поля, `vitalsBody` их не читает,
+  `bp` оставался пустым) → заменено на `"bp":"120/80"` + assert round-trip.
+  H4 теперь проверяется автоматически, а не только чтением кода.
+- Связка account→patient: login возвращает `PACC-xxx`, vitals/history хранятся
+  по `PAT-xxx` (`resolvePatientIDForSelf`). В UI не всплывает (UI на
+  `patientData.patientId`). Зафиксировано, чтобы не читалось как баг.
+- Токены `accessToken`/`refreshToken` в теле login — для API-клиентов
+  (smoke/curl); браузер ходит только cookie (botmax_pat_access/refresh).

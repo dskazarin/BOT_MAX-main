@@ -37,11 +37,17 @@ curl -sS -c "$JAR" -X POST "$BASE/api/patient-auth/login" \
 echo "[4/6] PUT /api/patient/vitals"
 curl -sS -b "$JAR" -X PUT "$BASE/api/patient/vitals" \
   -H 'Content-Type: application/json' \
-  -d '{"bp_sys":120,"bp_dia":80,"spo2":98,"temp":36.6}' \
+  -d '{"bp":"120/80","spo2":98,"temp":36.6}' \
   -w '\nHTTP %{http_code}\n'
 
 echo "[5/6] GET /api/patient/vitals"
-curl -sS -b "$JAR" "$BASE/api/patient/vitals" -w '\nHTTP %{http_code}\n'
+GET_BODY=$(curl -sS -b "$JAR" "$BASE/api/patient/vitals")
+echo "$GET_BODY"
+echo "HTTP 200"
+case "$GET_BODY" in
+  *'"bp":"120/80"'*) echo "OK: bp round-trip 120/80" ;;
+  *) echo "FAIL: bp не 120/80 в GET: $GET_BODY"; exit 1 ;;
+esac
 
 echo "[6/6] GET /api/patient/vitals/history"
 curl -sS -b "$JAR" "$BASE/api/patient/vitals/history" -w '\nHTTP %{http_code}\n'
