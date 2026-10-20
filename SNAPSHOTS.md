@@ -3576,3 +3576,19 @@ apiFetch-поведение не меняется (`!rr.ok → redirect`), но 
 314 (dev-hash empty password). Бэкап: patient_auth.go.bak.b30_5b_refresh.
 Коммит: a446b88 (1 file, 1 insertion, 1 deletion).
 
+## B30.5b — followup 2: smoke KEEP_ACCOUNT=1 (2026-10-20, 1f55ba4)
+Бэклог-пункт 2 закрыт. `smoke_b30_5.sh`: `cleanup()` больше не удаляет
+временный `patient_accounts` при `KEEP_ACCOUNT=1` — удобно для ручной
+отладки (аккаунт остаётся, id печатается в stderr). `rm -f $JAR` — всегда.
+
+Проверки обоих режимов:
+- по умолчанию: smoke **6/6**, аккаунт удалён (`SELECT count … PACC-SMOKE%` → **0**);
+- `KEEP_ACCOUNT=1`: smoke **6/6**, аккаунт `PACC-SMOKE-6477` остался,
+  ручной `DELETE` → **0**. `bash -n` OK.
+
+Урок quoting: правка строки с вложенными кавычками через `sed c\` / python
+`-c` дважды съедала экранирование (`\"` → `"`). Прагматичное решение —
+не дублировать SQL-пример в `echo`, он уже есть в комментарии над `cleanup()`.
+Коммит: 1f55ba4 (1 file, 8 insertions, 1 deletion).
+
+
