@@ -9,7 +9,14 @@ ACC_ID="PACC-SMOKE-$$"
 JAR="$(mktemp /tmp/pat_jar.XXXXXX)"
 
 cleanup() {
-  sqlite3 bot_max.db "DELETE FROM patient_accounts WHERE id='$ACC_ID';" 2>/dev/null || true
+  # KEEP_ACCOUNT=1 — оставить временный аккаунт для ручной отладки.
+  # Удалять его потом руками:
+  #   sqlite3 bot_max.db "DELETE FROM patient_accounts WHERE id='<ACC_ID>';"
+  if [ -z "${KEEP_ACCOUNT:-}" ]; then
+    sqlite3 bot_max.db "DELETE FROM patient_accounts WHERE id='$ACC_ID';" 2>/dev/null || true
+  else
+    echo "KEEP_ACCOUNT=1: аккаунт $ACC_ID оставлен для отладки" >&2
+  fi
   rm -f "$JAR"
 }
 trap cleanup EXIT
