@@ -336,7 +336,7 @@ func handlePatientRefresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.RefreshToken == "" {
-		http.Error(w, `{"error":"refreshToken required"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"refreshToken required"}`, http.StatusUnauthorized)
 		return
 	}
 
