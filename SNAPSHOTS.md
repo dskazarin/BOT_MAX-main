@@ -3534,3 +3534,27 @@ currentEnv.IsProd).
   `patientData.patientId`). Зафиксировано, чтобы не читалось как баг.
 - Токены `accessToken`/`refreshToken` в теле login — для API-клиентов
   (smoke/curl); браузер ходит только cookie (botmax_pat_access/refresh).
+
+## B30.5b — диагностика и smoke-нюансы (2026-10-20)
+- **smoke_b30_5.sh самоочищающийся:** trap EXIT делает
+  `DELETE FROM patient_accounts WHERE id=$ACC_ID` + `rm -f $JAR`.
+  Поэтому после прогона `SELECT ... WHERE login='smoke_pat'` = 0 — это норма,
+  а не «INSERT не сработал». Для ручных проверок нужен свой аккаунт
+  (refresh_test), который trap не трогает.
+- **WAL и CLI:** при живом сервере `sqlite3 bot_max.db "SELECT ..."` может
+  не видеть свежие записи из `-wal` (`journal_mode=wal`). Для проверки:
+  `PRAGMA wal_checkpoint(PASSIVE);` перед SELECT (безопасно при живом
+  сервере), либо `make stop` (checkpoint при закрытии). Иначе диагностика
+  врёт (`COUNT=0` при реально существующих строках).
+- **refresh-retry подтверждён контрактно:** login 200 → PUT 401 (удалён
+  access-cookie) → POST /api/patient-auth/refresh 200 → PUT 200.
+  Это ровно поведение apiFetch при истёкшем access.
+
+## B30.5b — ИТОГ (2026-10-20)
+B30.5b закрыт: H1 (apiFetch+refresh-retry+401->login), H4 (bp string,
+round-trip в smoke), H5 (неприменим к patient_cabinet_full.html).
+patient_login.html добавлен. Smoke: backend 6/6 + bp round-trip,
+refresh-retry контрактно OK (login 200 → PUT 401 → refresh 200 → PUT 200).
+Бэкап снят по новому регламенту (make stop перед make backup) — без
+WAL-предупреждения, bot_max.db консистентен. Первый бэкап без ⚠️:
+backups/bot_max_20261020_065516 (260K), ротация 10/10.
