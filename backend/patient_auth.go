@@ -293,6 +293,36 @@ type patientRefreshReq struct {
 }
 
 // handlePatientRefresh — POST /api/patient-auth/refresh.
+// handlePatientDevHash — POST /api/patient-auth/dev-hash.
+// Только для dev (IsProd=false). Возвращает bcrypt-хеш переданного пароля.
+// Используется smoke-скриптом (smoke_b30_5.sh) для seed'а временного
+// patient_accounts. В prod отдаёт 404.
+// Тело: {"password":"..."} -> {"hash":"$2a$10$..."}.
+func handlePatientDevHash(w http.ResponseWriter, r *http.Request) {
+	if currentEnv == nil || currentEnv.IsProd {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
+		http.Error(w, `{"error":"invalid json or empty password"}`, http.StatusBadRequest)
+		return
+	}
+	h, err := HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, `{"error":"hash failed"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"hash": h})
+}
+
 func handlePatientRefresh(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -467,6 +497,7 @@ func patientAuthMiddleware(next http.Handler) http.Handler {
 
 func registerPatientAuthRoutes() {
 	http.HandleFunc("/api/patient-auth/login", handlePatientLogin)
+	http.HandleFunc("/api/patient-auth/dev-hash", handlePatientDevHash)
 	http.HandleFunc("/api/patient-auth/refresh", handlePatientRefresh)
 	http.HandleFunc("/api/patient-auth/logout", handlePatientLogout)
 	slog.Info("registerPatientAuthRoutes", "routes", "/login, /refresh, /logout")
