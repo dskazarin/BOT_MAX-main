@@ -3483,6 +3483,12 @@ currentEnv.IsProd).
 Каждое изменение — проверяемо: `grep -n`, `wc -c`, `head`, `tail`,
 `bash -n`, `gofmt -l`, `go build`.
 
+### Уроки quoting (v2, 2026-10-20)
+
+- **history-expansion**: символ bang в python -c съедается bash до python; assert не ловит — проверять вывод глазами. Лечение: set +H, либо \x21 в литерале, либо не писать bang в тексте.
+- **вложенные кавычки**: sed c\ и python -c теряли escape (\" -> "). Надёжно: printf %s\n ... > /tmp/x.py, тело в одинарных кавычках, запуск python3 /tmp/x.py.
+- **go build ./... из корня**: коллизия имени бинарника backend с каталогом backend/; использовать go build -o /tmp/<name> ./...
+
 ## Решение: пересмотр порядка
 
 - **B30.5b** (UI логина пациента + seed/аккаунт) — вперёд 2b.
