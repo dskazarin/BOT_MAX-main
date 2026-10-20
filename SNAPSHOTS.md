@@ -3419,3 +3419,83 @@ make backup
   Markdown-блоки с код-фенсами дописывать в файл **построчно через python
   `open(p, "a").write(line + "\n")`** или через `printf '%s\n' …`,
   короткими кусками по 3–8 строк. В §6.68 это стоило двух залипаний.
+
+## 6.69 — B30.5 smoke: находки и пересмотр порядка
+
+Backend-smoke через curl (smoke_b30_5.sh) прошёл end-to-end:
+login -> cookie -> PUT/GET/history — все 6 шагов HTTP 200.
+Контракт /api/patient/vitals рабочий. По ходу smoke выявлено:
+
+### H1. UI пациента не авторизуется -> sync-индикатор мёртв
+`patient_cabinet_full.html` (a2621ec) ходит на /api/patient/vitals
+без cookie. `patientAuthMiddleware` (patient_auth.go:441) требует
+cookie `botmax_pat_access` — иначе 401. UI ловит 401 и уходит в
+localStorage-fallback. Следствие: sync-индикатор врача (c14defe)
+в проде **всегда** в состоянии «нет данных».
+
+Причина: B30.5b (экран логина пациента) на момент B30.5 не сделан.
+
+### H2. patient_accounts пуста — логиниться некому
+`SELECT COUNT(*) FROM patient_accounts` -> 0. Backend login/refresh/
+logout готовы (B30.2, /api/patient-auth/*), но ни одного аккаунта
+не заведено. B30.5b = UI-логин **плюс** заведение аккаунта.
+
+### H3. Cookie Secure — dev-safe (не блокер)
+`setPatientCookies` (cookies.go:96) берёт Secure из
+`currentEnv.CookieSecure`; в dev (BOTMAX_ENV=dev) — false.
+На http://localhost:8082 cookie работает корректно.
+
+### H4. Контракт vitals: bp_sys/bp_dia не принимаются (SMOKE-находка)
+PUT с `{"bp_sys":120,"bp_dia":80,...}` даёт `{"ok":true}`, но GET
+возвращает `bp:""`. API ожидает **строку** `bp` (вида `"120/80"`),
+а не два числовых поля. `bp_sys`/`bp_dia` молча игнорируются.
+Нужно либо (а) расширить API, либо (б) привести UI к формату `bp`.
+Не блокер для B30.5b, но **фиксируем до коммита 2b** — история bp
+без этого будет пустая.
+
+### H5. patientLoginResp.patient.id = account id, а не patient id
+В ответе login: `{"patient":{"id":"PACC-...","name":"...","login":"..."}}`.
+`history.patientId` при этом = `PAT-001`. Поле `patient.id` в ответе
+login семантически = account id. Если UI использует `patient.id`
+как id пациента для запросов — будет рассинхрон. Проверить при B30.5b.
+
+### H6. dev-hash endpoint (infra)
+Добавлен `POST /api/patient-auth/dev-hash` (dev-only, prod -> 404):
+`{"password":"..."} -> {"hash":"$2a$10$..."}`. Нужен для seed
+patient_accounts в smoke-скриптах и локальной разработки.
+Реализация — patient_auth.go, build-безопасно (проверка через
+currentEnv.IsProd).
+
+## Правило работы
+
+**ВСЕ ИЗМЕНЕНИЯ ФАЙЛОВ — ТОЛЬКО ЧЕРЕЗ BASH.** Запрещено:
+- открывать редактор (`code`, `nano`, `vim`) для правок;
+- вставлять markdown/HTML/Go-текст прямо в промпт;
+- heredoc с бэктик-фенсом и исполняемыми бэктиками внутри (урок §6.68).
+
+Разрешено:
+- `python3 - <<'PY'` с внешним литералом через тройные кавычки
+  (одинарными или двойными), но с проверкой на конфликт;
+- `cat > f <<'EOF'` — только если внутри нет бэктик-фенсов и бэктиков;
+- `cat a >> b`, `printf`, `sed -i`, `tee`, `cp`, `mv`, `git`;
+- `base64 -d` — крайний fallback.
+
+Каждое изменение — проверяемо: `grep -n`, `wc -c`, `head`, `tail`,
+`bash -n`, `gofmt -l`, `go build`.
+
+## Решение: пересмотр порядка
+
+- **B30.5b** (UI логина пациента + seed/аккаунт) — вперёд 2b.
+- **2b** (история vitals) — после B30.5b; и **сначала** решить H4
+  (формат bp), иначе showBPHistory получит пустоту.
+- **H5** (patient.id = account id) — проверить и исправить вместе
+  с B30.5b, если UI начнёт использовать `patient.id`.
+
+## Артефакты
+
+- `smoke_b30_5.sh` — backend smoke (login -> cookie -> PUT/GET/history),
+  с rollback через trap EXIT, использует dev-hash.
+- `backend/patient_auth.go` — dev-only `POST /api/patient-auth/dev-hash`
+  (IsProd -> 404).
+- `patient_login.html` — TODO (B30.5b).
+- `patient_cabinet_full.html` — TODO: `apiFetch()` + редирект на 401.
