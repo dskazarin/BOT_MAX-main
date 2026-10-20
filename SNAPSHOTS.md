@@ -3499,3 +3499,26 @@ currentEnv.IsProd).
   (IsProd -> 404).
 - `patient_login.html` — TODO (B30.5b).
 - `patient_cabinet_full.html` — TODO: `apiFetch()` + редирект на 401.
+
+## B30.5b — patient_cabinet_full.html (2026-10-20)
+- **H1 закрыт:** vitals PUT/GET переведены на `apiFetch` (credentials:'include';
+  access-cookie botmax_pat_access, Path=/api). При 401 — один retry через
+  `POST /api/patient-auth/refresh` (refresh-cookie botmax_pat_refresh,
+  Path=/api/patient-auth, SameSite=Strict, HttpOnly), при неудаче — редирект
+  на `/patient_login.html`. PUT — строгий (401→refresh→login); GET —
+  `allow401:true` (тихий fallback на localStorage, как и было задумано).
+  Из PUT убран явный `credentials:'same-origin'` (перекрывал include).
+- **H4 закрыт:** backend принимает `bp string` (`vitalsBody.BP string json:"bp"`,
+  backend/patients.go:251). UI собирает `bp` как `"sys/dia"`; при пустых
+  селектах отправляется `""` (а не `"/"`). Backend не менялся.
+- **H5 закрыт как неприменимый:** UI кабинета использует `patientData.patientId`
+  (PAT-xxx); account id в patient_cabinet_full.html не участвует.
+- **Сессия пациента:** cookie-based (botmax_pat_access / botmax_pat_refresh,
+  HttpOnly, SameSite=Strict, Secure=prod). Bearer не поддерживается
+  (patient_auth.go:456). Токены из ответа login в localStorage НЕ кладём.
+- **patient_login.html:** новая страница входа; POST /api/patient-auth/login
+  ({login,password}); авто-переход в кабинет при валидной cookie.
+- **TODO:** `sessionToken` в localStorage (строка 645) оставлен как fallback
+  на переходный период; удалить после подтверждения стабильной cookie-сессии.
+- **Регламент бэкапа:** перед `make backup` останавливать сервер (`make stop`),
+  чтобы bot_max.db не попадал в WAL-состояние (-wal/-shm не в бэкапе).

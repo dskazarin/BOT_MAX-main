@@ -612,7 +612,37 @@
 <script>
     // ========== НАСТРОЙКИ СИНХРОНИЗАЦИИ ==========
     let currentSystemDate = new Date();
-    let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString();
+    // === B30.5b: apiFetch — cookie-сессия + refresh-retry + 401->login.
+// access-cookie (botmax_pat_access, Path=/api) идёт автоматически при
+// credentials:'include'. При 401 пробуем ОДИН раз POST /api/patient-auth/refresh
+// (refresh-cookie botmax_pat_refresh, Path=/api/patient-auth) и повторяем
+// исходный запрос. Если refresh не удался — уводим на /patient_login.html.
+// opts.allow401=true — не редиректить (для фоновых проверок/GET-fallback).
+function apiFetch(url, opts) {
+  opts = opts || {};
+  opts.credentials = 'include';
+  var allow401 = !!opts.allow401;
+  delete opts.allow401;
+
+  function redirectLogin() {
+    location.href = '/patient_login.html';
+    return new Promise(function () {}); // «зависший» промис: вызывающий не продолжит
+  }
+
+  return fetch(url, opts).then(function (r) {
+    if (r.status !== 401 || allow401) return r;
+    // 401: access истёк или отсутствует — пробуем refresh один раз.
+    return fetch('/api/patient-auth/refresh', {
+      method: 'POST',
+      credentials: 'include'
+    }).then(function (rr) {
+      if (!rr.ok) return redirectLogin();
+      return fetch(url, opts); // повтор исходного запроса с новым access-cookie
+    }).catch(function () { return redirectLogin(); });
+  });
+}
+
+let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString();
     let recognition = null;
     let accumulatedText = '';
     let temperatureChart = null;
@@ -1372,16 +1402,16 @@
     // молча остаёмся на localStorage (пациент может быть не залогинен).
     function syncVitalsToServer() {
         try {
-            var bp = (document.getElementById('bpSystolicSelect').value || '') + '/' +
-                     (document.getElementById('bpDiastolicSelect').value || '');
+            var bpSys = document.getElementById('bpSystolicSelect').value || '';
+            var bpDia = document.getElementById('bpDiastolicSelect').value || '';
+            var bp = (bpSys && bpDia) ? (bpSys + '/' + bpDia) : '';
             var spo2 = parseInt(document.getElementById('spo2Select').value, 10) || 0;
             var tempEl = document.getElementById('tempSelect');
             var temp = tempEl ? (parseFloat(tempEl.value) || 0) : 0;
 
-            fetch('/api/patient/vitals', {
+            apiFetch('/api/patient/vitals', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({ bp: bp, temp: temp, spo2: spo2 })
             }).then(function(r) {
                 if (!r.ok && r.status !== 401) {
@@ -1399,7 +1429,7 @@
     // 200 → подставляем в селекты (localStorage не трогаем).
     // 401/0/ошибка → молча остаёмся на localStorage.
     function bootstrapVitalsFromServer() {
-        fetch('/api/patient/vitals', { credentials: 'same-origin' })
+        apiFetch('/api/patient/vitals', { allow401: true })
             .then(function(r) {
                 if (!r.ok) return null;
                 return r.json();

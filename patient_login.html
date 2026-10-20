@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вход пациента</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f5f6f8; margin:0;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; }
+  .card { background:#fff; padding:32px; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08);
+          width:100%; max-width:360px; }
+  h1 { font-size:20px; margin:0 0 20px; }
+  label { display:block; font-size:13px; color:#555; margin:12px 0 4px; }
+  input { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #d0d3d8;
+          border-radius:8px; font-size:15px; }
+  button { width:100%; margin-top:20px; padding:12px; border:0; border-radius:8px;
+           background:#2563eb; color:#fff; font-size:15px; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
+  .err { color:#c02626; font-size:13px; margin-top:12px; min-height:18px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Вход пациента</h1>
+  <form id="loginForm" autocomplete="on">
+    <label for="login">Логин</label>
+    <input id="login" name="login" type="text" required autofocus>
+    <label for="password">Пароль</label>
+    <input id="password" name="password" type="password" required>
+    <button id="submitBtn" type="submit">Войти</button>
+    <div class="err" id="err"></div>
+  </form>
+</div>
+<script>
+(function () {
+  var form = document.getElementById('loginForm');
+  var btn  = document.getElementById('submitBtn');
+  var err  = document.getElementById('err');
+
+  fetch('/api/patient/vitals', { credentials: 'include' })
+    .then(function (r) { if (r.ok) location.href = '/patient_cabinet_full.html'; })
+    .catch(function () { });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    err.textContent = '';
+    btn.disabled = true;
+    fetch('/api/patient-auth/login', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        login: document.getElementById('login').value.trim(),
+        password: document.getElementById('password').value
+      })
+    })
+    .then(function (r) {
+      if (r.ok) { location.href = '/patient_cabinet_full.html'; return; }
+      if (r.status === 401) { err.textContent = 'Неверный логин или пароль'; }
+      else { err.textContent = 'Ошибка входа (' + r.status + ')'; }
+      btn.disabled = false;
+    })
+    .catch(function () {
+      err.textContent = 'Сеть недоступна, попробуйте ещё раз';
+      btn.disabled = false;
+    });
+  });
+})();
+</script>
+</body>
+</html>
