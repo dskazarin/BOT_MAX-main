@@ -166,7 +166,12 @@ func handleConsentsList(w http.ResponseWriter, r *http.Request) {
 	)
 	switch role {
 	case "patient":
-		list, err = listConsentsForPatient(db, patientIDFromCtx(r))
+		pid, perr := resolvePatientIDForSelf(r)
+		if perr != nil {
+			http.Error(w, `{"error":"patient account not found"}`, http.StatusInternalServerError)
+			return
+		}
+		list, err = listConsentsForPatient(db, pid)
 	case "doctor":
 		list, err = listConsentsForDoctor(db, doctorIDFromCtx(r))
 	default:
@@ -257,6 +262,11 @@ func handleConsentTransition(w http.ResponseWriter, r *http.Request, id, action,
 
 	var actorType, actorID string
 	pid := patientIDFromCtx(r)
+	if pid != "" {
+		if rp, perr := resolvePatientIDForSelf(r); perr == nil {
+			pid = rp
+		}
+	}
 	did := doctorIDFromCtx(r)
 	switch requiredRole {
 	case "patient":

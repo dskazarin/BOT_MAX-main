@@ -782,6 +782,30 @@ func authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// B30.6c: /api/consents* принимает оба токена — patient и doctor.
+		// Ставим ОБА контекста (каждый хендлер берёт свой):
+		// roleOf() приоритет patient, doctorIDFromCtx() — для /request.
+		if isConsentDualPath(r.URL.Path) {
+			ctx := r.Context()
+			handled := false
+			if pt := extractPatientAccessToken(r); pt != "" {
+				if pc, perr := ParseToken(pt, "access"); perr == nil && pc.Role == RolePatient {
+					ctx = withPatientID(ctx, pc.DoctorID)
+					handled = true
+				}
+			}
+			if dt := extractAccessToken(r); dt != "" {
+				if dc, derr := ParseToken(dt, "access"); derr == nil {
+					ctx = withDoctorID(ctx, dc.DoctorID, dc.Role)
+					handled = true
+				}
+			}
+			if handled {
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+
 		token := extractAccessToken(r)
 		enforce := authEnforceEnabled()
 
@@ -977,6 +1001,10 @@ func requirePasswordChanged(next http.Handler) http.Handler {
 // isAuthWhitelist — пути, не требующие авторизации.
 // Для /api/* используем строгое сравнение (не префикс), чтобы случайно
 // не открыть /api/auth/loginXXX. Статика (не /api/*) — открыта.
+func isConsentDualPath(p string) bool {
+	return p == "/api/consents" || strings.HasPrefix(p, "/api/consents/")
+}
+
 func isAuthWhitelist(path string) bool {
 	switch path {
 	case "/api/health", "/api/metrics", "/api/auth/login", "/api/auth/refresh",
