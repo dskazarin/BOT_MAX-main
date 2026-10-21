@@ -3597,4 +3597,35 @@ apiFetch-поведение не меняется (`!rr.ok → redirect`), но 
 не дублировать SQL-пример в `echo`, он уже есть в комментарии над `cleanup()`.
 Коммит: 1f55ba4 (1 file, 8 insertions, 1 deletion).
 
+## B30.6 — consent UI + dual-auth + patient login (2026-10-21)
+Этап 1 B30 (см. §6.58): закрыт подпатчами 6a-s. Точка входа: 4b3b2af.
+
+### Подпатчи
+- **6a-c:** `/api/consents*` принимает и patient-, и doctor-токен (dual-auth в
+  `authMiddleware`), ставит ОБА контекста; в `consent.go` резолв account→patients.id
+  через `resolvePatientIDForSelf` (было: сравнение account id с patients.id → 401/403).
+- **6d/e/f:** `index.html` — карточка пациента → `patient_login.html` (было: сразу кабинет),
+  врач → `login.html`; `patient_login.html` приведён к стилю `login.html` (тёмная карточка,
+  🧠 BOT_MAX, поля Логин/Пароль, подсказка `patient@local`); seed `PACC-DEMO`/`PAT-DEMO`
+  (`patient@local`/`patient@local`) в `db.go`+`seed.go`.
+- **6g-m:** кабинет пациента: убран doctor-guard (`auth.js` + inline `requireAuth`),
+  добавлена consent-карточка (list/approve/deny/revoke через `apiFetch`), `logout()` →
+  `POST /api/patient-auth/logout` + confirm, тема/контраст, баланс `<script>` (chart.js был
+  незакрыт → весь JS «съеден»), глаз пароля в обеих формах.
+- **6n-s:** единый UI с врачом: `--bg-header`/`--bg-card-border`, `.header`/`.card` с blur;
+  переключатель темы (light/dark) через `theme.js` + `[data-theme="dark"]` с полным набором
+  переменных; `.constant-med-item` → `var(--bg-subtle)` (было `#e6fffa`).
+
+### Проверки
+- consent end-to-end (curl): pending → approve → approved → revoke → revoked, всё 200;
+- login `patient@local` при doctor-cookie → `Set-Cookie: botmax_access/refresh Max-Age=0` +
+  patient-cookie; кабинет открывается без прыжка на врача;
+- smoke 6/6 (bp round-trip), `go build`/`go vet`/`gofmt -l` зелёные;
+- UI: белая/тёмная тема, consent-карточка рендерится, глаз пароля, «Выйти» разлогинивает.
+
+### Коммиты
+838aaf8 (6a-c) → 13aed81 (6d/e/f) → 4b3b2af (6g-s).
+
+
+
 
