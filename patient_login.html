@@ -1,71 +1,246 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Вход пациента</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+<title>BOT_MAX — Вход пациента</title>
 <style>
-  body { font-family: system-ui, sans-serif; background:#f5f6f8; margin:0;
-         display:flex; align-items:center; justify-content:center; min-height:100vh; }
-  .card { background:#fff; padding:32px; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08);
-          width:100%; max-width:360px; }
-  h1 { font-size:20px; margin:0 0 20px; }
-  label { display:block; font-size:13px; color:#555; margin:12px 0 4px; }
-  input { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #d0d3d8;
-          border-radius:8px; font-size:15px; }
-  button { width:100%; margin-top:20px; padding:12px; border:0; border-radius:8px;
-           background:#2563eb; color:#fff; font-size:15px; cursor:pointer; }
-  button:disabled { opacity:.6; cursor:default; }
-  .err { color:#c02626; font-size:13px; margin-top:12px; min-height:18px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+        color: #e2e8f0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .login-card {
+        background: rgba(45, 55, 72, 0.95);
+        border: 1px solid rgba(159, 122, 234, 0.3);
+        border-radius: 16px;
+        padding: 40px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .login-card .logo {
+        font-size: 3em;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    .login-card h1 {
+        font-size: 1.5em;
+        font-weight: 700;
+        text-align: center;
+        color: #9f7aea;
+        margin-bottom: 6px;
+    }
+
+    .login-card .subtitle {
+        text-align: center;
+        color: #a0aec0;
+        font-size: 0.9em;
+        margin-bottom: 28px;
+    }
+
+    .form-group {
+        margin-bottom: 18px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.85em;
+        color: #a0aec0;
+        margin-bottom: 6px;
+        font-weight: 600;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 12px 14px;
+        background: rgba(26, 32, 44, 0.7);
+        border: 1px solid rgba(159, 122, 234, 0.3);
+        border-radius: 10px;
+        color: #e2e8f0;
+        font-size: 1em;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.2s, background 0.2s;
+    }
+
+    .form-group input:focus {
+        border-color: #9f7aea;
+        background: rgba(26, 32, 44, 0.9);
+    }
+
+    .form-group input:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    button[type="submit"] {
+        width: 100%;
+        padding: 14px;
+        background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+        border: none;
+        border-radius: 10px;
+        color: #fff;
+        font-size: 1em;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+        font-family: inherit;
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(159, 122, 234, 0.4);
+    }
+
+    button[type="submit"]:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .error-msg {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #f56565;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 0.9em;
+        margin-bottom: 18px;
+        display: none;
+    }
+
+    .error-msg.visible {
+        display: block;
+    }
+
+    .hint {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 0.8em;
+        color: #718096;
+    }
+
+    .hint code {
+        background: rgba(159, 122, 234, 0.15);
+        color: #9f7aea;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'SF Mono', Monaco, Consolas, monospace;
+    }
+
+    .back-link {
+        display: block;
+        text-align: center;
+        margin-top: 16px;
+        color: #a0aec0;
+        text-decoration: none;
+        font-size: 0.85em;
+    }
+
+    .back-link:hover {
+        color: #9f7aea;
+    }
+        .pass-wrap { position: relative; }
+        .pass-wrap input { padding-right: 42px; }
+        .toggle-pass { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1.1em; opacity: .6; user-select: none; }
+        .toggle-pass:hover { opacity: 1; }
 </style>
 </head>
 <body>
-<div class="card">
-  <h1>Вход пациента</h1>
-  <form id="loginForm" autocomplete="on">
-    <label for="login">Логин</label>
-    <input id="login" name="login" type="text" required autofocus>
-    <label for="password">Пароль</label>
-    <input id="password" name="password" type="password" required>
-    <button id="submitBtn" type="submit">Войти</button>
-    <div class="err" id="err"></div>
-  </form>
+
+<div class="login-card">
+    <div class="logo">🧠</div>
+    <h1>BOT_MAX</h1>
+    <div class="subtitle">Личный кабинет пациента</div>
+
+    <div id="errorMsg" class="error-msg"></div>
+
+    <form id="loginForm" autocomplete="on">
+        <div class="form-group">
+            <label for="login">Логин</label>
+            <input type="text" id="login" name="login"
+                   autocomplete="username" required
+                   placeholder="patient@local">
+        </div>
+
+        <div class="form-group">
+            <label for="password">Пароль</label>
+            <div class="pass-wrap">
+                <input type="password" id="password" name="password"
+                       autocomplete="current-password" required
+                       placeholder="••••••••">
+                <span class="toggle-pass" onclick="togglePass()" title="Показать/скрыть">👁</span>
+            </div>
+        </div>
+
+        <button type="submit" id="submitBtn">Войти</button>
+    </form>
+
+    <div class="hint">
+        Тестовый пациент: <code>patient@local</code> / <code>patient@local</code>
+    </div>
+
+    <a href="index.html" class="back-link">← Вернуться на главную</a>
 </div>
+
 <script>
 (function () {
-  var form = document.getElementById('loginForm');
-  var btn  = document.getElementById('submitBtn');
-  var err  = document.getElementById('err');
+    'use strict';
+    var form = document.getElementById('loginForm');
+    var btn  = document.getElementById('submitBtn');
+    var err  = document.getElementById('errorMsg');
 
-  fetch('/api/patient/vitals', { credentials: 'include' })
-    .then(function (r) { if (r.ok) location.href = '/patient_cabinet_full.html'; })
-    .catch(function () { });
+    fetch('/api/patient/vitals', { credentials: 'include' })
+        .then(function (r) { if (r.ok) location.href = '/patient_cabinet_full.html'; })
+        .catch(function () { });
 
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    err.textContent = '';
-    btn.disabled = true;
-    fetch('/api/patient-auth/login', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        login: document.getElementById('login').value.trim(),
-        password: document.getElementById('password').value
-      })
-    })
-    .then(function (r) {
-      if (r.ok) { location.href = '/patient_cabinet_full.html'; return; }
-      if (r.status === 401) { err.textContent = 'Неверный логин или пароль'; }
-      else { err.textContent = 'Ошибка входа (' + r.status + ')'; }
-      btn.disabled = false;
-    })
-    .catch(function () {
-      err.textContent = 'Сеть недоступна, попробуйте ещё раз';
-      btn.disabled = false;
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        err.className = 'error-msg';
+        err.textContent = '';
+        btn.disabled = true;
+        fetch('/api/patient-auth/login', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                login: document.getElementById('login').value.trim(),
+                password: document.getElementById('password').value
+            })
+        })
+        .then(function (r) {
+            if (r.ok) { location.href = '/patient_cabinet_full.html'; return; }
+            if (r.status === 401) { err.textContent = 'Неверный логин или пароль'; }
+            else { err.textContent = 'Ошибка входа (' + r.status + ')'; }
+            err.className = 'error-msg visible';
+            btn.disabled = false;
+        })
+        .catch(function () {
+            err.textContent = 'Сеть недоступна, попробуйте ещё раз';
+            err.className = 'error-msg visible';
+            btn.disabled = false;
+        });
     });
-  });
 })();
+    function togglePass() {
+        var p = document.getElementById('password');
+        if (!p) return;
+        p.type = (p.type === 'password') ? 'text' : 'password';
+    }
 </script>
 </body>
 </html>

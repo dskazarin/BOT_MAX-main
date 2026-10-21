@@ -570,6 +570,31 @@ func deletePatientByID(db *sql.DB, id string) error {
 // seedAdminRoles идемпотентно создаёт служебных superadmin и admin.
 // Не зависит от seedDefaultDoctor — вызывается отдельно из main.
 // Если врач с таким email уже есть — пропускает.
+func seedDefaultPatientAccount(db *sql.DB) error {
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM patient_accounts WHERE login = ?", "patient@local").Scan(&exists); err != nil {
+		return fmt.Errorf("check patient@local: %w", err)
+	}
+	if exists > 0 {
+		slog.Info("seed: patient@local уже есть, пропуск")
+		return nil
+	}
+	_, err := db.Exec("INSERT OR IGNORE INTO patients (id, name, birth_date, gender, created) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)", "PAT-DEMO", "Тестовый пациент", "1990-01-01", "male")
+	if err != nil {
+		return fmt.Errorf("seed patient PAT-DEMO: %w", err)
+	}
+	hash, err := HashPassword("patient@local")
+	if err != nil {
+		return fmt.Errorf("hash patient@local: %w", err)
+	}
+	_, err = db.Exec("INSERT OR IGNORE INTO patient_accounts (id, patient_id, login, password_hash, status, created, updated) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", "PACC-DEMO", "PAT-DEMO", "patient@local", hash, "active")
+	if err != nil {
+		return fmt.Errorf("seed patient_accounts PACC-DEMO: %w", err)
+	}
+	slog.Info("seed: создан тестовый пациент PACC-DEMO", "login", "patient@local")
+	return nil
+}
+
 func seedAdminRoles(db *sql.DB) error {
 	seeds := []struct {
 		ID       string
