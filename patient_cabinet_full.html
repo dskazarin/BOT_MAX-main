@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Личный кабинет пациента - BOT_MAX</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
     // ============================================================
     //  СИНХРОНИЗАЦИЯ С КАБИНЕТОМ ВРАЧА
     // ============================================================
@@ -68,6 +69,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         setTimeout(syncToDoctorCabinet, 1000);
         bootstrapVitalsFromServer();   // B30.5
+        loadConsents();                // B30.6
     });
     setInterval(syncToDoctorCabinet, 5000);
 
@@ -77,14 +79,17 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--bg-body);
+            background: linear-gradient(135deg, var(--bg-body-1), var(--bg-body-2));
+            color: var(--text-primary);
             min-height: 100vh;
             padding: 20px;
         }
         .container { max-width: 1400px; margin: 0 auto; }
         .header {
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
+            background: var(--bg-header);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--bg-card-border);
+            color: var(--text-primary);
             border-radius: 20px;
             padding: 20px 30px;
             margin-bottom: 20px;
@@ -202,11 +207,11 @@
         }
         .card {
             background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--bg-card-border);
             border-radius: 20px;
             padding: 25px;
             margin-bottom: 20px;
-            box-shadow: var(--shadow-card);
         }
         .card-header {
             display: flex;
@@ -324,7 +329,7 @@
         .status-taken { background: #48bb78; color: white; }
         .status-missed { background: #f56565; color: white; }
         .constant-med-item {
-            background: #e6fffa;
+            background: var(--bg-subtle);
             border-left: 4px solid #38b2ac;
         }
         .recording { animation: pulse 1s infinite; background: #e53e3e; }
@@ -399,13 +404,16 @@
         }
         /* B29.6.5b.1: theme tokens. Кабинет пациента — светлый по умолчанию. */
         :root {
-            --bg-body: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --bg-card: white;
+            --bg-body-1: #f7fafc;
+            --bg-body-2: #edf2f7;
+            --bg-card: #ffffff;
+            --bg-header: rgba(255, 255, 255, 0.95);
+            --bg-card-border: rgba(0, 0, 0, 0.1);
             --bg-subtle: #f7fafc;
             --bg-icon: #e2e8f0;
             --border-subtle: #cbd5e0;
-            --text-primary: #2d3748;
-            --text-secondary: #4a5568;
+            --text-primary: #1a202c;
+            --text-secondary: #2d3748;
             --text-muted: #718096;
             --text-heading: #667eea;
             --shadow-card: 0 5px 20px rgba(0,0,0,0.1);
@@ -422,14 +430,17 @@
         }
 
         [data-theme="dark"] {
-            --bg-body: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-            --bg-card: #2d3748;
-            --bg-subtle: #1a202c;
-            --bg-icon: #4a5568;
-            --border-subtle: #718096;
+            --bg-body-1: #1a202c;
+            --bg-body-2: #2d3748;
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --bg-header: rgba(255, 255, 255, 0.05);
+            --bg-card-border: rgba(255, 255, 255, 0.08);
+            --bg-subtle: rgba(255, 255, 255, 0.08);
+            --bg-icon: rgba(255, 255, 255, 0.1);
+            --border-subtle: rgba(255, 255, 255, 0.1);
             --text-primary: #e2e8f0;
-            --text-secondary: #cbd5e0;
-            --text-muted: #a0aec0;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
             --text-heading: #9f7aea;
             --shadow-card: 0 5px 20px rgba(0,0,0,0.4);
             --shadow-modal: 0 10px 40px rgba(0,0,0,0.5);
@@ -438,20 +449,9 @@
     </style>
     <!-- B6.2: клиентский auth-модуль -->
     <script src="theme.js"></script>
-<script>BotMaxTheme.init({ button: '#themeHost', default: 'light' });</script>
-<script src="auth.js"></script>
+    <script>BotMaxTheme.init({ button: "#themeHost", default: "light" });</script>
 </head>
 <body>
-<script>
-// B6.2: страница только для залогиненных
-(function () {
-    if (typeof BotMaxAuth === "undefined") {
-        window.location.replace("login.html");
-        return;
-    }
-    BotMaxAuth.requireAuth();
-})();
-</script>
 <div class="container">
     <div class="header">
         <div class="user-info">
@@ -596,6 +596,13 @@
             <button onclick="exportToPDF()" class="btn-info">📄 Экспорт в PDF</button>
         </div>
     </div>
+    <div class="card" id="consentsCard">
+        <div class="card-header" onclick="toggleSection('consentsSection', 'consentsIcon')">
+            <h2>🤝 Согласия врачам <span class="toggle-icon" id="consentsIcon">▼</span></h2>
+        </div>
+        <div id="consentsSection" class="card-content"><div id="consentsList">Загрузка…</div></div>
+    </div>
+
 </div>
 
 <!-- Модальные окна -->
@@ -1462,6 +1469,36 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
             .catch(function() { /* тихо */ });
     }
 
+    // ========== B30.6: consent-UI (list / approve / deny / revoke) ==========
+    function consentScopeLabel(s) {
+        if (s === "vitals_read") return "Показатели (давление, температура, SpO2)";
+        return s || "—";
+    }
+    function loadConsents() {
+        apiFetch("/api/consents", { allow401: true })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(list) { renderConsents(list || []); })
+            .catch(function() { renderConsents([]); });
+    }
+    function renderConsents(list) {
+        var box = document.getElementById("consentsList");
+        if (!box) return;
+        if (!list.length) { box.innerHTML = "<div style=\"color:#718096;padding:8px;\">Активных согласий нет</div>"; return; }
+        box.innerHTML = list.map(function(c) {
+            var btns = "";
+            if (c.status === "pending") btns = "<button onclick=\"consentAction('" + c.id + "','approve')\">Одобрить</button> <button onclick=\"consentAction('" + c.id + "','deny')\">Отклонить</button>";
+            else if (c.status === "approved") btns = "<button onclick=\"consentAction('" + c.id + "','revoke')\">Отозвать</button>";
+            return "<div style=\"border-bottom:1px solid #e2e8f0;padding:8px 0;\">"
+                + "<b>" + (c.doctorId || "—") + "</b> · " + consentScopeLabel(c.scope)
+                + " · <span>" + c.status + "</span><div>" + btns + "</div></div>";
+        }).join("");
+    }
+    function consentAction(id, action) {
+        apiFetch("/api/consents/" + encodeURIComponent(id) + "/" + action, { method: "POST" })
+            .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); loadConsents(); })
+            .catch(function(e) { alert("Не удалось: " + e.message); });
+    }
+
     function showHistory(title, items) {
         document.getElementById('historyTitle').innerHTML = title;
         document.getElementById('historyList').innerHTML = items.map(i=>`<div style="padding:8px; border-bottom:1px solid var(--border-subtle);">${i}</div>`).join('');
@@ -1475,7 +1512,12 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
         if(c && i) { if(c.classList.contains('collapsed')) { c.classList.remove('collapsed'); i.classList.remove('collapsed'); } else { c.classList.add('collapsed'); i.classList.add('collapsed'); } }
     }
     function escapeHtml(t) { if(!t) return ''; return t.replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m])); }
-    function logout() { if(confirm('Выйти?')) window.location.href = '/'; }
+    function logout() {
+        if (!confirm('Выйти?')) return;
+        fetch('/api/patient-auth/logout', { method: 'POST', credentials: 'include' })
+            .catch(function () {})
+            .finally(function () { window.location.href = '/'; });
+    }
 
     function generateQRCode() {
         let url = window.location.href;

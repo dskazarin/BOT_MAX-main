@@ -273,6 +273,8 @@ func handlePatientLogin(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("patient login: touchPatientLastLogin", "err", err)
 	}
 
+	// B30.6i: patient-login гасит doctor-сессию (конфликт ролей в одном браузере).
+	clearAuthCookies(w)
 	setPatientCookies(w, access, refresh)
 
 	w.Header().Set("Content-Type", "application/json")
