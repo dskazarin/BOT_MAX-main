@@ -1515,8 +1515,8 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
     function logout() {
         if (!confirm('Выйти?')) return;
         fetch('/api/patient-auth/logout', { method: 'POST', credentials: 'include' })
-            .catch(function () {})
-            .finally(function () { window.location.href = '/'; });
+            .then(function () { window.location.replace('/'); })
+            .catch(function () { window.location.replace('/'); });
     }
 
     function generateQRCode() {
