@@ -140,9 +140,19 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case "symptoms", "allergies", "vaccinations", "diagnoses",
-			"constant_medications", "course_medications", "files":
+			"constant_medications", "course_medications":
 			if len(parts) == 2 {
 				handleDoctorPatientRecords(w, r, id, parts[1])
+				return
+			}
+		case "files":
+			if len(parts) == 2 {
+				handleDoctorPatientRecords(w, r, id, "files")
+				return
+			}
+			// /api/patients/{id}/files/{fid}/data — скачивание BLOB (3e-2).
+			if len(parts) == 4 && parts[3] == "data" && parts[2] != "" {
+				handleDoctorPatientFileData(w, r, id, parts[2])
 				return
 			}
 		case "sync":

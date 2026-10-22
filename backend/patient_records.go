@@ -26,6 +26,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -291,11 +292,129 @@ func softDeletePatientRecord(kind, pid, id string) (int64, error) {
 }
 
 // registerPatientRecordsRoutes — все 4 сущности под patientAuthMiddleware.
+// parseFilesDataPath — /api/patient/records/files/{id}/data → id, true.
+func parseFilesDataPath(p string) (id string, ok bool) {
+	const prefix = "/api/patient/records/files/"
+	if !strings.HasPrefix(p, prefix) {
+		return "", false
+	}
+	rest := strings.TrimPrefix(p, prefix)
+	// ожидаем ровно "{id}/data"
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "data" {
+		return "", false
+	}
+	return parts[0], true
+}
+
+// handlePatientFileDownload — GET /api/patient/records/files/{id}/data (self).
+// Отдаём BLOB c Content-Type из files.mime (fallback octet-stream) и
+// Content-Disposition: attachment; filename="...".
+func handlePatientFileDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	fid, ok := parseFilesDataPath(r.URL.Path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	pid, err := resolvePatientIDForSelf(r)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"patient account not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeFileBlob(w, pid, fid)
+}
+
+// handleDoctorPatientFileData — GET /api/patients/{id}/files/{fid}/data (doctor).
+// Требует approved consent scope=files_read.
+func handleDoctorPatientFileData(w http.ResponseWriter, r *http.Request, pid, fid string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	doctorID := doctorIDFromCtx(r)
+	if doctorID == "" {
+		http.Error(w, `{"error":"doctor only"}`, http.StatusUnauthorized)
+		return
+	}
+	if _, err := getPatientByID(db, pid); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "patient not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, expiresAt, err := findApprovedConsent(pid, doctorID, "files_read")
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"consent_required"}`, http.StatusForbidden)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if expired, bad := checkConsentExpired(expiresAt); bad {
+		http.Error(w, `{"error":"consent_bad_expires"}`, http.StatusInternalServerError)
+		return
+	} else if expired {
+		http.Error(w, `{"error":"consent_expired"}`, http.StatusForbidden)
+		return
+	}
+	writeFileBlob(w, pid, fid)
+}
+
+// writeFileBlob — общая часть: SELECT filename, mime, data FROM files
+// WHERE id=? AND patient_id=? AND deleted_at IS NULL. NULL data → 404.
+func writeFileBlob(w http.ResponseWriter, pid, fid string) {
+	var filename, mime sql.NullString
+	var data []byte
+	err := db.QueryRow(`SELECT filename, mime, data FROM files
+		WHERE id=? AND patient_id=? AND deleted_at IS NULL`, fid, pid).
+		Scan(&filename, &mime, &data)
+	if err == sql.ErrNoRows {
+		http.NotFound(w, nil)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(data) == 0 {
+		http.NotFound(w, nil) // метаданные без BLOB
+		return
+	}
+	ct := "application/octet-stream"
+	if mime.Valid && mime.String != "" {
+		ct = mime.String
+	}
+	fn := fid
+	if filename.Valid && filename.String != "" {
+		fn = filename.String
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+strings.ReplaceAll(fn, `"`, "")+`"`)
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
+
 func registerPatientRecordsRoutes() {
+	// files/{id}/data — отдельный хендлер, должен быть зарегистрирован ДО
+	// generic /api/patient/records/ (Go http.Handle: более длинный префикс побеждает).
+	http.Handle("/api/patient/records/files/",
+		patientAuthMiddleware(http.HandlerFunc(handlePatientFileDownload)))
 	http.Handle("/api/patient/records/",
 		patientAuthMiddleware(http.HandlerFunc(handlePatientRecords)))
 	slog.Info("registerPatientRecordsRoutes",
-		"routes", "/api/patient/records/{symptoms,allergies,vaccinations,diagnoses}")
+		"routes", "/api/patient/records/{symptoms,allergies,vaccinations,diagnoses,constant_medications,course_medications,files} + /files/{id}/data")
 }
 
 // handleDoctorPatientRecords — GET /api/patients/{id}/{kind} для врача.
