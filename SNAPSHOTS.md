@@ -1048,10 +1048,41 @@
     списков в карте врача.
   - **Этап 3 (~5–7 подпатчей):** constantMedications, courseMedications
     (CRUD у врача), files (BLOB) + file storage.
-- **Не начато.** Требует отдельной сессии с дизайном схемы БД
-  (миграции, ключи, индексы) и с UI consent-экрана у пациента.
-- **Не в этой сессии.** B29.8 закрыт, эта волна — отдельный большой проект.
+- **Статус (2026-10-22):** этап 1 закрыт (B30.1–B30.8), этап 2 начат:
+  B30.9a–d закрыты (`1238b44`). Дальше — B30.9e (UI в patient_card.html,
+  вынесен в новый чат) и B30.9f (docs + smoke + пуш). Этап 3 — позже.
 
+
+- **Этап 2 (§6.58) — B30.9a–d закрыто (2026-10-22, коммит `1238b44`):**
+  - **B30.9a:** таблицы `symptoms` / `allergies` / `vaccinations` /
+    `diagnoses` — `id TEXT PK`, `patient_id`/`clinic_id` FK,
+    `created_at`/`updated_at`, `deleted_at`, индексы
+    `idx_<kind>_patient` + `idx_<kind>_alive`.
+  - **B30.9b:** белый список `scope` (`vitals_read` + `symptoms_read` /
+    `allergies_read` / `vaccinations_read` / `diagnoses_read`),
+    `normalizeConsentScope`, защита в `upsertConsentRequest` +
+    5 тестов (`consent_scope_b30_9b_test.go`).
+  - **B30.9c:** `/api/patient/records/{kind}` — `GET` (живые),
+    `POST` (upsert по `id`, server-wins, `created_at` не меняется),
+    `DELETE` (soft delete), под `patientAuthMiddleware`;
+    `clinic_id` = снимок `patients.clinic_id`. Тесты: 401/upsert/
+    soft-delete/чужой → 404 (`patient_records_test.go`).
+  - **B30.9d:** `/api/patients/{id}/{kind}` — врач;
+    `findApprovedConsent(pid, doctorID, kind+"_read")`,
+    401 без doctorID / 403 `consent_required` / 403 `consent_expired` /
+    500 `consent_bad_expires`. Тесты: 401/403/чужой scope/OK/удалённая
+    скрыта (`patient_records_doctor_test.go`).
+  - Проверки: `go build` / `go vet` / `gofmt -l` — чисто;
+    `go test ./backend/` — `ok 7.961s`.
+- **B30.9e (UI списков в `patient_card.html`) — следующий.**
+  Крупный UI: 4 секции (symptoms/allergies/vaccinations/diagnoses),
+  чтение через `GET /api/patients/{id}/{kind}` (B30.9d),
+  индикатор sync. **Вынесен в новый чат** со свежим слепком.
+- **B30.9f (docs + smoke + пуш)** — после B30.9e.
+- **Конвенция (2026-10-22):** все изменения в файлах вносить **через
+  bash** (`cat >`, `sed -i`, `python3`-патчи), не ручной вставкой
+  в редакторе. Коммит/пуш — тоже командами, с `git diff --stat`
+  после каждого шага.
 
 ### 6.57 (B29.8) — ЗАКРЫТО (2026-10-14)
 - **Тема:** backlog §6.56 — infantGrowth null, temp regex, time sync fallback.
