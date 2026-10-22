@@ -145,9 +145,19 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 				handleDoctorPatientRecords(w, r, id, parts[1])
 				return
 			}
+			// /api/patients/{id}/{kind}/{rid} — doctor DELETE (3g).
+			if len(parts) == 3 && parts[2] != "" {
+				handleDoctorPatientRecordDelete(w, r, id, parts[1], parts[2])
+				return
+			}
 		case "files":
 			if len(parts) == 2 {
 				handleDoctorPatientRecords(w, r, id, "files")
+				return
+			}
+			// /api/patients/{id}/files/{fid} — doctor DELETE (3g).
+			if len(parts) == 3 && parts[2] != "" {
+				handleDoctorPatientRecordDelete(w, r, id, "files", parts[2])
 				return
 			}
 			// /api/patients/{id}/files/{fid}/data — скачивание BLOB (3e-2).

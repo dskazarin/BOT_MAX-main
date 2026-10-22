@@ -345,6 +345,11 @@ var validConsentScopes = map[string]bool{
 	"constant_medications_read": true,
 	"course_medications_read":   true,
 	"files_read":                true,
+
+	// 3g: write-scope для doctor-CRUD (constant_medications / course_medications / files).
+	"constant_medications_write": true,
+	"course_medications_write":   true,
+	"files_write":                true,
 }
 
 func normalizeConsentScope(s string) (string, bool) {

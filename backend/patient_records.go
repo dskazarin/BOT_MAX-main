@@ -371,6 +371,30 @@ func handleDoctorPatientFileData(w http.ResponseWriter, r *http.Request, pid, fi
 	writeFileBlob(w, pid, fid)
 }
 
+// handleDoctorPatientRecordDelete — DELETE /api/patients/{id}/{kind}/{rid} (doctor).
+// Требует approved consent scope=kind+"_write". Soft delete; 404 если записи
+// нет / она чужая / уже удалена.
+func handleDoctorPatientRecordDelete(w http.ResponseWriter, r *http.Request, pid, kind, rid string) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !requireDoctorConsent(w, r, pid, kind, "write") {
+		return
+	}
+	n, err := softDeletePatientRecord(kind, pid, rid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if n == 0 {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
 // writeFileBlob — общая часть: SELECT filename, mime, data FROM files
 // WHERE id=? AND patient_id=? AND deleted_at IS NULL. NULL data → 404.
 func writeFileBlob(w http.ResponseWriter, pid, fid string) {
@@ -417,6 +441,51 @@ func registerPatientRecordsRoutes() {
 		"routes", "/api/patient/records/{symptoms,allergies,vaccinations,diagnoses,constant_medications,course_medications,files} + /files/{id}/data")
 }
 
+// requireDoctorConsent — общая проверка для doctor read/write по kind.
+// action ∈ {"read","write"} → scope = kind + "_" + action.
+// Возвращает true, если можно продолжать; иначе уже записал HTTP-ошибку.
+//
+//   - нет doctorID в ctx          → 401 doctor only
+//   - пациент не существует       → 404 patient not found
+//   - нет approved consent        → 403 consent_required
+//   - consent истёк               → 403 consent_expired
+//   - битый expires_at            → 500 consent_bad_expires
+func requireDoctorConsent(w http.ResponseWriter, r *http.Request, pid, kind, action string) bool {
+	actorID := doctorIDFromCtx(r)
+	if actorID == "" {
+		http.Error(w, `{"error":"doctor only"}`, http.StatusUnauthorized)
+		return false
+	}
+
+	if _, err := getPatientByID(db, pid); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "patient not found", http.StatusNotFound)
+			return false
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return false
+	}
+
+	scope := kind + "_" + action
+	_, expiresAt, err := findApprovedConsent(pid, actorID, scope)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"consent_required"}`, http.StatusForbidden)
+		return false
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if expired, bad := checkConsentExpired(expiresAt); bad {
+		http.Error(w, `{"error":"consent_bad_expires"}`, http.StatusInternalServerError)
+		return false
+	} else if expired {
+		http.Error(w, `{"error":"consent_expired"}`, http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 // handleDoctorPatientRecords — GET /api/patients/{id}/{kind} для врача.
 // Проверка consent: findApprovedConsent(pid, doctorID, kind+"_read").
 //   - нет doctorID в ctx          → 401
@@ -424,49 +493,43 @@ func registerPatientRecordsRoutes() {
 //   - consent истёк (expires_at)  → 403 consent_expired
 //   - иначе                       → 200 + список живых (deleted_at IS NULL)
 func handleDoctorPatientRecords(w http.ResponseWriter, r *http.Request, pid, kind string) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	doctorID := doctorIDFromCtx(r)
-	if doctorID == "" {
-		http.Error(w, `{"error":"doctor only"}`, http.StatusUnauthorized)
-		return
-	}
-
-	// Пациент существует?
-	if _, err := getPatientByID(db, pid); err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "patient not found", http.StatusNotFound)
+	switch r.Method {
+	case http.MethodGet:
+		if !requireDoctorConsent(w, r, pid, kind, "read") {
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+		list, err := listPatientRecords(kind, pid)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(list)
 
-	scope := kind + "_read"
-	_, expiresAt, err := findApprovedConsent(pid, doctorID, scope)
-	if err == sql.ErrNoRows {
-		http.Error(w, `{"error":"consent_required"}`, http.StatusForbidden)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if expired, bad := checkConsentExpired(expiresAt); bad {
-		http.Error(w, `{"error":"consent_bad_expires"}`, http.StatusInternalServerError)
-		return
-	} else if expired {
-		http.Error(w, `{"error":"consent_expired"}`, http.StatusForbidden)
-		return
-	}
+	case http.MethodPost, http.MethodPut:
+		if !requireDoctorConsent(w, r, pid, kind, "write") {
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+		if err != nil {
+			http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(body, &payload); err != nil {
+			http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		rid, err := upsertPatientRecord(kind, pid, payload)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": rid})
 
-	list, err := listPatientRecords(kind, pid)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(list)
 }
