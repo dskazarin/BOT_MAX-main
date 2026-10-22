@@ -3812,3 +3812,51 @@ history, затем удаляет всё через `trap cleanup EXIT`.
 ### Коммиты
 
 4e15b19 (8b) → docs.
+
+## B30.8c — нормализация ageDisplay при чтении пациента (2026-10-22)
+
+Закрывает пункт бэклога «унификация `ageDisplay` у старых записей»: в БД
+`patients.age_display` у записей, созданных до B30.7, лежит «35 лет», а
+`patient_profile.go` пишет «36 г 9 мес». Врач в карточке видел разнобой.
+
+### Что сделано
+
+- `backend/db.go`: helper `normalizeAgeDisplay(p *Patient)` — если
+  `p.BirthDate != ""`, пересчитывает `Age/AgeMonths/AgeDisplay` через
+  `calcAgeFromBirthDate(birth_date, time.Now().UTC())`. Ошибки парсинга
+  `birth_date` игнорируются (остаётся то, что в БД).
+- Вызов в обеих точках чтения: `getPatientsByDoctor` (перед `append`) и
+  `getPatientByID` (перед `return`) — покрывает всех читателей, включая
+  `encounters.go`/`consent.go`.
+- Миграция БД **не делалась** намеренно: нормализация на чтении безопаснее,
+  обратима и не трогает старые записи; `PUT /api/patient/profile` и так
+  пишет новый формат в БД.
+
+### Проверки
+
+- `backend/db_patient_age_test.go`: 3 теста —
+  - `getPatientByID` со старым `age_display="35 лет"` + `birth_date="1990-01-01"`
+    → `AgeDisplay` = `formatAgeDisplay(calcAgeFromBirthDate(...))`, не «35 лет»;
+  - без `birth_date` → `AgeDisplay` остаётся «35 лет» (пересчитывать не из чего);
+  - `getPatientsByDoctor` нормализует так же.
+- `gofmt -l` пуст, `go build -o /dev/null ./...`, `go vet ./...` — зелёные;
+  `go test ./backend/` — `ok 7.970s`.
+
+### Уроки сессии
+
+- **Разнобой формата — это про чтение, а не про миграцию.** Достаточно
+  пересчитывать на чтении: старые записи остаются как есть, врач видит
+  единый формат, миграция не нужна. Если бы потребовался единый формат и
+  в БД (для SQL-отчётов) — тогда отдельная миграция.
+- **`patients.doctor_id` — FK на `doctors.id`.** В тесте
+  `getPatientsByDoctor` нельзя вставить пациента с `doctor_id='DOC-AGE'`,
+  не засидив доктора: `FOREIGN KEY constraint failed`. Паттерн —
+  `INSERT INTO doctors (...) VALUES (?, NULL, ?, 'x', 'Test', 'lor',
+  'doctor', datetime('now'), 1)` (см. `seedDoctorForRefresh`).
+- **`calcAgeFromBirthDate` уже в том же пакете.** `db.go` может её звать
+  без нового пакета и без цикла — helper рядом с вызовами, не отдельный
+  модуль.
+
+### Коммиты
+
+2786a6f (8c) → docs.
