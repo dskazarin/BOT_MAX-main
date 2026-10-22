@@ -332,6 +332,22 @@ func TestConsentApprove_Forbidden_OtherPatient(t *testing.T) {
 	}
 }
 
+// Нет аутентификации — 401, а не 403. 403 зарезервирован за «чужой consent»
+// (см. TestConsentApprove_Forbidden_OtherPatient): 401 = не аутентифицирован,
+// 403 = аутентифицирован, но не свой.
+func TestConsentApprove_NoAuth_401(t *testing.T) {
+	setupConsentEnv(t, "pending")
+
+	// Запрос без withPatientID/withDoctorID — аналог «нет токена».
+	req := httptest.NewRequest(http.MethodPost, "/api/consents/CONSENT-1/approve", nil)
+	w := httptest.NewRecorder()
+	handleConsentApprove(w, req, "CONSENT-1")
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401, body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestConsentRevoke_Forbidden_OtherDoctor(t *testing.T) {
 	db, _, _, id := setupConsentEnv(t, "approved")
 	// Второй врач — свой, не DOC-1.

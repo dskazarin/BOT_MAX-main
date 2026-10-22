@@ -271,7 +271,9 @@ func handleConsentTransition(w http.ResponseWriter, r *http.Request, id, action,
 	switch requiredRole {
 	case "patient":
 		if pid == "" {
-			http.Error(w, `{"error":"patient only"}`, http.StatusForbidden)
+			// Нет аутентификации — 401, а не 403: 403 ниже зарезервирован
+			// за «свой/чужой consent» (c.PatientID != actorID).
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 		actorType, actorID = "patient", pid
