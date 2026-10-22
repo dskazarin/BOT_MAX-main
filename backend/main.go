@@ -494,7 +494,7 @@ func main() {
 	registerAuthRoutes()
 	registerPatientAuthRoutes()
 	registerPatientVitalsRoutes()
-	registerPatientRecordsRoutes()  // B30.5: self-vitals
+	registerPatientRecordsRoutes() // B30.5: self-vitals
 	registerPatientProfileRoutes() // B30.7: self-profile
 	registerConsentRoutes()
 
