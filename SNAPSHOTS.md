@@ -3860,3 +3860,48 @@ history, затем удаляет всё через `trap cleanup EXIT`.
 ### Коммиты
 
 2786a6f (8c) → docs.
+
+## B30.8d — approve/deny без аутентификации → 401 (не 403) (2026-10-22)
+
+Закрывает пункт бэклога «approve без токена → 403 vs 401 (семантика
+soft-mode)». Семантика HTTP: 401 — «не аутентифицирован», 403 —
+«аутентифицирован, но нет прав». В `handleConsentTransition` для
+`approve`/`deny` (`requiredRole="patient"`) отсутствие аутентификации
+отдавало 403 `patient only`, а ветка `revoke` (`default`) в том же файле —
+корректный 401 `unauthorized`.
+
+### Что сделано
+
+- `backend/consent.go`, `case "patient"`: `pid == ""` → **401**
+  `{"error":"unauthorized"}` вместо 403 `{"error":"patient only"}`.
+  Комментарий у ветки: 403 ниже зарезервирован за «свой/чужой consent»
+  (`c.PatientID != actorID`) — там он и остаётся.
+- `backend/consent_test.go`: `TestConsentApprove_NoAuth_401` — запрос без
+  `withPatientID`/`withDoctorID` → 401. Парный
+  `TestConsentApprove_Forbidden_OtherPatient` (уже был) → 403: вместе
+  закрепляют границу 401/403 с обеих сторон.
+
+### Проверки
+
+- `go test ./backend/ -run 'TestConsentApprove' -v` — Patient / Forbidden /
+  NoAuth — PASS;
+- `gofmt -l` пуст, `go build -o /dev/null ./...`, `go vet ./...` — зелёные;
+  `go test ./backend/` — `ok 8.063s`.
+
+### Уроки сессии
+
+- **401 vs 403 — это «не аутентифицирован» vs «аутентифицирован, но не
+  твой».** В одном файле уже была правильная ветка (`revoke` → 401), а
+  `approve`/`deny` — неправильная (403). Асимметрию видно при чтении рядом:
+  перед фиксом стоит сравнить все ветки с одинаковым смыслом «нет актора».
+- **Проверка аутентификации — до `getConsent`.** В `handleConsentTransition`
+  ветка `case "patient"` отрабатывает раньше похода в БД, поэтому тест на
+  401 может передать произвольный `consentID` (до БД дело не дойдёт). Это же
+  гарантирует, что «нет токена» не утекает в 404 «not found».
+- **Пара тестов на границу лучше одного.** `NoAuth_401` +
+  `Forbidden_OtherPatient` фиксируют оба края; без второго фикс мог бы
+  случайно сделать 401 и на «чужой consent».
+
+### Коммиты
+
+ce93b5e (8d) → docs.
