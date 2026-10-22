@@ -1040,6 +1040,36 @@
         </div>
     </div>
 
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recordsConstantMedsContent','recordsConstantMedsIcon')">
+            <div class="section-title"><span>💊</span> Постоянные лекарства (БД)<span class="records-sync" id="recordsSync_constant_medications"></span></div>
+            <span class="toggle-icon" id="recordsConstantMedsIcon">▼</span>
+        </div>
+        <div class="section-content" id="recordsConstantMedsContent">
+            <div class="records-list" id="recordsList_constant_medications"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recordsCourseMedsContent','recordsCourseMedsIcon')">
+            <div class="section-title"><span>💊</span> Курсовые лекарства (БД)<span class="records-sync" id="recordsSync_course_medications"></span></div>
+            <span class="toggle-icon" id="recordsCourseMedsIcon">▼</span>
+        </div>
+        <div class="section-content" id="recordsCourseMedsContent">
+            <div class="records-list" id="recordsList_course_medications"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recordsFilesContent','recordsFilesIcon')">
+            <div class="section-title"><span>📎</span> Файлы (БД)<span class="records-sync" id="recordsSync_files"></span></div>
+            <span class="toggle-icon" id="recordsFilesIcon">▼</span>
+        </div>
+        <div class="section-content" id="recordsFilesContent">
+            <div class="records-list" id="recordsList_files"></div>
+        </div>
+    </div>
+
 </div>
 
         <div class="ai-modal-buttons">
@@ -2032,10 +2062,10 @@
     // B30.9e: records patient→doctor (symptoms/allergies/vaccinations/diagnoses)
     // GET /api/patients/{id}/{kind} — consent по scope *_read (B30.9d)
     // ============================================================
-    var RECORD_KINDS = ['symptoms', 'allergies', 'vaccinations', 'diagnoses']; // e4: все 4 секции
+    var RECORD_KINDS = ['symptoms', 'allergies', 'vaccinations', 'diagnoses', 'constant_medications', 'course_medications', 'files']; // e4+3d: 7 секций
 
     function recordsKindRu(kind) {
-        return ({ symptoms: 'Симптомы', allergies: 'Аллергии', vaccinations: 'Вакцинации', diagnoses: 'Диагнозы' })[kind] || kind;
+        return ({ symptoms: 'Симптомы', allergies: 'Аллергии', vaccinations: 'Вакцинации', diagnoses: 'Диагнозы', constant_medications: 'Постоянные лекарства', course_medications: 'Курсовые лекарства', files: 'Файлы' })[kind] || kind;
     }
 
     function setRecordsSync(kind, state, text) {
@@ -2059,9 +2089,15 @@
             return;
         }
         var html = items.map(function(it) {
-            var title = it.name || it.title || it.symptom || it.allergen || it.vaccine || it.diagnosis || it.code || it.id || '—';
+            var title = it.name || it.title || it.symptom || it.allergen || it.vaccine || it.diagnosis || it.filename || it.code || it.id || '—';
             var meta = [];
             if (it.code && it.code !== title) meta.push('Код: ' + it.code);
+            if (it.dose) meta.push('доза: ' + it.dose);
+            if (it.schedule) meta.push('расписание: ' + it.schedule);
+            if (it.status) meta.push('статус: ' + it.status);
+            if (it.start_at || it.end_at) meta.push('курс: ' + (it.start_at || '?') + ' — ' + (it.end_at || '?'));
+            if (it.mime) meta.push('тип: ' + it.mime);
+            if (it.size_bytes) meta.push('размер: ' + it.size_bytes + ' Б');
             if (it.created_at) meta.push('создано: ' + it.created_at);
             return '<div class="records-item">' +
                 '<div class="records-item-title">' + escapeHtml(String(title)) + '</div>' +
