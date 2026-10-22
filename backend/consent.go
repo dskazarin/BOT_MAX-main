@@ -341,6 +341,10 @@ var validConsentScopes = map[string]bool{
 	"allergies_read":    true,
 	"vaccinations_read": true,
 	"diagnoses_read":    true,
+
+	"constant_medications_read": true,
+	"course_medications_read":   true,
+	"files_read":                true,
 }
 
 func normalizeConsentScope(s string) (string, bool) {

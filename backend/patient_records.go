@@ -29,10 +29,13 @@ import (
 )
 
 var recordTables = map[string]bool{
-	"symptoms":     true,
-	"allergies":    true,
-	"vaccinations": true,
-	"diagnoses":    true,
+	"symptoms":             true,
+	"allergies":            true,
+	"vaccinations":         true,
+	"diagnoses":            true,
+	"constant_medications": true,
+	"course_medications":   true,
+	"files":                true,
 }
 
 // recordKindFromPath — /api/patient/records/{kind}[/{id}] → kind, id.
@@ -144,10 +147,13 @@ func handlePatientRecords(w http.ResponseWriter, r *http.Request) {
 // recordFields — белый список колонок по kind (кроме id/patient_id/clinic_id/
 // created_at/updated_at/deleted_at — их ставим сами).
 var recordFields = map[string][]string{
-	"symptoms":     {"name", "severity", "onset", "notes"},
-	"allergies":    {"allergen", "reaction", "severity", "notes"},
-	"vaccinations": {"vaccine", "dose", "administered", "notes"},
-	"diagnoses":    {"code", "title", "diagnosed_at", "status", "notes"},
+	"symptoms":             {"name", "severity", "onset", "notes"},
+	"allergies":            {"allergen", "reaction", "severity", "notes"},
+	"vaccinations":         {"vaccine", "dose", "administered", "notes"},
+	"diagnoses":            {"code", "title", "diagnosed_at", "status", "notes"},
+	"constant_medications": {"name", "dose", "schedule", "notes"},
+	"course_medications":   {"name", "dose", "start_at", "end_at", "status", "notes"},
+	"files":                {"filename", "mime", "size_bytes", "data", "notes"},
 }
 
 func listPatientRecords(kind, pid string) ([]map[string]any, error) {

@@ -346,6 +346,65 @@ func InitDB(path string) (*sql.DB, error) {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_diagnoses_patient ON diagnoses(patient_id, updated_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_diagnoses_alive   ON diagnoses(patient_id, deleted_at);`,
+
+		// === B30.9g (этап 3 §6.58): постоянные/курсовые лекарства + файлы ===
+		// constant_medications — постоянный приём (name, dose, schedule, notes).
+		// course_medications   — курс (name, dose, start_at, end_at, status, notes).
+		// files                — метаданные BLOB-файла (BLOB кладём в 3e).
+		// scope: constant_medications_read | course_medications_read | files_read.
+		`CREATE TABLE IF NOT EXISTS constant_medications (
+			id          TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			clinic_id   TEXT,
+			name        TEXT NOT NULL DEFAULT '',
+			dose        TEXT,
+			schedule    TEXT,
+			notes       TEXT,
+			created_at  TEXT NOT NULL,
+			updated_at  TEXT NOT NULL,
+			deleted_at  TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_constant_medications_patient ON constant_medications(patient_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_constant_medications_alive   ON constant_medications(patient_id, deleted_at);`,
+
+		`CREATE TABLE IF NOT EXISTS course_medications (
+			id          TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			clinic_id   TEXT,
+			name        TEXT NOT NULL DEFAULT '',
+			dose        TEXT,
+			start_at    TEXT,
+			end_at      TEXT,
+			status      TEXT NOT NULL DEFAULT 'active',
+			notes       TEXT,
+			created_at  TEXT NOT NULL,
+			updated_at  TEXT NOT NULL,
+			deleted_at  TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_course_medications_patient ON course_medications(patient_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_course_medications_alive   ON course_medications(patient_id, deleted_at);`,
+
+		`CREATE TABLE IF NOT EXISTS files (
+			id          TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			clinic_id   TEXT,
+			filename    TEXT NOT NULL DEFAULT '',
+			mime        TEXT,
+			size_bytes  INTEGER,
+			data        BLOB,
+			notes       TEXT,
+			created_at  TEXT NOT NULL,
+			updated_at  TEXT NOT NULL,
+			deleted_at  TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_files_patient ON files(patient_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_files_alive   ON files(patient_id, deleted_at);`,
 	}
 
 	for _, stmt := range schema {
