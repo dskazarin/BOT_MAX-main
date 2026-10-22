@@ -781,6 +781,13 @@
         .records-item-actions { margin-top: 6px; }
         .records-download-btn { font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; }
         .records-download-btn:hover { background: #f1f5f9; }
+        .records-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .records-add-btn { font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid #3b82f6; background: #eff6ff; color: #1d4ed8; cursor: pointer; }
+        .records-add-btn:hover { background: #dbeafe; }
+        .records-edit-btn, .records-delete-btn { font-size: 12px; padding: 4px 8px; margin-left: 6px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; }
+        .records-edit-btn:hover { background: #f1f5f9; }
+        .records-delete-btn { border-color: #fca5a5; color: #b91c1c; }
+        .records-delete-btn:hover { background: #fef2f2; }
         .records-consent { font-size: 13px; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; }
         .records-sync { font-size: 11px; color: var(--muted, #6b7280); margin-left: 8px; }
         .records-sync.loading { opacity: .7; }
@@ -1050,6 +1057,9 @@
         </div>
         <div class="section-content" id="recordsConstantMedsContent">
             <div class="records-list" id="recordsList_constant_medications"></div>
+            <div class="records-actions">
+                <button type="button" class="records-add-btn" onclick="doctorOpenRecordForm('constant_medications')">➕ Добавить</button>
+            </div>
         </div>
     </div>
 
@@ -1060,6 +1070,9 @@
         </div>
         <div class="section-content" id="recordsCourseMedsContent">
             <div class="records-list" id="recordsList_course_medications"></div>
+            <div class="records-actions">
+                <button type="button" class="records-add-btn" onclick="doctorOpenRecordForm('course_medications')">➕ Добавить</button>
+            </div>
         </div>
     </div>
 
@@ -1070,6 +1083,10 @@
         </div>
         <div class="section-content" id="recordsFilesContent">
             <div class="records-list" id="recordsList_files"></div>
+            <div class="records-actions">
+                <input type="file" id="recordsFileInput" style="display:none" onchange="doctorUploadFile(this)">
+                <button type="button" class="records-add-btn" onclick="document.getElementById('recordsFileInput').click()">📤 Загрузить файл</button>
+            </div>
         </div>
     </div>
 
@@ -2086,7 +2103,11 @@
 
     function downloadRecordFile(id, filename) {
         if (!id) return;
-        var url = API_BASE + '/api/patient/records/files/' + encodeURIComponent(id) + '/data';
+        // 3g: врач качает через /api/patients/{pid}/files/{fid}/data (consent files_read).
+        var pid = patientId || currentPatientId();
+        var url = pid
+            ? API_BASE + '/api/patients/' + encodeURIComponent(pid) + '/files/' + encodeURIComponent(id) + '/data'
+            : API_BASE + '/api/patient/records/files/' + encodeURIComponent(id) + '/data';
         BotMaxAuth.authFetch('GET', url).then(function(res) {
             if (!res.ok) {
                 return res.text().then(function(t) {
@@ -2129,15 +2150,17 @@
             if (it.mime) meta.push('тип: ' + it.mime);
             if (it.size_bytes) meta.push('размер: ' + it.size_bytes + ' Б');
             if (it.created_at) meta.push('создано: ' + it.created_at);
-            var actions = '';
+            var idJs = String(it.id).replace(/'/g, "\\'");
+            var actions = '<div class="records-item-actions">';
             if (kind === 'files' && it.has_data) {
                 var fn = it.filename || ('file-' + it.id);
-                actions = '<div class="records-item-actions">' +
-                    '<button type="button" class="records-download-btn" ' +
-                    'onclick="downloadRecordFile(\'' + String(it.id).replace(/'/g, "\\'") + '\', \'' +
-                    escapeHtml(String(fn)).replace(/'/g, "\\'") + '\')">Скачать</button>' +
-                    '</div>';
+                actions += '<button type="button" class="records-download-btn" ' +
+                    'onclick="downloadRecordFile(\'' + idJs + '\', \'' +
+                    escapeHtml(String(fn)).replace(/'/g, "\\'") + '\')">Скачать</button>';
             }
+            actions += '<button type="button" class="records-edit-btn" onclick="doctorOpenRecordForm(\'' + kind + '\', \'' + idJs + '\')">✏️</button>';
+            actions += '<button type="button" class="records-delete-btn" onclick="doctorDeleteRecord(\'' + kind + '\', \'' + idJs + '\')">🗑️</button>';
+            actions += '</div>';
             return '<div class="records-item">' +
                 '<div class="records-item-title">' + escapeHtml(String(title)) + '</div>' +
                 (meta.length ? '<div class="records-item-meta">' + escapeHtml(meta.join(' · ')) + '</div>' : '') +
@@ -2179,6 +2202,116 @@
     function loadPatientRecords() {
         if (!patientId && !currentPatientId()) return;
         RECORD_KINDS.forEach(function(kind) { loadRecordsOne(kind); });
+    }
+
+
+    // ============================================================
+    // 3g: doctor-CRUD для constant_medications / course_medications / files
+    // POST/PUT /api/patients/{pid}/{kind} (consent <kind>_write)
+    // DELETE   /api/patients/{pid}/{kind}/{rid}
+    // ============================================================
+    var RECORD_FIELDS = {
+        constant_medications: ['name', 'dose', 'schedule', 'notes'],
+        course_medications:   ['name', 'dose', 'start_at', 'end_at', 'status', 'notes'],
+        files:                ['filename', 'mime', 'notes']
+    };
+    var RECORD_FIELD_RU = {
+        name: 'Название', dose: 'Доза', schedule: 'Расписание', notes: 'Заметки',
+        start_at: 'Начало (YYYY-MM-DD)', end_at: 'Конец (YYYY-MM-DD)', status: 'Статус',
+        filename: 'Имя файла', mime: 'MIME-тип'
+    };
+
+    function doctorExplainWriteError(kind, err) {
+        var msg = (err && err.message) || 'ошибка';
+        if (err && err.status === 403 && /consent_required|consent_expired/.test(msg)) {
+            return 'Нужно согласие пациента на запись в раздел «' + recordsKindRu(kind) + '» (scope ' + kind + '_write).';
+        }
+        return msg;
+    }
+
+    function doctorOpenRecordForm(kind, editId) {
+        var pid = patientId || currentPatientId();
+        if (!pid) { alert('Не выбран пациент'); return; }
+        var fields = RECORD_FIELDS[kind] || [];
+        if (editId) {
+            apiRequest('GET', '/api/patients/' + encodeURIComponent(pid) + '/' + kind).then(function(items) {
+                var cur = {};
+                (items || []).forEach(function(it) { if (String(it.id) === String(editId)) cur = it; });
+                _doctorPromptForm(kind, pid, editId, fields, cur);
+            }).catch(function(err) {
+                alert('Не удалось загрузить запись: ' + doctorExplainWriteError(kind, err));
+            });
+        } else {
+            _doctorPromptForm(kind, pid, '', fields, {});
+        }
+    }
+
+    function _doctorPromptForm(kind, pid, editId, fields, current) {
+        var payload = {};
+        payload.id = editId || ('D-' + Date.now() + '-' + Math.floor(Math.random() * 1000));
+        for (var i = 0; i < fields.length; i++) {
+            var f = fields[i];
+            var label = RECORD_FIELD_RU[f] || f;
+            var def = current[f] != null ? String(current[f]) : '';
+            var v = prompt(label + ':', def);
+            if (v === null) return;
+            if (v !== '') payload[f] = v;
+        }
+        doctorSaveRecord(kind, pid, payload, !!editId);
+    }
+
+    function doctorSaveRecord(kind, pid, payload, isEdit) {
+        var method = isEdit ? 'PUT' : 'POST';
+        apiRequest(method, '/api/patients/' + encodeURIComponent(pid) + '/' + kind, payload, { noEnqueue: true })
+            .then(function() {
+                if (typeof showNotification === 'function') showNotification('✅ Сохранено');
+                loadRecordsOne(kind);
+            })
+            .catch(function(err) {
+                alert('Не удалось сохранить: ' + doctorExplainWriteError(kind, err));
+            });
+    }
+
+    function doctorDeleteRecord(kind, id) {
+        var pid = patientId || currentPatientId();
+        if (!pid) { alert('Не выбран пациент'); return; }
+        if (!confirm('Удалить запись «' + recordsKindRu(kind) + '» #' + id + '?')) return;
+        apiRequest('DELETE', '/api/patients/' + encodeURIComponent(pid) + '/' + kind + '/' + encodeURIComponent(id), null, { noEnqueue: true })
+            .then(function() {
+                if (typeof showNotification === 'function') showNotification('🗑️ Удалено');
+                loadRecordsOne(kind);
+            })
+            .catch(function(err) {
+                alert('Не удалось удалить: ' + doctorExplainWriteError(kind, err));
+            });
+    }
+
+    function doctorUploadFile(inputEl) {
+        var pid = patientId || currentPatientId();
+        if (!pid) { alert('Не выбран пациент'); return; }
+        var file = inputEl && inputEl.files && inputEl.files[0];
+        if (!file) return;
+        if (file.size > 6 * 1024 * 1024) {
+            alert('Файл больше 6 МиБ — не пройдёт лимит тела 8 МиБ (base64 +33%).');
+            inputEl.value = '';
+            return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            var dataUrl = String(ev.target.result || '');
+            var comma = dataUrl.indexOf(',');
+            var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+            var payload = {
+                id: 'D-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+                filename: file.name,
+                mime: file.type || 'application/octet-stream',
+                data: b64
+            };
+            doctorSaveRecord('files', pid, payload, false);
+        };
+        reader.onerror = function() { alert('Не удалось прочитать файл'); };
+        reader.readAsDataURL(file);
+        inputEl.value = '';
     }
 
     function toggleSection(contentId, iconId) {
