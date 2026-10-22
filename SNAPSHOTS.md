@@ -1048,12 +1048,14 @@
     списков в карте врача.
   - **Этап 3 (~5–7 подпатчей):** constantMedications, courseMedications
     (CRUD у врача), files (BLOB) + file storage.
-- **Статус (2026-10-22):** этап 1 закрыт (B30.1–B30.8), этап 2 начат:
-  B30.9a–d закрыты (`1238b44`). Дальше — B30.9e (UI в patient_card.html,
-  вынесен в новый чат) и B30.9f (docs + smoke + пуш). Этап 3 — позже.
+- **Статус (2026-10-22):** этап 1 закрыт (B30.1–B30.8), этап 2 **закрыт
+  полностью**: B30.9a–d (`1238b44`), B30.9e — UI records lists в
+  `patient_card.html` (`3e1251d`), B30.9f — docs + smoke + пуш.
+  Дальше — этап 3 §6.58: `constantMedications` / `courseMedications` /
+  `files` (BLOB).
 
 
-- **Этап 2 (§6.58) — B30.9a–d закрыто (2026-10-22, коммит `1238b44`):**
+- **Этап 2 (§6.58) — B30.9a–e закрыто (2026-10-22, коммиты `1238b44` + feat(b30.9e)):**
   - **B30.9a:** таблицы `symptoms` / `allergies` / `vaccinations` /
     `diagnoses` — `id TEXT PK`, `patient_id`/`clinic_id` FK,
     `created_at`/`updated_at`, `deleted_at`, индексы
@@ -1072,7 +1074,23 @@
     401 без doctorID / 403 `consent_required` / 403 `consent_expired` /
     500 `consent_bad_expires`. Тесты: 401/403/чужой scope/OK/удалённая
     скрыта (`patient_records_doctor_test.go`).
+  - **B30.9e:** UI records lists в `patient_card.html` — 4 секции
+    «(БД)» после «Рекомендаций» внутри контейнера карты:
+    `recordsSymptomsContent` / `recordsAllergiesContent` /
+    `recordsVaccinationsContent` / `recordsDiagnosesContent`
+    (заголовки «Симптомы/Аллергии/Вакцинации/Диагнозы (БД)»).
+    `RECORD_KINDS = ['symptoms','allergies','vaccinations','diagnoses']`,
+    `loadPatientRecords()` вызывается из `loadPatient()` (server-путь)
+    после `maybeMigratePatientData()`. Чтение —
+    `GET /api/patients/{id}/{kind}` через существующий `apiRequest`
+    (Bearer, refresh 401 — внутри `BotMaxAuth.authFetch`). Sync-бейдж
+    `#recordsSync_<kind>`: `загрузка…` / `обновлено HH:MM` (+ `title`
+    с полным `toLocaleString()`). При 403 `consent_required` /
+    `consent_expired` — плашка «Нужно согласие пациента…»; прочие
+    ошибки — `.records-error`. Пусто → «Пока нет записей».
   - Проверки: `go build` / `go vet` / `gofmt -l` — чисто;
+    UI-smoke: `grep -c 'class="records-list"' patient_card.html` → 4;
+    `RECORD_KINDS` — все 4; `badge.title` в `loadRecordsOne`.
     `go test ./backend/` — `ok 7.961s`.
 - **B30.9e (UI списков в `patient_card.html`) — следующий.**
   Крупный UI: 4 секции (symptoms/allergies/vaccinations/diagnoses),
