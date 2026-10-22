@@ -770,6 +770,18 @@
             --badge-draft-bg: rgba(214, 158, 46, 0.15);
             --badge-draft-fg: #b7791f;
         }
+
+        /* === B30.9e: records lists (symptoms/allergies/vaccinations/diagnoses) === */
+        .records-list { display: flex; flex-direction: column; gap: 8px; }
+        .records-item { border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 8px 10px; background: var(--surface, #fff); }
+        .records-item-title { font-weight: 600; font-size: 14px; }
+        .records-item-meta { font-size: 12px; color: var(--muted, #6b7280); margin-top: 2px; }
+        .records-empty { font-size: 13px; color: var(--muted, #6b7280); padding: 6px 0; }
+        .records-error { font-size: 13px; color: #b91c1c; padding: 6px 0; }
+        .records-consent { font-size: 13px; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; }
+        .records-sync { font-size: 11px; color: var(--muted, #6b7280); margin-left: 8px; }
+        .records-sync.loading { opacity: .7; }
+        .records-sync.error { color: #b91c1c; }
     </style>
 </head>
 <body>
@@ -985,6 +997,46 @@
                 <div class="field-wrapper"><textarea class="field-textarea" id="field_recommendations" placeholder="Режим, диета, медикаменты..."></textarea><div class="spell-highlight-layer"></div><div class="spell-counter"></div></div>
                 
             </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recordsSymptomsContent','recordsSymptomsIcon')">
+            <div class="section-title"><span>🩺</span> Симптомы (БД)<span class="records-sync" id="recordsSync_symptoms"></span></div>
+            <span class="toggle-icon" id="recordsSymptomsIcon">▼</span>
+        </div>
+        <div class="section-content" id="recordsSymptomsContent">
+            <div class="records-list" id="recordsList_symptoms"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recordsAllergiesContent','recordsAllergiesIcon')">
+            <div class="section-title"><span>⚠️</span> Аллергии (БД)<span class="records-sync" id="recordsSync_allergies"></span></div>
+            <span class="toggle-icon" id="recordsAllergiesIcon">▼</span>
+        </div>
+        <div class="section-content" id="recordsAllergiesContent">
+            <div class="records-list" id="recordsList_allergies"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recordsVaccinationsContent','recordsVaccinationsIcon')">
+            <div class="section-title"><span>💉</span> Вакцинации (БД)<span class="records-sync" id="recordsSync_vaccinations"></span></div>
+            <span class="toggle-icon" id="recordsVaccinationsIcon">▼</span>
+        </div>
+        <div class="section-content" id="recordsVaccinationsContent">
+            <div class="records-list" id="recordsList_vaccinations"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('recordsDiagnosesContent','recordsDiagnosesIcon')">
+            <div class="section-title"><span>📊</span> Диагнозы (БД)<span class="records-sync" id="recordsSync_diagnoses"></span></div>
+            <span class="toggle-icon" id="recordsDiagnosesIcon">▼</span>
+        </div>
+        <div class="section-content" id="recordsDiagnosesContent">
+            <div class="records-list" id="recordsList_diagnoses"></div>
         </div>
     </div>
 
@@ -1529,6 +1581,7 @@
                     loadCardData();
                     loadVitals();
                     maybeMigratePatientData();   // B5: одноразовая миграция localStorage → сервер
+                    loadPatientRecords();        // B30.9e: records списки
                 })
                 .catch(function(err) {
                     console.warn('⚠️ GET patient failed, fallback → localStorage:', err.message);
@@ -1972,6 +2025,84 @@
         } else {
             showNotification('⚠️ Не удалось подобрать МКБ-10');
         }
+    }
+
+
+    // ============================================================
+    // B30.9e: records patient→doctor (symptoms/allergies/vaccinations/diagnoses)
+    // GET /api/patients/{id}/{kind} — consent по scope *_read (B30.9d)
+    // ============================================================
+    var RECORD_KINDS = ['symptoms', 'allergies', 'vaccinations', 'diagnoses']; // e4: все 4 секции
+
+    function recordsKindRu(kind) {
+        return ({ symptoms: 'Симптомы', allergies: 'Аллергии', vaccinations: 'Вакцинации', diagnoses: 'Диагнозы' })[kind] || kind;
+    }
+
+    function setRecordsSync(kind, state, text) {
+        var el = document.getElementById('recordsSync_' + kind);
+        if (!el) return;
+        el.className = 'records-sync' + (state ? ' ' + state : '');
+        el.textContent = text || '';
+    }
+
+    function fetchRecords(kind) {
+        var pid = patientId || currentPatientId();
+        if (!pid) return Promise.reject(new Error('no patient id'));
+        return apiRequest('GET', '/api/patients/' + encodeURIComponent(pid) + '/' + kind);
+    }
+
+    function renderRecords(kind, items) {
+        var host = document.getElementById('recordsList_' + kind);
+        if (!host) return;
+        if (!items || !items.length) {
+            host.innerHTML = '<div class="records-empty">Пока нет записей</div>';
+            return;
+        }
+        var html = items.map(function(it) {
+            var title = it.name || it.title || it.symptom || it.allergen || it.vaccine || it.diagnosis || it.code || it.id || '—';
+            var meta = [];
+            if (it.code && it.code !== title) meta.push('Код: ' + it.code);
+            if (it.created_at) meta.push('создано: ' + it.created_at);
+            return '<div class="records-item">' +
+                '<div class="records-item-title">' + escapeHtml(String(title)) + '</div>' +
+                (meta.length ? '<div class="records-item-meta">' + escapeHtml(meta.join(' · ')) + '</div>' : '') +
+                '</div>';
+        }).join('');
+        host.innerHTML = html;
+    }
+
+    function renderRecordsError(kind, err) {
+        var host = document.getElementById('recordsList_' + kind);
+        if (!host) return;
+        var msg = (err && err.message) || 'ошибка загрузки';
+        var isConsent = err && err.status === 403 && /consent_required|consent_expired/.test(msg);
+        if (isConsent) {
+            host.innerHTML = '<div class="records-consent">Нужно согласие пациента на просмотр раздела «' +
+                escapeHtml(recordsKindRu(kind)) + '».</div>';
+        } else {
+            host.innerHTML = '<div class="records-error">Не удалось загрузить: ' + escapeHtml(msg) + '</div>';
+        }
+    }
+
+    function loadRecordsOne(kind) {
+        setRecordsSync(kind, 'loading', 'загрузка…');
+        return fetchRecords(kind).then(function(items) {
+            renderRecords(kind, items);
+            var now = new Date();
+            var hhmm = now.toTimeString().slice(0, 5);
+            setRecordsSync(kind, '', 'обновлено ' + hhmm);
+            var badge = document.getElementById('recordsSync_' + kind);
+            if (badge) badge.title = 'обновлено ' + now.toLocaleString();
+        }).catch(function(err) {
+            console.warn('records ' + kind + ' failed:', err && err.message);
+            renderRecordsError(kind, err);
+            setRecordsSync(kind, 'error', 'ошибка');
+        });
+    }
+
+    function loadPatientRecords() {
+        if (!patientId && !currentPatientId()) return;
+        RECORD_KINDS.forEach(function(kind) { loadRecordsOne(kind); });
     }
 
     function toggleSection(contentId, iconId) {
