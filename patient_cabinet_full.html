@@ -649,6 +649,104 @@ function apiFetch(url, opts) {
   });
 }
 
+
+// ========== B30.7b: серверный профиль пациента ==========
+// Single source of truth: GET/PUT /api/patient/profile.
+// patientData.height — см, patientData.weight — граммы (как в UI);
+// на сервере height — см, weight — кг (конвертим на границе).
+let profileLoaded = false;
+
+function loadProfile() {
+  return apiFetch('/api/patient/profile', { method: 'GET' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('GET profile: ' + r.status);
+      return r.json();
+    })
+    .then(function (p) {
+      // Раскладываем серверные значения в patientData и DOM.
+      if (p.name) patientData.fullName = p.name;
+      if (p.birthDate) patientData.birthDate = p.birthDate;
+      if (p.gender) patientData.gender = p.gender;
+      if (typeof p.height === 'number') patientData.height = p.height;
+      if (typeof p.weight === 'number') patientData.weight = Math.round(p.weight * 1000); // кг → г
+
+      // DOM: ФИО
+      var fullNameEl = document.getElementById('fullName');
+      if (fullNameEl && p.name) fullNameEl.textContent = p.name;
+      // DOM: дата рождения (ISO → DD.MM.YYYY для отображения)
+      if (p.birthDate) {
+        var bdEl = document.getElementById('birthDate');
+        if (bdEl) {
+          var parts = p.birthDate.split('-');
+          if (parts.length === 3) bdEl.textContent = parts[2] + '.' + parts[1] + '.' + parts[0];
+        }
+      }
+      // DOM: пол
+      var gEl = document.getElementById('genderSelect');
+      if (gEl && p.gender) gEl.value = p.gender;
+      // DOM: рост (см → м+см)
+      if (typeof p.height === 'number') {
+        var hm = document.getElementById('heightMeters');
+        var hc = document.getElementById('heightCm');
+        if (hm) hm.value = Math.floor(p.height / 10) * 10;
+        if (hc) hc.value = p.height % 10;
+      }
+      // DOM: вес (кг → кг+г)
+      if (typeof p.weight === 'number') {
+        var totalG = Math.round(p.weight * 1000);
+        var wkg = document.getElementById('weightKg');
+        var w100 = document.getElementById('weightGrams100');
+        var w10 = document.getElementById('weightGrams10');
+        var w1 = document.getElementById('weightGrams1');
+        if (wkg) wkg.value = Math.floor(totalG / 1000);
+        if (w100) w100.value = Math.floor((totalG % 1000) / 100) * 100;
+        if (w10) w10.value = Math.floor((totalG % 100) / 10) * 10;
+        if (w1) w1.value = totalG % 10;
+      }
+      // Возраст (серверный ageDisplay; если пусто — локальный fallback)
+      var ageEl = document.getElementById('ageCategory');
+      if (ageEl) ageEl.textContent = p.ageDisplay || (typeof getAgeDisplay === 'function' ? getAgeDisplay(p.birthDate || patientData.birthDate) : '');
+
+      // Обновляем зависящие блоки без записи обратно на сервер.
+      profileLoaded = true;
+      try { updateBMI(); } catch (e) {}
+      try { updateInfantGrowthTable(); } catch (e) {}
+      try { updatePatientInfo(); } catch (e) {}
+      profileLoaded = false;
+      return p;
+    })
+    .catch(function (err) {
+      console.warn('loadProfile:', err);
+      showNotification('⚠️ Не удалось загрузить профиль с сервера', 'error');
+    });
+}
+
+// Частичный PUT: patch = {name?, birthDate?, gender?, height?, weight?} (height см, weight кг).
+function saveProfile(patch) {
+  if (!profileLoaded && Object.keys(patch).length === 0) return Promise.resolve();
+  return apiFetch('/api/patient/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+    allow401: false
+  })
+    .then(function (r) {
+      if (r.ok) return r.json();
+      return r.text().then(function (t) {
+        throw new Error((t || '').trim() || ('PUT profile: ' + r.status));
+      });
+    })
+    .then(function (p) {
+      showNotification('✅ Профиль сохранён на сервере', 'success');
+      return p;
+    })
+    .catch(function (err) {
+      console.warn('saveProfile:', err);
+      showNotification('❌ Не удалось сохранить профиль: ' + err.message, 'error');
+    });
+}
+// ========== /B30.7b ==========
+
 let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString();
     let recognition = null;
     let accumulatedText = '';
@@ -964,6 +1062,7 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
         updateFilesList();
         updateInfantGrowthTable();
         updateDateTimeDisplay();
+        loadProfile(); // B30.7b: серверный профиль — источник истины
     }
 
     function updatePatientInfo() {
@@ -1342,7 +1441,7 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
         showNotification(`✅ Температура ${temp}°C записана!`, 'success');
     }
 
-    function editPatientName() { let n = prompt("Введите ФИО:", patientData.fullName); if(n && n.trim()) { patientData.fullName = n.trim(); saveToLocalStorage(); updatePatientInfo(); } }
+    function editPatientName() { let n = prompt("Введите ФИО:", patientData.fullName); if(n && n.trim()) { patientData.fullName = n.trim(); saveToLocalStorage(); updatePatientInfo(); saveProfile({ name: patientData.fullName }); } }
     function editCurrentDateTime() {
         document.getElementById('currentDatePicker').value = currentSystemDate.toISOString().split('T')[0];
         document.getElementById('currentTimePicker').value = `${String(currentSystemDate.getHours()).padStart(2,'0')}:${String(currentSystemDate.getMinutes()).padStart(2,'0')}`;
@@ -1373,6 +1472,7 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
             closeBirthDateModal(); 
             updateInfantGrowthTable();
             showNotification('📅 Дата рождения обновлена!', 'success');
+            saveProfile({ birthDate: newDate });
         } else if(newDate) { alert("Пожалуйста, введите корректную дату рождения!"); }
     }
     function updateGender() {
@@ -1381,6 +1481,7 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
         document.getElementById('avatarEmoji').innerHTML = gender === 'male' ? '👨' : '👩';
         saveToLocalStorage();
         updateInfantGrowthTable();
+        saveProfile({ gender: gender });
     }
     function updateHeightWeight() {
         patientData.height = getTotalHeight();
@@ -1389,6 +1490,8 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
         saveToLocalStorage();
         updateBMI();
         updateInfantGrowthTable();
+        // B30.7b: height — см, weight — кг (на сервере).
+        saveProfile({ height: patientData.height, weight: patientData.weight / 1000 });
     }
     function updateBP() {
         patientData.bpHistory.push({systolic:parseInt(document.getElementById('bpSystolicSelect').value), diastolic:parseInt(document.getElementById('bpDiastolicSelect').value), date: new Date().toLocaleString()});
