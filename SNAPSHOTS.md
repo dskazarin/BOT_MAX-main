@@ -3710,3 +3710,58 @@ apiFetch-поведение не меняется (`!rr.ok → redirect`), но 
 ### Коммиты
 
 10a7fcb (7a) → 7b70ba1 (7b) → 9f45e47 (7c) → docs.
+
+## B30.8a — тесты patientAuthMiddleware на /api/patient/profile (2026-10-22)
+
+Закрывает пункт бэклога, оставленный в уроках B30.7 («в hard-mode проверить,
+что patient-middleware не конфликтует с doctor-middleware»). Реальная дыра
+оказалась шире: существующие `patient_profile_test.go` вызывают
+`handlePatientProfile` напрямую с `withPatientID` в контексте — то есть
+`patientAuthMiddleware` в тестах **байпасится**, и проверки роли/токена не
+покрыты вообще.
+
+### Что сделано
+
+- Новый `backend/patient_profile_auth_test.go`: 4 теста прогоняют запрос через
+  `patientAuthMiddleware(http.HandlerFunc(handlePatientProfile))`, cookie
+  `botmax_pat_access`:
+  - нет cookie → 401 `authorization required`;
+  - doctor access-токен (`IssueAccessToken("DOC-MW2", RoleDoctor)`) → 401
+    `invalid token` (ключевое: doctor-токен не принимается patient-эндпоинтом);
+  - валидный patient access-токен (`IssueAccessToken(accID, RolePatient)`) →
+    200, профиль своего пациента;
+  - patient-токен несуществующего аккаунта → 404 (нет утечки чужого профиля).
+- Helper `withProfileAuthEnv(t)` — по образцу `withMetricsEnv`: ставит
+  `currentEnv = &Env{Name:"dev", JWTSecret:...}` с `t.Cleanup`, иначе
+  `IssueAccessToken` паникует `currentEnv == nil`.
+
+### Проверки
+
+- `go build -o /dev/null ./...`, `go vet ./...`, `gofmt -l` — зелёные;
+- `go test ./backend/ -run 'TestPatientProfile' -v` — 4 новых + старые
+  `TestPatientProfile_*` — PASS;
+- полный `go test ./backend/` — `ok 7.818s`.
+
+### Уроки сессии
+
+- **Middleware, не покрытый тестом, — не «работает», а «пока не падал».**
+  `patientAuthMiddleware` уже был hard-mode и корректен по коду, но ни один
+  тест его не прогонял: `patient_profile_test.go` шёл мимо. Регрессия в CI
+  дешевле ручного прогона с `BOTMAX_AUTH_ENFORCE=1` и остаётся навсегда.
+- **`BOTMAX_AUTH_ENFORCE` — только про doctor-middleware.** `patient_auth.go`
+  не читает env и всегда hard-mode (см. комментарий в шапке файла). Пункт
+  бэклога «patient-middleware vs doctor-middleware в hard-mode» сводится ровно
+  к «doctor-токен не должен приниматься patient-роутом» — это и проверяем.
+- **`IssueAccessToken` в тестах требует `currentEnv`.** Без него —
+  `panic: jwtSecret: currentEnv == nil`. Паттерн `withXxxEnv(t)` с `t.Cleanup`
+  уже есть (`withMetricsEnv`, `retention_test.go`) — переиспользовать, не
+  изобретать.
+- **Ассерты в python-патче считают и объявления, и вызовы.** `src.count("withProfileAuthEnv(t)")`
+  не равен числу вызовов, потому что объявление — `withProfileAuthEnv(t *testing.T)`.
+  Проверять объявление и вызовы отдельно, иначе ложный AssertionError и
+  патч не применяется (что и случилось с первого раза — файл не записан,
+  это хорошо: ассерт сработал до `write`).
+
+### Коммиты
+
+979bdf3 (8a) → docs.
