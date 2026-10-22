@@ -19,8 +19,10 @@ package main
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -103,7 +105,7 @@ func handlePatientRecords(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20)) // 8 MiB: files.data (base64 ≈ 6 MiB бинаря)
 		if err != nil {
 			http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 			return
@@ -158,8 +160,16 @@ var recordFields = map[string][]string{
 
 func listPatientRecords(kind, pid string) ([]map[string]any, error) {
 	cols := append([]string{"id"}, recordFields[kind]...)
+	// files: не отдаём BLOB в списке — только флаг has_data (BLOB качается отдельно).
+	if kind == "files" {
+		cols = []string{"id", "filename", "mime", "size_bytes", "notes"}
+	}
 	cols = append(cols, "created_at", "updated_at")
-	q := `SELECT ` + strings.Join(cols, ",") + ` FROM ` + kind +
+	selectCols := strings.Join(cols, ",")
+	if kind == "files" {
+		selectCols += ", CASE WHEN data IS NOT NULL AND length(data)>0 THEN 1 ELSE 0 END AS has_data"
+	}
+	q := `SELECT ` + selectCols + ` FROM ` + kind +
 		` WHERE patient_id=? AND deleted_at IS NULL ORDER BY updated_at DESC`
 	rows, err := db.Query(q, pid)
 	if err != nil {
@@ -167,10 +177,14 @@ func listPatientRecords(kind, pid string) ([]map[string]any, error) {
 	}
 	defer rows.Close()
 
+	n := len(cols)
+	if kind == "files" {
+		n++ // + has_data (CASE WHEN ...) — не входит в cols, но есть в SELECT
+	}
 	out := []map[string]any{}
 	for rows.Next() {
-		vals := make([]any, len(cols))
-		ptrs := make([]any, len(cols))
+		vals := make([]any, n)
+		ptrs := make([]any, n)
 		for i := range vals {
 			ptrs[i] = &vals[i]
 		}
@@ -181,6 +195,9 @@ func listPatientRecords(kind, pid string) ([]map[string]any, error) {
 		for i, c := range cols {
 			m[c] = vals[i]
 		}
+		if kind == "files" {
+			m["has_data"] = vals[n-1]
+		}
 		out = append(out, m)
 	}
 	return out, rows.Err()
@@ -190,6 +207,28 @@ func upsertPatientRecord(kind, pid string, payload map[string]any) (string, erro
 	rid, _ := payload["id"].(string)
 	if strings.TrimSpace(rid) == "" {
 		return "", errors.New("id required")
+	}
+
+	// files: data приходит base64-строкой → декодируем в []byte (BLOB).
+	// size_bytes при наличии data вычисляем сами (клиентское значение игнорируем).
+	if kind == "files" {
+		if raw, ok := payload["data"]; ok && raw != nil {
+			s, isStr := raw.(string)
+			if !isStr {
+				return "", errors.New("data must be base64 string")
+			}
+			if s == "" {
+				payload["data"] = nil
+				delete(payload, "size_bytes")
+			} else {
+				decoded, decErr := base64.StdEncoding.DecodeString(s)
+				if decErr != nil {
+					return "", fmt.Errorf("data base64: %w", decErr)
+				}
+				payload["data"] = decoded
+				payload["size_bytes"] = int64(len(decoded))
+			}
+		}
 	}
 
 	clinic, err := clinicIDForPatient(pid)
