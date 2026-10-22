@@ -3765,3 +3765,50 @@ apiFetch-поведение не меняется (`!rr.ok → redirect`), но 
 ### Коммиты
 
 979bdf3 (8a) → docs.
+
+## B30.8b — smoke vitals на временном пациенте (2026-10-22)
+
+Закрывает пункт бэклога «smoke: vitals во временного пациента» (сейчас
+писал в `PAT-001`, history копилась). `smoke_b30_8.sh` создаёт собственного
+пациента `PAT-SMOKE8-$$` и аккаунт на него, пишет vitals, проверяет GET и
+history, затем удаляет всё через `trap cleanup EXIT`.
+
+### Что сделано
+
+- `smoke_b30_8.sh` (по образцу `smoke_b30_7.sh`), 6 шагов:
+  1. `POST /api/patient-auth/dev-hash` → bcrypt hash;
+  2. seed: `INSERT INTO patients (id,name,created)` + `patient_accounts`
+     на временного `PAT-SMOKE8-$$`;
+  3. `POST /api/patient-auth/login` → cookie-jar;
+  4. `PUT /api/patient/vitals` `{bp:"120/80",temp:36.6,spo2:98}` → 200;
+  5. `GET /api/patient/vitals` → `bp:"120/80"`, `spo2:98`;
+  6. `GET /api/patient/vitals/history?limit=5` → запись с
+     `patientId:"PAT-SMOKE8-$$"` (не `PAT-001`).
+- `cleanup`: удаляет `patient_accounts`, `patients`, `vitals`,
+  `vitals_history` для временного `PATIENT_ID`; `KEEP_ACCOUNT=1` оставляет.
+
+### Проверки
+
+- `bash -n smoke_b30_8.sh` — чисто;
+- прогон против живого backend (:8082) — все 6 шагов зелёные, rc=0:
+  `OK: B30.8b smoke complete (patient=PAT-SMOKE8-35255)`;
+- после прогона `SELECT count(*)` по `patients/patient_accounts/vitals/
+  vitals_history` для `%SMOKE8%` — везде 0: cleanup отработал, `PAT-001` не
+  затронут.
+
+### Уроки сессии
+
+- **Smoke без cleanup — это не smoke, а seed.** Старый подход «писать в
+  PAT-001» оставлял растущую `vitals_history` на общем пациенте: следующий
+  прогон видел чужие записи, а данные копились. Временный `PATIENT_ID` +
+  `trap cleanup EXIT` — дешёвая гигиена, которую стоит повторять в
+  последующих smoke (consents и т.п.).
+- **Проверять надо `patientId` в history, а не только наличие `bp`.**
+  Иначе smoke пройдёт и при записи «не туда» — ровно тот баг, который
+  закрываем. В шаге 6 ассерт на `"patientId":"PAT-SMOKE8-$$"`.
+- **GET `/api/patient-auth/login` без метода — 405**, не 404: probe «жив ли
+  сервер» через curl на `/login` даёт 405, это норма, не ошибка.
+
+### Коммиты
+
+4e15b19 (8b) → docs.
