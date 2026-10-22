@@ -379,6 +379,26 @@ func seedDefaultDoctor(db *sql.DB) error {
 	return nil
 }
 
+// normalizeAgeDisplay — единый формат ageDisplay при чтении пациента.
+//
+// Старые записи в patients.age_display хранят произвольный формат
+// («35 лет»), а patient_profile.go пишет «36 г 9 мес». Если birth_date
+// заполнена — пересчитываем Age/AgeMonths/AgeDisplay из неё, чтобы врач
+// в карточке видел единый формат независимо от того, когда запись создана.
+// Ошибки парсинга birth_date игнорируем: остаётся то, что в БД.
+func normalizeAgeDisplay(p *Patient) {
+	if p == nil || p.BirthDate == "" {
+		return
+	}
+	age, ageMonths, display, err := calcAgeFromBirthDate(p.BirthDate, time.Now().UTC())
+	if err != nil {
+		return
+	}
+	p.Age = age
+	p.AgeMonths = ageMonths
+	p.AgeDisplay = display
+}
+
 // getPatientsByDoctor возвращает всех пациентов врача, отсортированных по created DESC.
 func getPatientsByDoctor(db *sql.DB, doctorID string) ([]Patient, error) {
 	rows, err := db.Query(`
@@ -418,6 +438,7 @@ func getPatientsByDoctor(db *sql.DB, doctorID string) ([]Patient, error) {
 		if aiResult != "" {
 			p.AIResult = json.RawMessage(aiResult)
 		}
+		normalizeAgeDisplay(&p)
 		patients = append(patients, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -484,6 +505,7 @@ func getPatientByID(db *sql.DB, id string) (*Patient, error) {
 	if aiResult != "" {
 		p.AIResult = json.RawMessage(aiResult)
 	}
+	normalizeAgeDisplay(&p)
 	return &p, nil
 }
 
