@@ -272,6 +272,80 @@ func InitDB(path string) (*sql.DB, error) {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_patient_refresh_patient ON patient_refresh_tokens(patient_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_patient_refresh_expires ON patient_refresh_tokens(expires_at);`,
+		// === B30.9a: симптомы / аллергии / вакцинации / диагнозы пациента ===
+		// Этап 2 §6.58. id TEXT (клиентский Date.now()), soft-delete deleted_at,
+		// updated_at для server-wins при upsert. clinic_id — снимок
+		// patients.clinic_id на момент записи (FK ON DELETE SET NULL).
+		// scope-имена для consent: symptoms_read | allergies_read |
+		// vaccinations_read | diagnoses_read (см. B30.9b).
+		`CREATE TABLE IF NOT EXISTS symptoms (
+			id          TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			clinic_id   TEXT,
+			name        TEXT NOT NULL DEFAULT '',
+			severity    TEXT,
+			onset       TEXT,
+			notes       TEXT,
+			created_at  TEXT NOT NULL,
+			updated_at  TEXT NOT NULL,
+			deleted_at  TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_symptoms_patient ON symptoms(patient_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_symptoms_alive   ON symptoms(patient_id, deleted_at);`,
+
+		`CREATE TABLE IF NOT EXISTS allergies (
+			id          TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			clinic_id   TEXT,
+			allergen    TEXT NOT NULL DEFAULT '',
+			reaction    TEXT,
+			severity    TEXT,
+			notes       TEXT,
+			created_at  TEXT NOT NULL,
+			updated_at  TEXT NOT NULL,
+			deleted_at  TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_allergies_patient ON allergies(patient_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_allergies_alive   ON allergies(patient_id, deleted_at);`,
+
+		`CREATE TABLE IF NOT EXISTS vaccinations (
+			id          TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			clinic_id   TEXT,
+			vaccine     TEXT NOT NULL DEFAULT '',
+			dose        TEXT,
+			administered TEXT,
+			notes       TEXT,
+			created_at  TEXT NOT NULL,
+			updated_at  TEXT NOT NULL,
+			deleted_at  TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_vaccinations_patient ON vaccinations(patient_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_vaccinations_alive   ON vaccinations(patient_id, deleted_at);`,
+
+		`CREATE TABLE IF NOT EXISTS diagnoses (
+			id          TEXT PRIMARY KEY,
+			patient_id  TEXT NOT NULL,
+			clinic_id   TEXT,
+			code        TEXT,
+			title       TEXT NOT NULL DEFAULT '',
+			diagnosed_at TEXT,
+			status      TEXT NOT NULL DEFAULT 'active',
+			notes       TEXT,
+			created_at  TEXT NOT NULL,
+			updated_at  TEXT NOT NULL,
+			deleted_at  TEXT,
+			FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+			FOREIGN KEY(clinic_id)  REFERENCES clinics(id)  ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_diagnoses_patient ON diagnoses(patient_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_diagnoses_alive   ON diagnoses(patient_id, deleted_at);`,
 	}
 
 	for _, stmt := range schema {

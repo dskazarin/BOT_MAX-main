@@ -211,9 +211,12 @@ func handleConsentRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"patientId required"}`, http.StatusBadRequest)
 		return
 	}
-	if req.Scope == "" {
-		req.Scope = "vitals_read"
+	scope, ok := normalizeConsentScope(req.Scope)
+	if !ok {
+		http.Error(w, `{"error":"invalid scope"}`, http.StatusBadRequest)
+		return
 	}
+	req.Scope = scope
 	// B-b: проверяем, что пациент существует (иначе FK уронит в 500).
 	if _, err := getPatientByID(db, req.PatientID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -329,7 +332,32 @@ func handleConsentTransition(w http.ResponseWriter, r *http.Request, id, action,
 // upsertConsentRequest — INSERT ON CONFLICT (patient_id, doctor_id, scope).
 // Решение 1a: повторный request (в т.ч. после denied) → pending,
 // approved_at/revoked_at обнуляются.
+// B30.9b: допустимые scope согласий (этап 2 §6.58).
+// Схема consents.scope — TEXT, расширение без ALTER.
+// Пустая строка трактуется как "vitals_read" (совместимость этапа 1).
+var validConsentScopes = map[string]bool{
+	"vitals_read":       true,
+	"symptoms_read":     true,
+	"allergies_read":    true,
+	"vaccinations_read": true,
+	"diagnoses_read":    true,
+}
+
+func normalizeConsentScope(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "vitals_read", true
+	}
+	if !validConsentScopes[s] {
+		return "", false
+	}
+	return s, true
+}
+
 func upsertConsentRequest(db *sql.DB, patientID, doctorID, scope string) (string, error) {
+	if _, ok := normalizeConsentScope(scope); !ok {
+		return "", fmt.Errorf("invalid consent scope: %q", scope)
+	}
 	id, err := newID("CONS")
 	if err != nil {
 		return "", fmt.Errorf("newID: %w", err)
