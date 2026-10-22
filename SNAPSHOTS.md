@@ -3626,6 +3626,87 @@ apiFetch-поведение не меняется (`!rr.ok → redirect`), но 
 ### Коммиты
 838aaf8 (6a-c) → 13aed81 (6d/e/f) → 4b3b2af (6g-s).
 
+## B30.7 — серверный профиль пациента (2026-10-22)
 
+Закрывает разрыв: поля `birth_date/gender/height/weight` в схеме и в структуре
+`Patient` были, врачебные CRUD (`getPatientsByDoctor/createPatient/updatePatient`)
+их читали/писали, но у пациента не было своего эндпоинта — кабинет правил
+профиль только в `localStorage`. Теперь пациент читает и правит свой профиль
+через `GET/PUT /api/patient/profile`, а сервер — источник истины.
 
+### Что сделано
 
+- `backend/patient_profile.go`: `PatientProfile`, `profileBody` (указатели —
+  «не прислали» ≠ «прислали пусто»), `getPatientProfile/updatePatientProfile`,
+  `calcAgeFromBirthDate` (+`formatAgeDisplay`, `profileItoa`),
+  `handlePatientProfile`, `registerPatientProfileRoutes`.
+- Роут за `patientAuthMiddleware`; резолв `patientAccountID → patients.id`
+  через `resolvePatientIDForSelf` (как vitals/consents).
+- Валидация: `gender ∈ {male,female,other}`, `birthDate` — `YYYY-MM-DD` и не
+  в будущем, `height 0..250 см`, `weight 0..500 кг`, `name` non-empty (если пришло).
+- Возраст пересчитывается на сервере из `birth_date` при PUT
+  (`age/age_months/age_display`) — иначе врач видел бы расхождение birthDate↔age.
+- `UPDATE` трогает только «свои» поля (`name/birth_date/gender/height/weight/
+  age/age_months/age_display`). Врачебные (`doctor_id/status/diagnosis/ai_*/
+  last_sync/clinic_id/phone/email`) через этот эндпоинт не меняются.
+- audit: `patient.profile.update` при PUT.
+
+### Подпатчи
+
+- **7a (backend):** `patient_profile.go` + `patient_profile_test.go`
+  (GET empty, PUT happy+persist, partial PUT, 8 invalid-кейсов → 400,
+  no-account → 404, таблица `calcAgeFromBirthDate`),
+  регистрация в `main.go` рядом с `registerPatientVitalsRoutes`.
+- **7b (UI):** `patient_cabinet_full.html` — не новая карточка, а подключение
+  существующих редакторов к серверу: `loadProfile()` (GET → patientData + DOM,
+  рост см ↔ м+см, вес кг ↔ кг+г на границе, `ageDisplay` с fallback на
+  локальный `getAgeDisplay`) и `saveProfile(patch)` (частичный PUT через
+  `apiFetch`, `Content-Type: application/json`, текст 400 показывается через
+  `showNotification`). Вызовы из `editPatientName` / `saveBirthDate` /
+  `updateGender` / `updateHeightWeight`; `loadProfile()` в `updateAll()`.
+  Без новых CSS — переиспользованы `.card`/`.info-*` и `showNotification`.
+- **7c (smoke):** `smoke_b30_7.sh` — patient login (dev-hash + seed
+  `patient_accounts`), GET/PUT/GET профиля, 5 invalid PUT → 400, bonus:
+  doctor login (`doctor@local`) → `GET /api/patients/PAT-001` видит обновлённые
+  `birthDate/gender`. Стиль `smoke_b30_5.sh`, `bash -n` чист.
+
+### Проверки
+
+- `go build`/`go vet`/`gofmt -l` зелёные, `go test ./backend/` ok;
+- smoke `smoke_b30_7.sh` против живого сервера: шаги 1–7 + bonus зелёные, rc=0:
+  - GET profile → 200 (`name`);
+  - PUT `{birthDate:"1990-01-01",gender:"male",height:180,weight:75}` → 200,
+    `age:36, ageMonths:441, ageDisplay:"36 г 9 мес"` (пересчитано);
+  - повторный GET — значения сохранились;
+  - invalid PUT (`gender:"xxx"`, `birthDate:"2999-01-01"`, `height:999`,
+    `weight:999`, `name:"   "`) → 400;
+  - doctor `GET /api/patients/PAT-001` — видит `birthDate:"1990-01-01"`,
+    `gender:"male"`, `age:36` (консистентно для врача).
+
+### Уроки сессии
+
+- **Поля были, эндпоинта не было.** B30.7 — не про схему (всё уже было в
+  `patients` и `Patient`), а про серверный CRUD пациента поверх
+  `patientAccountID`. Перед «добавить модель» стоит грепнуть колонки: они уже
+  могут быть и читаться врачебным путём.
+- **`updatePatient` перезаписывает `age*` «как пришло».** Поэтому `PUT profile`
+  обязан пересчитывать возраст из `birth_date` на сервере — иначе рождается
+  расхождение, которое первым заметит врач в карточке.
+- **Единицы на границе.** В UI `patientData.weight` — граммы, `patientData.height`
+  — см; на сервере weight — кг, height — см. Конвертация ровно в `saveProfile`
+  (`/1000`) и в `loadProfile` (`*1000`); смешивать нельзя.
+- **`itoa` уже занят.** `encounters_plan_test.go` объявляет `itoa` — второй в
+  пакете не собрать (`vet: itoa redeclared`). Локальный хелпер назван
+  `profileItoa`. Впредь имена хелперов — с префиксом файла.
+- **`go build ./...` из корня падает** на `build output "backend" already exists
+  and is a directory`. Для проверки — `go build -o /dev/null ./...`.
+- **Формат `ageDisplay` у старых записей другой** («35 лет» vs наш «36 г 9 мес»).
+  Унификация формата — отдельная задача, если понадобится; PUT пишет наш формат.
+- **soft-mode логирует «auth: soft-mode, нет токена»** на patient-роутах, хотя
+  patient-cookie работает (200, корректный `patientIDFromCtx`). В hard-mode
+  (`BOTMAX_AUTH_ENFORCE=1`) проверить, что patient-middleware не конфликтует
+  с doctor-middleware.
+
+### Коммиты
+
+10a7fcb (7a) → 7b70ba1 (7b) → 9f45e47 (7c) → docs.
