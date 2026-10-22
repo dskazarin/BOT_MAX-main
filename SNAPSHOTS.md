@@ -995,7 +995,7 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
-### 6.58 (B30) — ЗАКРЫТО (2026-10-22, этапы 1–3; B30.1–B30.9g)
+### 6.58 (B30) — ЗАКРЫТО (2026-10-22, этапы 1–3; B30.1–B30.9g, включая 3g doctor-CRUD)
 - **Тема:** синхронизация patient → doctor через backend, с consent-механизмом.
 - **Проблема (найдена при смоке B29.8):**
   - `patient_cabinet_full.html` не делает **ни одного** API-запроса
@@ -1050,8 +1050,9 @@
     (CRUD у врача), files (BLOB) + file storage.
 - **Статус (2026-10-22):** §6.58 **закрыт полностью**.
   Этап 1 (B30.1–B30.8), этап 2 (B30.9a–f: `1238b44`, `3e1251d`,
-  `697b4b6`), этап 3 (B30.9g 3a–3e-3: `c47214e`, `d3a5046`, `a4b5089`,
-  `f0f7977`, `318c4e8`, `8352ce1`, `513793b`).
+  `697b4b6`), этап 3 (B30.9g 3a–3e-3 + 3g: `c47214e`, `d3a5046`,
+  `a4b5089`, `f0f7977`, `318c4e8`, `8352ce1`, `513793b`,
+  `d4a9043`, `a474581`, `b4095de`).
 
 
 - **Этап 2 (§6.58) — B30.9a–e закрыто (2026-10-22, коммиты `1238b44` + feat(b30.9e)):**
@@ -1143,6 +1144,50 @@
     `RECORD_KINDS` — 7 kind, `recordsSync_constant_medications` /
     `_course_medications` / `_files` — 3 секции,
     `function downloadRecordFile` — есть.
+  - **3g (doctor-CRUD)** (2026-10-22, `d4a9043`, `a474581`, `b4095de`):
+    полноценный write у врача для `constant_medications` /
+    `course_medications` / `files`.
+    - **a** (`d4a9043`): scope `constant_medications_write` /
+      `course_medications_write` / `files_write` в
+      `validConsentScopes` (`backend/consent.go`); хелпер
+      `requireDoctorConsent(w,r,pid,kind,action)` в
+      `patient_records.go` — общий consent-чек для read/write
+      (401 / 404 patient / 403 `consent_required` / 403
+      `consent_expired` / 500 `consent_bad_expires`).
+      `handleDoctorPatientRecords` — method-dispatch: GET (read) /
+      POST,PUT (write, generic `upsertPatientRecord`, partial upsert).
+      `handleDoctorPatientRecordDelete` — `DELETE
+      /api/patients/{id}/{kind}/{rid}` с consent `<kind>_write`,
+      soft delete, 404 чужого/уже удалённого. `patients.go`:
+      диспетчер для `/{id}/{kind}/{rid}` (2 medication-kind + files).
+      Тесты: `patient_records_doctor_write_test.go` (11 кейсов:
+      read≠write, partial upsert `status DEFAULT 'active'`, чужой
+      пациент 404, soft-deleted скрыт, files read-only delete 403).
+    - **b** (`a474581`): doctor-upload files через POST
+      `/api/patients/{id}/files` — base64 → BLOB, `size_bytes`
+      сервером, лимит тела 8 MiB, `data` не утекает в GET-список
+      (`has_data`), PUT метаданных без `data` не затирает BLOB,
+      DELETE → download 404. Тесты:
+      `patient_records_doctor_write_files_test.go` (7 кейсов).
+    - **c** (`b4095de`): UI врача в `patient_card.html` —
+      панели «➕ Добавить» в секциях `constant_medications` /
+      `course_medications`; «📤 Загрузить файл» в `files`
+      (`input file` → `FileReader.readAsDataURL` → base64 → POST,
+      лимит 6 МиБ на клиенте); кнопки ✏️ / 🗑️ на каждом item
+      (`doctorOpenRecordForm` / `doctorDeleteRecord`); «Скачать»
+      для `files` с `has_data` (`downloadRecordFile` теперь берёт
+      doctor-URL `/api/patients/{pid}/files/{fid}/data` при
+      наличии `pid`, иначе self); 403 consent → понятное
+      сообщение «Нужно согласие ... (`<kind>_write`)»; CSS
+      `.records-actions` / `.records-add-btn` / `.records-edit-btn`
+      / `.records-delete-btn`.
+    - Проверки: `go build` / `go vet` / `gofmt -l` — чисто;
+      `go test ./backend/` — `ok ~8s`; UI-smoke:
+      `function doctorOpenRecordForm` / `doctorSaveRecord` /
+      `doctorDeleteRecord` / `doctorUploadFile` — есть;
+      `.records-add-btn` / `.records-edit-btn` / `.records-delete-btn`
+      — есть; `RECORD_FIELDS` / `RECORD_FIELD_RU` — есть;
+      doctor-URL в `downloadRecordFile` — есть.
 - **B30.9e (UI списков в `patient_card.html`) — следующий.**
   Крупный UI: 4 секции (symptoms/allergies/vaccinations/diagnoses),
   чтение через `GET /api/patients/{id}/{kind}` (B30.9d),

@@ -486,12 +486,10 @@ func requireDoctorConsent(w http.ResponseWriter, r *http.Request, pid, kind, act
 	return true
 }
 
-// handleDoctorPatientRecords — GET /api/patients/{id}/{kind} для врача.
-// Проверка consent: findApprovedConsent(pid, doctorID, kind+"_read").
-//   - нет doctorID в ctx          → 401
-//   - нет approved consent        → 403 consent_required
-//   - consent истёк (expires_at)  → 403 consent_expired
-//   - иначе                       → 200 + список живых (deleted_at IS NULL)
+// handleDoctorPatientRecords — /api/patients/{id}/{kind} для врача.
+// GET (read, consent kind+"_read") → список живых (deleted_at IS NULL).
+// POST/PUT (write, consent kind+"_write") → generic upsert по id.
+// Проверка — requireDoctorConsent (401 / 404 patient / 403 / 500).
 func handleDoctorPatientRecords(w http.ResponseWriter, r *http.Request, pid, kind string) {
 	switch r.Method {
 	case http.MethodGet:
