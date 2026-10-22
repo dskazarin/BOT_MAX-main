@@ -198,7 +198,9 @@ func upsertPatientRecord(kind, pid string, payload map[string]any) (string, erro
 	}
 
 	fields := recordFields[kind]
-	// Собираем значения по бе白ому списку; отсутствующие — nil.
+	// Partial upsert: в INSERT/UPDATE включаем только поля, реально
+	// присутствующие в payload. Отсутствующие не трогаем — сработает
+	// DEFAULT/NULL схемы (например course_medications.status DEFAULT 'active').
 	vals := make([]any, 0, len(fields)+5)
 	vals = append(vals, rid, pid)
 	var clinicVal any
@@ -215,7 +217,10 @@ func upsertPatientRecord(kind, pid string, payload map[string]any) (string, erro
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, f := range fields {
-		v := payload[f]
+		v, ok := payload[f]
+		if !ok {
+			continue
+		}
 		cols = append(cols, f)
 		placeholders = append(placeholders, "?")
 		vals = append(vals, v)

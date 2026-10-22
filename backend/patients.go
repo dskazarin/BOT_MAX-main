@@ -139,7 +139,8 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 				handleCardByID(w, r, id)
 				return
 			}
-		case "symptoms", "allergies", "vaccinations", "diagnoses":
+		case "symptoms", "allergies", "vaccinations", "diagnoses",
+			"constant_medications", "course_medications", "files":
 			if len(parts) == 2 {
 				handleDoctorPatientRecords(w, r, id, parts[1])
 				return
