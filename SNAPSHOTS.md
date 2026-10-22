@@ -995,7 +995,7 @@
 
 <!-- B29_6_BACKLOG_APPLIED -->
 
-### 6.58 (B30) — ПЛАН (не начат, checkpoint 2026-10-14)
+### 6.58 (B30) — ЗАКРЫТО (2026-10-22, этапы 1–3; B30.1–B30.9g)
 - **Тема:** синхронизация patient → doctor через backend, с consent-механизмом.
 - **Проблема (найдена при смоке B29.8):**
   - `patient_cabinet_full.html` не делает **ни одного** API-запроса
@@ -1048,11 +1048,10 @@
     списков в карте врача.
   - **Этап 3 (~5–7 подпатчей):** constantMedications, courseMedications
     (CRUD у врача), files (BLOB) + file storage.
-- **Статус (2026-10-22):** этап 1 закрыт (B30.1–B30.8), этап 2 **закрыт
-  полностью**: B30.9a–d (`1238b44`), B30.9e — UI records lists в
-  `patient_card.html` (`3e1251d`), B30.9f — docs + smoke + пуш.
-  Дальше — этап 3 §6.58: `constantMedications` / `courseMedications` /
-  `files` (BLOB).
+- **Статус (2026-10-22):** §6.58 **закрыт полностью**.
+  Этап 1 (B30.1–B30.8), этап 2 (B30.9a–f: `1238b44`, `3e1251d`,
+  `697b4b6`), этап 3 (B30.9g 3a–3e-3: `c47214e`, `d3a5046`, `a4b5089`,
+  `f0f7977`, `318c4e8`, `8352ce1`, `513793b`).
 
 
 - **Этап 2 (§6.58) — B30.9a–e закрыто (2026-10-22, коммиты `1238b44` + feat(b30.9e)):**
@@ -1092,6 +1091,58 @@
     UI-smoke: `grep -c 'class="records-list"' patient_card.html` → 4;
     `RECORD_KINDS` — все 4; `badge.title` в `loadRecordsOne`.
     `go test ./backend/` — `ok 7.961s`.
+
+- **Этап 3 (§6.58) — B30.9g закрыт (2026-10-22, 3a–3e-3):**
+  - **3a** (`c47214e`): схема `constant_medications` / `course_medications`
+    / `files` (`id TEXT PK`, `patient_id`/`clinic_id` FK,
+    `created_at`/`updated_at`, `deleted_at`, индексы
+    `idx_<kind>_patient` + `idx_<kind>_alive`; `files.data BLOB`).
+    Scope: `constant_medications_read` / `course_medications_read` /
+    `files_read` (`backend/consent.go`).
+  - **3b** (`d3a5046`): self-CRUD через generic
+    `/api/patient/records/{kind}` — `recordTables` + `recordFields`
+    расширены; `patients.go` whitelist для doctor-read; **partial
+    upsert** в `upsertPatientRecord` (в INSERT/UPDATE идут только
+    поля, реально присутствующие в payload — иначе
+    `course_medications.status NOT NULL DEFAULT 'active'` падал).
+    Тесты: `patient_records_stage3_test.go` (CRUD ×3 + изоляция).
+  - **3c** (`a4b5089`): doctor-read + consent для трёх новых kind —
+    `patient_records_doctor_stage3_test.go` (401 / 403
+    `consent_required` / 403 чужой scope / 200 / soft-deleted скрыт).
+  - **3d** (`f0f7977`): UI — 3 секции «(БД)» после «Диагнозов»:
+    `recordsConstantMedsContent` / `recordsCourseMedsContent` /
+    `recordsFilesContent`; `RECORD_KINDS` → 7; `recordsKindRu`
+    расширен; `renderRecords` показывает `filename` / `dose` /
+    `schedule` / `status` / `start_at–end_at` / `mime` / `size_bytes`.
+  - **3e** (`318c4e8`): `files.data` BLOB — POST принимает `data`
+    как base64-строку, сервер декодирует в `[]byte` и сам считает
+    `size_bytes`; в GET-списке BLOB **не отдаётся** — только
+    `has_data` (`CASE WHEN data IS NOT NULL AND length(data)>0`).
+    Лимит тела поднят 1 MiB → 8 MiB
+    (`io.LimitReader(r.Body, 8<<20)`). Тесты:
+    `patient_records_files_blob_test.go` (upload / no-data /
+    invalid-base64 / too-large).
+  - **3e-2** (`8352ce1`): скачивание BLOB —
+    `GET /api/patient/records/files/{id}/data` (self,
+    `handlePatientFileDownload`) и
+    `GET /api/patients/{id}/files/{fid}/data` (doctor,
+    `handleDoctorPatientFileData`, consent `files_read`); общая
+    `writeFileBlob` отдаёт `Content-Type` из `files.mime`
+    (fallback `application/octet-stream`),
+    `Content-Disposition: attachment; filename="..."`,
+    `Content-Length`; soft-deleted/без-BLOB/чужой → 404.
+    `patients.go`: `case "files"` с 2-сегментным (list) и
+    4-сегментным (`{fid}/data`) путями. Тесты:
+    `patient_records_files_download_test.go` (7 кейсов).
+  - **3e-3** (`513793b`): UI — кнопка «Скачать» у `files` при
+    `has_data=1` (`downloadRecordFile` в `patient_card.html`:
+    `BotMaxAuth.authFetch('GET', '/api/patient/records/files/{id}/data')`
+    → `res.blob()` → `<a download>` → `URL.revokeObjectURL`).
+  - Проверки: `go build` / `go vet` / `gofmt -l` — чисто;
+    `go test ./backend/` — `ok ~9s`; UI-smoke:
+    `RECORD_KINDS` — 7 kind, `recordsSync_constant_medications` /
+    `_course_medications` / `_files` — 3 секции,
+    `function downloadRecordFile` — есть.
 - **B30.9e (UI списков в `patient_card.html`) — следующий.**
   Крупный UI: 4 секции (symptoms/allergies/vaccinations/diagnoses),
   чтение через `GET /api/patients/{id}/{kind}` (B30.9d),
