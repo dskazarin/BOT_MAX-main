@@ -204,10 +204,31 @@ func listPatientRecords(kind, pid string) ([]map[string]any, error) {
 	return out, rows.Err()
 }
 
+// newFileID — серверный id для нового файла (без внешних зависимостей).
+// Формат: "F" + unix-nano (монотонно, сортируется по времени).
+func newFileID() string {
+	return fmt.Sprintf("F%d", time.Now().UnixNano())
+}
+
 func upsertPatientRecord(kind, pid string, payload map[string]any) (string, error) {
 	rid, _ := payload["id"].(string)
 	if strings.TrimSpace(rid) == "" {
-		return "", errors.New("id required")
+		if kind == "files" {
+			// B30.11-fix: загрузка нового файла — id выдаёт сервер.
+			// Для остальных kind id обязателен (клиентский upsert по Date.now()).
+			rid = newFileID()
+			payload["id"] = rid
+		} else {
+			return "", errors.New("id required")
+		}
+	}
+
+	// B30.11-fix: фронт patient_cabinet_full.html шлёт data_base64 (B30.11),
+	// а тесты/API-контракт B30.9c — data. Принимаем оба, data приоритетнее.
+	if _, ok := payload["data"]; !ok {
+		if alt, ok2 := payload["data_base64"]; ok2 && alt != nil {
+			payload["data"] = alt
+		}
 	}
 
 	// files: data приходит base64-строкой → декодируем в []byte (BLOB).
@@ -446,6 +467,11 @@ func handlePatientFilesRouter(w http.ResponseWriter, r *http.Request) {
 func registerPatientRecordsRoutes() {
 	// files/{id}/data → download; всё остальное под /files (list/upload/delete)
 	// уходит в handlePatientRecords через диспетчер.
+	// Точный путь без слэша — чтобы фронт/curl не получали 307 и не полагались
+	// на автоматический редирект ServeMux (важно для POST: 307 сохраняет метод,
+	// но лишний round-trip и риск потерять тело в некоторых клиентах).
+	http.Handle("/api/patient/records/files",
+		patientAuthMiddleware(http.HandlerFunc(handlePatientFilesRouter)))
 	http.Handle("/api/patient/records/files/",
 		patientAuthMiddleware(http.HandlerFunc(handlePatientFilesRouter)))
 	http.Handle("/api/patient/records/",
