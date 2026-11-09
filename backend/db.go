@@ -428,12 +428,20 @@ func InitDB(path string) (*sql.DB, error) {
 		{"doctors", "failed_login_count", "INTEGER NOT NULL DEFAULT 0"},
 		{"doctors", "locked_until", "TEXT"},
 		{"consents", "expires_at", "TEXT"},
+		{"files", "storage_kind", "TEXT NOT NULL DEFAULT 'blob'"},
+		{"files", "storage_key", "TEXT"},
 	}
 	for _, m := range migrations {
 		if err := ensureColumn(db, m.table, m.column, m.ddl); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate %s.%s: %w", m.table, m.column, err)
 		}
+	}
+
+	// === B30.10 §6.59: индекс по storage_kind (после ALTER-миграций) ===
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_files_storage_kind ON files(storage_kind)`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("idx_files_storage_kind: %w", err)
 	}
 
 	// === B30.2b: patients.doctor_id → NULLABLE + ON DELETE SET NULL ===
