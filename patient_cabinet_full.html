@@ -1649,5 +1649,18 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
 
 
 </script>
+
+<script>
+// B30.11-fix: кабинет требует patient-сессию (hard-mode patient-auth).
+// Если cookie botmax_pat_access нет — редирект на страницу логина.
+// (Единая точка входа — patient_login.html; модалка здесь не нужна.)
+(function() {
+  fetch('/api/patient/profile', { method: 'GET', credentials: 'include' })
+    .then(function(r) {
+      if (r.status === 401) location.href = '/patient_login.html';
+    })
+    .catch(function() { /* сеть недоступна — работаем на localStorage-фоллбэке */ });
+})();
+</script>
 </body>
 </html>
