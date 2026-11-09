@@ -204,10 +204,31 @@ func listPatientRecords(kind, pid string) ([]map[string]any, error) {
 	return out, rows.Err()
 }
 
+// newFileID — серверный id для нового файла (без внешних зависимостей).
+// Формат: "F" + unix-nano (монотонно, сортируется по времени).
+func newFileID() string {
+	return fmt.Sprintf("F%d", time.Now().UnixNano())
+}
+
 func upsertPatientRecord(kind, pid string, payload map[string]any) (string, error) {
 	rid, _ := payload["id"].(string)
 	if strings.TrimSpace(rid) == "" {
-		return "", errors.New("id required")
+		if kind == "files" {
+			// B30.11-fix: загрузка нового файла — id выдаёт сервер.
+			// Для остальных kind id обязателен (клиентский upsert по Date.now()).
+			rid = newFileID()
+			payload["id"] = rid
+		} else {
+			return "", errors.New("id required")
+		}
+	}
+
+	// B30.11-fix: фронт patient_cabinet_full.html шлёт data_base64 (B30.11),
+	// а тесты/API-контракт B30.9c — data. Принимаем оба, data приоритетнее.
+	if _, ok := payload["data"]; !ok {
+		if alt, ok2 := payload["data_base64"]; ok2 && alt != nil {
+			payload["data"] = alt
+		}
 	}
 
 	// files: data приходит base64-строкой → декодируем в []byte (BLOB).
@@ -430,11 +451,29 @@ func writeFileBlob(w http.ResponseWriter, pid, fid string) {
 	w.Write(data)
 }
 
+// handlePatientFilesRouter — тонкий диспетчер для /api/patient/records/files/*.
+// Причина: ServeMux выбирает самый длинный префикс, поэтому если зарегистрировать
+// "/files/" прямо на handlePatientFileDownload, то list/upload/delete (которые не
+// содержат "/{id}/data") тоже уйдут в download-хендлер и получат 404/405.
+// См. регрессионный тест TestPatientFilesRouting.
+func handlePatientFilesRouter(w http.ResponseWriter, r *http.Request) {
+	if _, ok := parseFilesDataPath(r.URL.Path); ok {
+		handlePatientFileDownload(w, r)
+		return
+	}
+	handlePatientRecords(w, r)
+}
+
 func registerPatientRecordsRoutes() {
-	// files/{id}/data — отдельный хендлер, должен быть зарегистрирован ДО
-	// generic /api/patient/records/ (Go http.Handle: более длинный префикс побеждает).
+	// files/{id}/data → download; всё остальное под /files (list/upload/delete)
+	// уходит в handlePatientRecords через диспетчер.
+	// Точный путь без слэша — чтобы фронт/curl не получали 307 и не полагались
+	// на автоматический редирект ServeMux (важно для POST: 307 сохраняет метод,
+	// но лишний round-trip и риск потерять тело в некоторых клиентах).
+	http.Handle("/api/patient/records/files",
+		patientAuthMiddleware(http.HandlerFunc(handlePatientFilesRouter)))
 	http.Handle("/api/patient/records/files/",
-		patientAuthMiddleware(http.HandlerFunc(handlePatientFileDownload)))
+		patientAuthMiddleware(http.HandlerFunc(handlePatientFilesRouter)))
 	http.Handle("/api/patient/records/",
 		patientAuthMiddleware(http.HandlerFunc(handlePatientRecords)))
 	slog.Info("registerPatientRecordsRoutes",

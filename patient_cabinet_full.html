@@ -576,7 +576,13 @@
         <div class="card-header" onclick="toggleSection('filesSection', 'filesIcon')">
             <h2>📎 Загруженные файлы <span class="toggle-icon" id="filesIcon">▼</span></h2>
         </div>
-        <div id="filesSection" class="card-content"><div id="filesList"></div></div>
+        <div id="filesSection" class="card-content">
+            <div class="records-actions">
+                <input type="file" id="patientFilesInput" style="display:none" onchange="patientFileUpload(this)">
+                <button class="records-add-btn" onclick="document.getElementById('patientFilesInput').click()">📤 Загрузить файл</button>
+            </div>
+            <div id="filesList"></div>
+        </div>
     </div>
 
     <!-- Печать -->
@@ -891,7 +897,17 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
             <!DOCTYPE html>
             <html>
             <head><title>${file.name}</title>
-            <style>body{margin:0;padding:20px;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f7fafc;}img,iframe{max-width:100%;height:auto;box-shadow:0 10px 40px rgba(0,0,0,0.1);}iframe{width:100%;height:90vh;border:none;}</style>
+            <style>body{margin:0;padding:20px;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f7fafc;}img,iframe{max-width:100%;height:auto;box-shadow:0 10px 40px rgba(0,0,0,0.1);}iframe{width:100%;height:90vh;border:none;}
+    /* B30.11: файлы пациента — серверные кнопки */
+    .records-actions { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+    .records-add-btn, .records-download-btn, .records-delete-btn {
+      padding:6px 12px; border:0; border-radius:6px; cursor:pointer; font-size:13px;
+    }
+    .records-add-btn { background:#4a5568; color:#fff; }
+    .records-download-btn { background:#3182ce; color:#fff; }
+    .records-delete-btn { background:#e53e3e; color:#fff; }
+    .records-add-btn:hover, .records-download-btn:hover, .records-delete-btn:hover { opacity:.85; }
+</style>
             </head>
             <body><div>${file.type === 'image' ? `<img src="${file.data}">` : `<iframe src="${file.data}"></iframe>`}</div></body>
             </html>
@@ -1647,6 +1663,178 @@ let sessionToken = localStorage.getItem('sessionToken') || Date.now().toString()
 
 
 
+
+</script>
+
+<script>
+// B30.11-fix: кабинет требует patient-сессию (hard-mode patient-auth).
+// Если cookie botmax_pat_access нет — редирект на страницу логина.
+// (Единая точка входа — patient_login.html; модалка здесь не нужна.)
+(function() {
+  fetch('/api/patient/profile', { method: 'GET', credentials: 'include' })
+    .then(function(r) {
+      if (r.status === 401) location.href = '/patient_login.html';
+    })
+    .catch(function() { /* сеть недоступна — работаем на localStorage-фоллбэке */ });
+})();
+</script>
+
+<script>
+// B30.11: после загрузки профиля подтянуть серверный список файлов
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof patientRefreshFiles === 'function') {
+        setTimeout(function() { try { patientRefreshFiles(); } catch(e) {} }, 500);
+    }
+});
+
+    // ===== B30.11: файлы пациента — сервер (GET/POST/DELETE /api/patient/records/files) =====
+    // Загрузка: POST с data_base64 (бэкенд принимает и data, и data_base64).
+    // id не передаём — сервер сгенерирует (F<unixnano>).
+    function patientFileUpload(input) {
+        var file = input && input.files && input.files[0];
+        if (!file) return;
+        if (file.size > 6 * 1024 * 1024) {
+            alert('Файл больше 6 МиБ — не пройдёт лимит тела. Уменьшите размер.');
+            input.value = '';
+            return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            var dataUrl = String(ev.target.result || '');
+            var comma = dataUrl.indexOf(',');
+            var b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+            apiFetch('/api/patient/records/files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: file.name,
+                    mime: file.type || 'application/octet-stream',
+                    data_base64: b64
+                })
+            }).then(function(r) {
+                if (!r.ok) {
+                    return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+                }
+                showNotification('📎 Файл загружен!', 'success');
+                patientRefreshFiles();
+            }).catch(function(err) {
+                var msg = (err && err.message) || '';
+                if (msg.indexOf('HTTP 401') === 0) { alert('Требуется вход в кабинет пациента (401).'); return; }
+                console.warn('patient file upload failed:', msg);
+                alert('Не удалось загрузить файл: ' + (msg || 'ошибка'));
+            });
+        };
+        reader.onerror = function() { alert('Не удалось прочитать файл'); };
+        reader.readAsDataURL(file);
+        input.value = '';
+    }
+
+    // Удаление: DELETE /api/patient/records/files/{id}
+    function patientFileDelete(id) {
+        if (!confirm('Удалить файл?')) return;
+        apiFetch('/api/patient/records/files/' + encodeURIComponent(id), { method: 'DELETE' })
+            .then(function(r) {
+                if (!r.ok) {
+                    return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+                }
+                showNotification('🗑️ Файл удалён', 'success');
+                patientRefreshFiles();
+            })
+            .catch(function(err) {
+                var msg = (err && err.message) || '';
+                if (msg.indexOf('HTTP 401') === 0) { alert('Требуется вход в кабинет пациента (401).'); return; }
+                console.warn('patient file delete failed:', msg);
+                alert('Не удалось удалить: ' + (msg || 'ошибка'));
+            });
+    }
+
+    // Список: GET /api/patient/records/files; fallback на локальные (legacy)
+    function patientRefreshFiles() {
+        var container = document.getElementById('filesList');
+        if (!container) return;
+        container.innerHTML = '<div style="text-align:center;padding:20px;opacity:.6;">Загрузка…</div>';
+        apiFetch('/api/patient/records/files', { method: 'GET' })
+            .then(function(r) {
+                if (!r.ok) {
+                    return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+                }
+                return r.json();
+            })
+            .then(function(items) {
+                items = items || [];
+                if (!items.length) {
+                    container.innerHTML = '<div style="text-align:center;padding:20px;">Нет файлов</div>';
+                    return;
+                }
+                container.innerHTML = items.map(function(f) {
+                    var id = String(f.id || '');
+                    var name = escapeHtml(String(f.filename || f.name || 'файл'));
+                    var size = f.size_bytes ? ' • ' + Math.round(Number(f.size_bytes) / 1024) + ' KB' : '';
+                    var has = String(f.has_data) === '1';
+                    var btn = has
+                        ? '<button class="records-download-btn" onclick="patientFileDownload(\'' + id.replace(/'/g, "\\'") + '\', \'' + name.replace(/'/g, "\\'") + '\')">⬇️ Скачать</button>'
+                        : '';
+                    return '<div class="file-item"><div>📎 ' + name + '<br><small>' + (f.updated_at || '') + size + '</small></div><div>' + btn +
+                        '<button class="records-delete-btn" onclick="patientFileDelete(\'' + id.replace(/'/g, "\\'") + '\')">🗑️</button></div></div>';
+                }).join('');
+            })
+            .catch(function(err) {
+                var msg = (err && err.message) || '';
+                if (msg.indexOf('HTTP 401') === 0) {
+                    container.innerHTML = '<div style="text-align:center;padding:20px;color:#c00;">Требуется вход (401). Войдите в кабинет пациента.</div>';
+                    return;
+                }
+                console.warn('patient files list failed:', msg);
+                if (patientData.files && patientData.files.length) {
+                    container.innerHTML = patientData.files.map(function(f) {
+                        return '<div class="file-item"><div>📎 ' + escapeHtml(f.name) + '<br><small>' + f.date + ' (локально, не синхронизировано)</small></div><div></div></div>';
+                    }).join('');
+                } else {
+                    container.innerHTML = '<div style="text-align:center;padding:20px;">Не удалось загрузить список</div>';
+                }
+            });
+    }
+
+    // Скачивание: GET /api/patient/records/files/{id}/data → blob → <a download>
+    function patientFileDownload(id, filename) {
+        if (!id) return;
+        apiFetch('/api/patient/records/files/' + encodeURIComponent(id) + '/data', { method: 'GET' })
+            .then(function(r) {
+                if (!r.ok) {
+                    return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+                }
+                return r.blob();
+            })
+            .then(function(blob) {
+                var objUrl = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = objUrl;
+                a.download = filename || ('file-' + id);
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function() { URL.revokeObjectURL(objUrl); }, 1000);
+            })
+            .catch(function(err) {
+                var msg = (err && err.message) || '';
+                if (msg.indexOf('HTTP 401') === 0) { alert('Требуется вход в кабинет пациента (401).'); return; }
+                console.warn('patient file download failed:', msg);
+                alert('Не удалось скачать файл: ' + (msg || 'ошибка'));
+            });
+    }
+
+    // legacy-алиасы (переопределяем старые локальные)
+    function uploadFile(input) { patientFileUpload(input); }
+    function deleteFile(id) { patientFileDelete(id); }
+    function updateFilesList() { patientRefreshFiles(); }
+    function viewFile(file) {
+        if (!file) return;
+        if (file.id && (String(file.id).indexOf('F') === 0)) {
+            patientFileDownload(file.id, file.filename || file.name);
+        } else {
+            viewFileInNewTab(file);
+        }
+    }
 
 </script>
 </body>

@@ -65,3 +65,4 @@ bot_max.db-wal
 
 # Go build artifact из корня репо (go build ./... без -o)
 /backend/backend
+data/
