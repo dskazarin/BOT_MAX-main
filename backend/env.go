@@ -50,6 +50,11 @@ type Env struct {
 	// ImpersonationTTL — время жизни access-токена в режиме impersonation
 	// (B21, было константой в auth.go). По умолчанию 15m.
 	ImpersonationTTL time.Duration
+	// --- B30.10 §6.59: хранилище файлов ---
+	StorageKind    StorageKind // blob|fs (s3 — бэклог)
+	StorageDir     string      // только для kind=fs
+	StorageMaxMiB  int         // > 0, дефолт 6
+	StorageMigrate bool        // BLOB → FS при старте (только fs)
 }
 
 // devJWTSecret — fallback для dev-режима.
@@ -201,6 +206,11 @@ func validateEnv() (*Env, error) {
 		return nil, err
 	}
 
+	storageCfg, err := loadStorageCfg(dbPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Env{
 		Name:                 name,
 		IsProd:               isProd,
@@ -212,5 +222,9 @@ func validateEnv() (*Env, error) {
 		RefreshRetentionDays: refreshRetentionDays,
 		AuditCleanupInterval: cleanupInterval,
 		ImpersonationTTL:     impersonationTTL,
+		StorageKind:          storageCfg.Kind,
+		StorageDir:           storageCfg.Dir,
+		StorageMaxMiB:        storageCfg.MaxMiB,
+		StorageMigrate:       storageCfg.Migrate,
 	}, nil
 }
