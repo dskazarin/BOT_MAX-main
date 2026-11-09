@@ -26,6 +26,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -168,7 +169,7 @@ func listPatientRecords(kind, pid string) ([]map[string]any, error) {
 	cols = append(cols, "created_at", "updated_at")
 	selectCols := strings.Join(cols, ",")
 	if kind == "files" {
-		selectCols += ", CASE WHEN data IS NOT NULL AND length(data)>0 THEN 1 ELSE 0 END AS has_data"
+		selectCols += ", CASE WHEN storage_kind != '' AND (data IS NOT NULL OR storage_key IS NOT NULL) THEN 1 ELSE 0 END AS has_data"
 	}
 	q := `SELECT ` + selectCols + ` FROM ` + kind +
 		` WHERE patient_id=? AND deleted_at IS NULL ORDER BY updated_at DESC`
@@ -211,6 +212,9 @@ func newFileID() string {
 }
 
 func upsertPatientRecord(kind, pid string, payload map[string]any) (string, error) {
+	if kind == "files" {
+		return upsertFileRecord(pid, payload)
+	}
 	rid, _ := payload["id"].(string)
 	if strings.TrimSpace(rid) == "" {
 		if kind == "files" {
@@ -302,6 +306,107 @@ func upsertPatientRecord(kind, pid string, payload map[string]any) (string, erro
 	return rid, nil
 }
 
+// upsertFileRecord — files: через FileStorage. Для blobStorage — data в БД,
+// для fsStorage — файл на диск + storage_key, data=NULL. Контракт HTTP не меняется.
+func upsertFileRecord(pid string, payload map[string]any) (string, error) {
+	rid, _ := payload["id"].(string)
+	if strings.TrimSpace(rid) == "" {
+		rid = newFileID()
+		payload["id"] = rid
+	}
+	if _, ok := payload["data"]; !ok {
+		if alt, ok2 := payload["data_base64"]; ok2 && alt != nil {
+			payload["data"] = alt
+		}
+	}
+
+	// декод base64 → []byte
+	var data []byte
+	if raw, ok := payload["data"]; ok && raw != nil {
+		s, isStr := raw.(string)
+		if !isStr {
+			return "", errors.New("data must be base64 string")
+		}
+		if s != "" {
+			decoded, decErr := base64.StdEncoding.DecodeString(s)
+			if decErr != nil {
+				return "", fmt.Errorf("data base64: %w", decErr)
+			}
+			data = decoded
+		}
+	}
+
+	filename, _ := payload["filename"].(string)
+	mime, _ := payload["mime"].(string)
+	notes, _ := payload["notes"].(string)
+
+	if storage == nil {
+		return "", errors.New("storage не инициализирован")
+	}
+
+	clinic, err := clinicIDForPatient(pid)
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
+	clinicVal := any(nil)
+	if clinic.Valid {
+		clinicVal = clinic.String
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// 1) запись в хранилище (blob → files.data, fs → диск).
+	if len(data) > 0 {
+		if err := storage.Put(pid, rid, filename, mime, data); err != nil {
+			return "", fmt.Errorf("storage.Put: %w", err)
+		}
+	}
+
+	// 2) метаданные в files. Для blob — data в БД (совместимо со старым);
+	//    для fs — data=NULL, storage_kind='fs', storage_key='<pid>/<id>.bin'.
+	var (
+		kind  string
+		key   any
+		size  any
+		dataV any
+	)
+	switch storage.(type) {
+	case *blobStorage:
+		kind = string(StorageKindBlob)
+		key = nil
+		if len(data) > 0 {
+			size = int64(len(data))
+			dataV = data
+		}
+	case *fsStorage:
+		kind = string(StorageKindFS)
+		if len(data) > 0 {
+			key = filepath.Join(pid, rid+".bin")
+			size = int64(len(data))
+		}
+	default:
+		return "", fmt.Errorf("storage: неизвестный тип %T", storage)
+	}
+
+	q := `INSERT INTO files (id, patient_id, clinic_id, filename, mime, size_bytes, data, notes,
+	                         storage_kind, storage_key, created_at, updated_at)
+	      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	      ON CONFLICT(id) DO UPDATE SET
+	        filename=excluded.filename, mime=excluded.mime,
+	        size_bytes=excluded.size_bytes, data=excluded.data, notes=excluded.notes,
+	        storage_kind=excluded.storage_kind, storage_key=excluded.storage_key,
+	        updated_at=excluded.updated_at
+	      WHERE files.patient_id = excluded.patient_id`
+	if _, err := db.Exec(q, rid, pid, clinicVal, filename, mime, size, dataV, notes,
+		kind, key, now, now); err != nil {
+		// откат файла на диске — best-effort
+		if kind == string(StorageKindFS) && len(data) > 0 {
+			_ = storage.Delete(pid, rid)
+		}
+		return "", err
+	}
+	return rid, nil
+}
+
 func softDeletePatientRecord(kind, pid, id string) (int64, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := db.Exec(`UPDATE `+kind+` SET deleted_at=?, updated_at=? WHERE id=? AND patient_id=? AND deleted_at IS NULL`,
@@ -309,7 +414,12 @@ func softDeletePatientRecord(kind, pid, id string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	n, _ := res.RowsAffected()
+	// B30.10 §6.59: для files — удалить файл в FS (best-effort; blob — no-op).
+	if n > 0 && kind == "files" && storage != nil {
+		_ = storage.Delete(pid, id)
+	}
+	return n, nil
 }
 
 // registerPatientRecordsRoutes — все 4 сущности под patientAuthMiddleware.
@@ -418,12 +528,17 @@ func handleDoctorPatientRecordDelete(w http.ResponseWriter, r *http.Request, pid
 
 // writeFileBlob — общая часть: SELECT filename, mime, data FROM files
 // WHERE id=? AND patient_id=? AND deleted_at IS NULL. NULL data → 404.
+// writeFileBlob — метаданные из files (filename/mime), байты — из storage.
+// Контракт: 200 + bytes, Content-Disposition: attachment.
 func writeFileBlob(w http.ResponseWriter, pid, fid string) {
+	if storage == nil {
+		http.Error(w, "storage не инициализирован", http.StatusInternalServerError)
+		return
+	}
 	var filename, mime sql.NullString
-	var data []byte
-	err := db.QueryRow(`SELECT filename, mime, data FROM files
+	err := db.QueryRow(`SELECT filename, mime FROM files
 		WHERE id=? AND patient_id=? AND deleted_at IS NULL`, fid, pid).
-		Scan(&filename, &mime, &data)
+		Scan(&filename, &mime)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, nil)
 		return
@@ -432,13 +547,20 @@ func writeFileBlob(w http.ResponseWriter, pid, fid string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if len(data) == 0 {
-		http.NotFound(w, nil) // метаданные без BLOB
+	_, mimeFromStorage, data, ok, err := storage.Get(pid, fid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !ok || len(data) == 0 {
+		http.NotFound(w, nil)
 		return
 	}
 	ct := "application/octet-stream"
 	if mime.Valid && mime.String != "" {
 		ct = mime.String
+	} else if mimeFromStorage != "" {
+		ct = mimeFromStorage
 	}
 	fn := fid
 	if filename.Valid && filename.String != "" {
