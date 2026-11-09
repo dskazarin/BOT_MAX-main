@@ -381,6 +381,9 @@ var loader *Loader
 var guidelines map[string]*Guideline
 var db *sql.DB
 
+// storage — выбранная реализация FileStorage (blob по умолчанию, fs — §6.59).
+var storage FileStorage
+
 // recoverMiddleware ловит panic в HTTP-хендлерах, логирует и отдаёт 500.
 // Защищает сервер от падения при панике в одном запросе.
 func recoverMiddleware(next http.Handler) http.Handler {
@@ -433,6 +436,40 @@ func main() {
 		slog.Error("InitDB", "err", err)
 		os.Exit(1)
 	}
+
+	// === B30.10 §6.59 step5a: выбор FileStorage (поведение пока не меняется) ===
+	storageCfg, err := loadStorageCfg(dbPath)
+	if err != nil {
+		slog.Error("storage cfg", "err", err)
+		os.Exit(1)
+	}
+	switch storageCfg.Kind {
+	case StorageKindBlob:
+		storage = newBlobStorage(db)
+	case StorageKindFS:
+		fs, ferr := newFSStorage(storageCfg.Dir)
+		if ferr != nil {
+			slog.Error("storage fs init", "err", ferr, "dir", storageCfg.Dir)
+			os.Exit(1)
+		}
+		if merr := os.MkdirAll(storageCfg.Dir, 0o755); merr != nil {
+			slog.Error("storage mkdir", "err", merr, "dir", storageCfg.Dir)
+			os.Exit(1)
+		}
+		if storageCfg.Migrate {
+			moved, merr := migrateBlobToFS(db, fs)
+			if merr != nil {
+				slog.Error("storage migrate", "err", merr)
+				os.Exit(1)
+			}
+			slog.Info("storage migrate: blob→fs", "moved", moved)
+		}
+		storage = fs
+	default:
+		slog.Error("storage kind: не реализовано", "kind", storageCfg.Kind)
+		os.Exit(1)
+	}
+	slog.Info("storage", "kind", storageCfg.Kind, "dir", storageCfg.Dir, "max_mib", storageCfg.MaxMiB, "migrate", storageCfg.Migrate)
 	defer db.Close()
 	runDevSeeds(db, currentEnv)
 	slog.Info("SQLite готова", "dbPath", dbPath)
