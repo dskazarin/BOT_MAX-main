@@ -430,11 +430,24 @@ func writeFileBlob(w http.ResponseWriter, pid, fid string) {
 	w.Write(data)
 }
 
+// handlePatientFilesRouter — тонкий диспетчер для /api/patient/records/files/*.
+// Причина: ServeMux выбирает самый длинный префикс, поэтому если зарегистрировать
+// "/files/" прямо на handlePatientFileDownload, то list/upload/delete (которые не
+// содержат "/{id}/data") тоже уйдут в download-хендлер и получат 404/405.
+// См. регрессионный тест TestPatientFilesRouting.
+func handlePatientFilesRouter(w http.ResponseWriter, r *http.Request) {
+	if _, ok := parseFilesDataPath(r.URL.Path); ok {
+		handlePatientFileDownload(w, r)
+		return
+	}
+	handlePatientRecords(w, r)
+}
+
 func registerPatientRecordsRoutes() {
-	// files/{id}/data — отдельный хендлер, должен быть зарегистрирован ДО
-	// generic /api/patient/records/ (Go http.Handle: более длинный префикс побеждает).
+	// files/{id}/data → download; всё остальное под /files (list/upload/delete)
+	// уходит в handlePatientRecords через диспетчер.
 	http.Handle("/api/patient/records/files/",
-		patientAuthMiddleware(http.HandlerFunc(handlePatientFileDownload)))
+		patientAuthMiddleware(http.HandlerFunc(handlePatientFilesRouter)))
 	http.Handle("/api/patient/records/",
 		patientAuthMiddleware(http.HandlerFunc(handlePatientRecords)))
 	slog.Info("registerPatientRecordsRoutes",
