@@ -484,6 +484,7 @@ func main() {
 		runRetention(bgCtx, db,
 			currentEnv.AuditRetentionDays,
 			currentEnv.RefreshRetentionDays,
+			currentEnv.StorageGCDays,
 			currentEnv.AuditCleanupInterval)
 	}()
 

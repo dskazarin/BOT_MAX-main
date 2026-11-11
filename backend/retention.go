@@ -104,17 +104,17 @@ func retentionHealthy(auditDays, refreshDays int, interval time.Duration) bool {
 // После каждого прогона обновляет retentionStatusVal:
 //   - успех → updateRetentionStatusSuccess
 //   - ошибка хотя бы одной очистки → updateRetentionStatusError
-func runRetention(ctx context.Context, db *sql.DB, auditDays, refreshDays int, interval time.Duration) {
-	if auditDays <= 0 && refreshDays <= 0 {
-		slog.Info("retention: выключен (auditDays<=0 && refreshDays<=0)",
-			"auditDays", auditDays, "refreshDays", refreshDays)
+func runRetention(ctx context.Context, db *sql.DB, auditDays, refreshDays, storageGCDays int, interval time.Duration) {
+	if auditDays <= 0 && refreshDays <= 0 && storageGCDays <= 0 {
+		slog.Info("retention: выключен (auditDays<=0 && refreshDays<=0 && storageGCDays<=0)",
+			"auditDays", auditDays, "refreshDays", refreshDays, "storageGCDays", storageGCDays)
 		return
 	}
 	if interval <= 0 {
 		interval = 24 * time.Hour
 	}
 	slog.Info("retention: запущен",
-		"auditDays", auditDays, "refreshDays", refreshDays, "interval", interval.String())
+		"auditDays", auditDays, "refreshDays", refreshDays, "storageGCDays", storageGCDays, "interval", interval.String())
 
 	runOnce := func() {
 		var (
@@ -146,6 +146,17 @@ func runRetention(ctx context.Context, db *sql.DB, auditDays, refreshDays int, i
 				refreshN = n
 			}
 		}
+		if storageGCDays > 0 {
+			n, err := GCStorage(ctx, storage, db, time.Duration(storageGCDays)*24*time.Hour)
+			if err != nil {
+				slog.Warn("retention: GCStorage", "err", err)
+				if firstErr == nil {
+					firstErr = err
+				}
+			} else if n > 0 {
+				slog.Info("retention: GCStorage удалил файлов", "count", n)
+			}
+		}
 		if firstErr != nil {
 			updateRetentionStatusError(firstErr)
 		} else {
@@ -172,5 +183,5 @@ func runRetention(ctx context.Context, db *sql.DB, auditDays, refreshDays int, i
 // runAuditRetention — обёртка над runRetention для обратной совместимости (B19).
 // audit-only: refreshDays=0.
 func runAuditRetention(ctx context.Context, db *sql.DB, days int, interval time.Duration) {
-	runRetention(ctx, db, days, 0, interval)
+	runRetention(ctx, db, days, 0, 0, interval)
 }
