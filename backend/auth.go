@@ -1007,7 +1007,7 @@ func isConsentDualPath(p string) bool {
 
 func isAuthWhitelist(path string) bool {
 	switch path {
-	case "/api/health", "/api/metrics", "/api/auth/login", "/api/auth/refresh",
+	case "/api/config", "/api/health", "/api/metrics", "/api/auth/login", "/api/auth/refresh",
 		"/api/auth/password-reset/request", "/api/auth/password-reset/confirm":
 		return true
 	// B30.2: patient-auth — публичные пути (аналог /api/auth/*).
