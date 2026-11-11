@@ -66,7 +66,7 @@ func TestRetentionStatus_UpdatedOnRun(t *testing.T) {
 	defer cancel()
 
 	// Запускаем runner в горутине, ждём первый прогон.
-	go runRetention(ctx, testDB, 30, 1, time.Hour)
+	go runRetention(ctx, testDB, 30, 1, 0, time.Hour)
 
 	// Ждём появления HasRun (первый прогон — сразу).
 	deadline := time.Now().Add(2 * time.Second)

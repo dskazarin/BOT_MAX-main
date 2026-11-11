@@ -55,6 +55,9 @@ type Env struct {
 	StorageDir     string      // только для kind=fs
 	StorageMaxMiB  int         // > 0, дефолт 6
 	StorageMigrate bool        // BLOB → FS при старте (только fs)
+	// B30.13: через сколько дней после soft-delete физически удалять FS-файл.
+	// 0 — выключено.
+	StorageGCDays int
 }
 
 // devJWTSecret — fallback для dev-режима.
@@ -211,6 +214,11 @@ func validateEnv() (*Env, error) {
 		return nil, err
 	}
 
+	storageGCDays, err := parseNonNegativeInt("BOTMAX_STORAGE_GC_DAYS", os.Getenv("BOTMAX_STORAGE_GC_DAYS"), 30)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Env{
 		Name:                 name,
 		IsProd:               isProd,
@@ -226,5 +234,6 @@ func validateEnv() (*Env, error) {
 		StorageDir:           storageCfg.Dir,
 		StorageMaxMiB:        storageCfg.MaxMiB,
 		StorageMigrate:       storageCfg.Migrate,
+		StorageGCDays:        storageGCDays,
 	}, nil
 }
