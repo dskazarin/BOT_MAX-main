@@ -489,6 +489,9 @@ func main() {
 
 	http.HandleFunc("/api/health", handleHealth)
 
+	// B30.12: публичный конфиг клиента (лимит загрузки и пр.).
+	http.HandleFunc("/api/config", handleConfig)
+
 	// B26.1: Prometheus-совместимый /api/metrics.
 	registerMetricsRoutes()
 
