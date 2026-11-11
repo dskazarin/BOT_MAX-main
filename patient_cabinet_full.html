@@ -1690,14 +1690,31 @@ document.addEventListener('DOMContentLoaded', function() {
     // ===== B30.11: файлы пациента — сервер (GET/POST/DELETE /api/patient/records/files) =====
     // Загрузка: POST с data_base64 (бэкенд принимает и data, и data_base64).
     // id не передаём — сервер сгенерирует (F<unixnano>).
+    // B30.12: получаем лимит загрузки из /api/config (с кэшем)
+    let _storageMaxPromise = null;
+    function getStorageMaxMiB() {
+        if (!_storageMaxPromise) {
+            _storageMaxPromise = fetch('/api/config')
+                .then(r => r.json())
+                .then(c => c.storage_max_mib || 6)
+                .catch(e => { console.warn('Не удалось загрузить /api/config', e); return 6; });
+        }
+        return _storageMaxPromise;
+    }
+
     function patientFileUpload(input) {
         var file = input && input.files && input.files[0];
         if (!file) return;
-        if (file.size > 6 * 1024 * 1024) {
-            alert('Файл больше 6 МиБ — не пройдёт лимит тела. Уменьшите размер.');
-            input.value = '';
-            return;
-        }
+        getStorageMaxMiB().then(function(maxMiB) {
+            if (file.size > maxMiB * 1024 * 1024) {
+                alert('Файл больше ' + maxMiB + ' МиБ — не пройдёт лимит тела. Уменьшите размер.');
+                input.value = '';
+                return;
+            }
+            _doPatientFileUpload(file, input);
+        });
+    }
+    function _doPatientFileUpload(file, input) {
         var reader = new FileReader();
         reader.onload = function(ev) {
             var dataUrl = String(ev.target.result || '');

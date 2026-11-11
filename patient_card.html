@@ -2286,16 +2286,33 @@
             });
     }
 
+    // B30.12: получаем лимит загрузки из /api/config (с кэшем)
+    let _storageMaxPromise = null;
+    function getStorageMaxMiB() {
+        if (!_storageMaxPromise) {
+            _storageMaxPromise = fetch('/api/config')
+                .then(r => r.json())
+                .then(c => c.storage_max_mib || 6)
+                .catch(e => { console.warn('Не удалось загрузить /api/config', e); return 6; });
+        }
+        return _storageMaxPromise;
+    }
+
     function doctorUploadFile(inputEl) {
         var pid = patientId || currentPatientId();
         if (!pid) { alert('Не выбран пациент'); return; }
         var file = inputEl && inputEl.files && inputEl.files[0];
         if (!file) return;
-        if (file.size > 6 * 1024 * 1024) {
-            alert('Файл больше 6 МиБ — не пройдёт лимит тела 8 МиБ (base64 +33%).');
-            inputEl.value = '';
-            return;
-        }
+        getStorageMaxMiB().then(function(maxMiB) {
+            if (file.size > maxMiB * 1024 * 1024) {
+                alert('Файл больше ' + maxMiB + ' МиБ — не пройдёт лимит тела 8 МиБ (base64 +33%).');
+                inputEl.value = '';
+                return;
+            }
+            _doUploadFile(file, inputEl, pid);
+        });
+    }
+    function _doUploadFile(file, inputEl, pid) {
         var reader = new FileReader();
         reader.onload = function(ev) {
             var dataUrl = String(ev.target.result || '');
