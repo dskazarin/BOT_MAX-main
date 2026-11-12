@@ -85,26 +85,6 @@ func renderVitalsSection(pdf *gofpdf.Fpdf, v VitalsData) {
 	renderLines(pdf, vitalsLines(v))
 }
 
-// renderSection выводит раздел «заголовок + пары ключ/значение».
-func renderSection(pdf *gofpdf.Fpdf, title string, m map[string]string) {
-	if len(m) == 0 {
-		return
-	}
-	pdf.Ln(4)
-	pdf.SetFont("Arial", "B", 12)
-	pdf.CellFormat(0, 8, title, "", 1, "L", false, 0, "")
-	pdf.SetFont("Arial", "", 10)
-	for k, v := range m {
-		if v == "" {
-			continue
-		}
-		pdf.SetFont("Arial", "B", 10)
-		pdf.CellFormat(40, 7, cardLabel(k)+":", "", 0, "L", false, 0, "")
-		pdf.SetFont("Arial", "", 10)
-		pdf.MultiCell(0, 7, v, "", "L", false)
-	}
-}
-
 // cardLabel — человекочитаемые подписи для ключей плоской карты.
 func cardLabel(k string) string {
 	switch k {
