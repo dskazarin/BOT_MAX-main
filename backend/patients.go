@@ -462,7 +462,16 @@ func handlePatientCardPDF(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, verr.Error(), http.StatusInternalServerError)
 		return
 	}
-	pdfBytes, err := renderPatientCardPDF(*p, data, updated, vd)
+	records := map[string][]map[string]any{}
+	for _, kind := range []string{"symptoms", "allergies", "vaccinations", "files"} {
+		rows, lerr := listPatientRecords(kind, id)
+		if lerr != nil {
+			http.Error(w, lerr.Error(), http.StatusInternalServerError)
+			return
+		}
+		records[kind] = rows
+	}
+	pdfBytes, err := renderPatientCardPDF(*p, data, updated, vd, records)
 	if err != nil {
 		http.Error(w, "pdf render: "+err.Error(), http.StatusInternalServerError)
 		return
