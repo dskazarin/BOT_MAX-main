@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -29,13 +30,26 @@ const (
 // DefaultStorageMaxMiB — дефолт, совпадает с текущим хардкодом UI (6 МиБ).
 const DefaultStorageMaxMiB = 6
 
+// S3Cfg — параметры S3-совместимого хранилища (B30.14).
+// Заполняется из BOTMAX_STORAGE_S3_* только при KIND=s3.
+type S3Cfg struct {
+	Endpoint  string
+	Bucket    string
+	AccessKey string
+	SecretKey string
+	Region    string
+	UseSSL    bool
+}
+
 // StorageCfg — итоговая конфигурация (заполняется из Env при старте).
 type StorageCfg struct {
 	Kind    StorageKind
 	Dir     string // только для kind=fs
 	MaxMiB  int    // > 0
 	Migrate bool   // только для kind=fs
+	S3      S3Cfg  // только для kind=s3
 }
+
 
 // parseStorageKind — BOTMAX_STORAGE_KIND. Пусто → blob (текущее поведение).
 func parseStorageKind(raw string) (StorageKind, error) {
@@ -123,11 +137,48 @@ func loadStorageCfg(dbPath string) (StorageCfg, error) {
 	if err != nil {
 		return StorageCfg{}, err
 	}
+	var s3cfg S3Cfg
 	if kind == StorageKindS3 {
-		return StorageCfg{}, fmt.Errorf("BOTMAX_STORAGE_KIND=s3: пока не реализовано (см. бэклог)")
+		var err error
+		s3cfg, err = loadS3Cfg()
+		if err != nil {
+			return StorageCfg{}, err
+		}
 	}
 	if migrate && kind != StorageKindFS {
 		return StorageCfg{}, fmt.Errorf("BOTMAX_STORAGE_MIGRATE=1 требует BOTMAX_STORAGE_KIND=fs")
 	}
-	return StorageCfg{Kind: kind, Dir: dir, MaxMiB: maxMiB, Migrate: migrate}, nil
+	return StorageCfg{Kind: kind, Dir: dir, MaxMiB: maxMiB, Migrate: migrate, S3: s3cfg}, nil
+}
+
+// loadS3Cfg — BOTMAX_STORAGE_S3_* → S3Cfg. Обязательны endpoint/bucket/access_key/secret_key.
+func loadS3Cfg() (S3Cfg, error) {
+	cfg := S3Cfg{
+		Endpoint:  os.Getenv("BOTMAX_STORAGE_S3_ENDPOINT"),
+		Bucket:    os.Getenv("BOTMAX_STORAGE_S3_BUCKET"),
+		AccessKey: os.Getenv("BOTMAX_STORAGE_S3_ACCESS_KEY"),
+		SecretKey: os.Getenv("BOTMAX_STORAGE_S3_SECRET_KEY"),
+		Region:    os.Getenv("BOTMAX_STORAGE_S3_REGION"),
+		UseSSL:    true,
+	}
+	if cfg.Region == "" {
+		cfg.Region = "us-east-1"
+	}
+	if v := os.Getenv("BOTMAX_STORAGE_S3_USE_SSL"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_USE_SSL=%q: %w", v, err)
+		}
+		cfg.UseSSL = b
+	}
+	if cfg.Endpoint == "" {
+		return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_ENDPOINT обязателен при KIND=s3")
+	}
+	if cfg.Bucket == "" {
+		return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_BUCKET обязателен при KIND=s3")
+	}
+	if cfg.AccessKey == "" || cfg.SecretKey == "" {
+		return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_ACCESS_KEY/SECRET_KEY обязательны при KIND=s3")
+	}
+	return cfg, nil
 }
