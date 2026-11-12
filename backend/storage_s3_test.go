@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,5 +136,27 @@ func TestS3Storage_PutError(t *testing.T) {
 	s := &s3Storage{client: st, bucket: "b"}
 	if err := s.Put("p1", "f1", "a", "text/plain", []byte("x")); err == nil {
 		t.Fatal("ожидали ошибку из клиента")
+	}
+}
+
+func TestS3Storage_PresignURL(t *testing.T) {
+	st := newStubS3()
+	s := &s3Storage{client: st, bucket: "b", presign: true, presignTTL: 15 * time.Minute}
+	u, ttl, err := s.PresignURL("p1", "f1")
+	if err != nil {
+		t.Fatalf("PresignURL: %v", err)
+	}
+	if !strings.Contains(u, "patients/p1/f1") {
+		t.Fatalf("URL не содержит ключ: %q", u)
+	}
+	if ttl != 15*time.Minute {
+		t.Fatalf("ttl=%v, want 15m", ttl)
+	}
+}
+
+func TestS3Storage_PresignDisabled(t *testing.T) {
+	s := &s3Storage{client: newStubS3(), bucket: "b", presign: false}
+	if _, _, err := s.PresignURL("p1", "f1"); err == nil {
+		t.Fatal("ожидали ошибку при presign=false")
 	}
 }

@@ -26,8 +26,10 @@ import (
 
 // s3Storage — реализация FileStorage поверх S3-совместимого хранилища.
 type s3Storage struct {
-	client s3Client // интерфейс для stub в тестах
-	bucket string
+	client     s3Client // интерфейс для stub в тестах
+	bucket     string
+	presign    bool
+	presignTTL time.Duration
 }
 
 var _ FileStorage = (*s3Storage)(nil)
@@ -53,7 +55,31 @@ func newS3Storage(cfg S3Cfg) (*s3Storage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("s3: init client: %w", err)
 	}
-	return &s3Storage{client: cli, bucket: cfg.Bucket}, nil
+	return &s3Storage{
+		client:     cli,
+		bucket:     cfg.Bucket,
+		presign:    cfg.Presign,
+		presignTTL: cfg.PresignTTL,
+	}, nil
+}
+
+
+// PresignURL — presigned GET-URL для объекта patients/{pid}/{id}.
+// Не входит в FileStorage (blob/fs его не умеют) — вызывается через type-assert.
+func (s *s3Storage) PresignURL(pid, id string) (string, time.Duration, error) {
+	if !s.presign {
+		return "", 0, errors.New("s3: presign отключён (BOTMAX_STORAGE_S3_PRESIGN=0)")
+	}
+	if pid == "" || id == "" {
+		return "", 0, fmt.Errorf("s3Storage.PresignURL: пустой pid/id")
+	}
+	u, err := s.client.PresignedGetObject(
+		context.Background(), s.bucket, s3Key(pid, id), s.presignTTL, nil,
+	)
+	if err != nil {
+		return "", 0, fmt.Errorf("s3Storage.PresignURL: %w", err)
+	}
+	return u.String(), s.presignTTL, nil
 }
 
 // s3Key — единый формат ключа объекта.

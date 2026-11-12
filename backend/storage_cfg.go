@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 	"strings"
 )
 
@@ -37,8 +38,10 @@ type S3Cfg struct {
 	Bucket    string
 	AccessKey string
 	SecretKey string
-	Region    string
-	UseSSL    bool
+	Region     string
+	UseSSL     bool
+	Presign    bool
+	PresignTTL time.Duration
 }
 
 // StorageCfg — итоговая конфигурация (заполняется из Env при старте).
@@ -159,7 +162,9 @@ func loadS3Cfg() (S3Cfg, error) {
 		AccessKey: os.Getenv("BOTMAX_STORAGE_S3_ACCESS_KEY"),
 		SecretKey: os.Getenv("BOTMAX_STORAGE_S3_SECRET_KEY"),
 		Region:    os.Getenv("BOTMAX_STORAGE_S3_REGION"),
-		UseSSL:    true,
+		UseSSL:     true,
+		Presign:    true,
+		PresignTTL: 15 * time.Minute,
 	}
 	if cfg.Region == "" {
 		cfg.Region = "us-east-1"
@@ -170,6 +175,20 @@ func loadS3Cfg() (S3Cfg, error) {
 			return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_USE_SSL=%q: %w", v, err)
 		}
 		cfg.UseSSL = b
+	}
+	if v := os.Getenv("BOTMAX_STORAGE_S3_PRESIGN"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_PRESIGN=%q: %w", v, err)
+		}
+		cfg.Presign = b
+	}
+	if v := os.Getenv("BOTMAX_STORAGE_S3_PRESIGN_TTL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_PRESIGN_TTL=%q: %w", v, err)
+		}
+		cfg.PresignTTL = d
 	}
 	if cfg.Endpoint == "" {
 		return S3Cfg{}, fmt.Errorf("BOTMAX_STORAGE_S3_ENDPOINT обязателен при KIND=s3")
