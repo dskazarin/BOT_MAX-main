@@ -13,7 +13,7 @@ import (
 
 func TestRenderPatientCardPDF_Header(t *testing.T) {
 	p := Patient{ID: "PAT-1", Name: "Иванов Иван", BirthDate: "1980-01-02", AgeDisplay: "45 лет", Gender: "м", Diagnosis: "ОРВИ"}
-	b, err := renderPatientCardPDF(p, `{"vitals":{"bp":"120/80"}}`, "2026-11-12T10:00:00Z")
+	b, err := renderPatientCardPDF(p, `{"vitals":{"bp":"120/80"}}`, "2026-11-12T10:00:00Z", nil)
 	if err != nil {
 		t.Fatalf("renderPatientCardPDF: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestRenderPatientCardPDF_Header(t *testing.T) {
 }
 
 func TestRenderPatientCardPDF_EmptyCard(t *testing.T) {
-	b, err := renderPatientCardPDF(Patient{ID: "PAT-2"}, "", "")
+	b, err := renderPatientCardPDF(Patient{ID: "PAT-2"}, "", "", nil)
 	if err != nil {
 		t.Fatalf("renderPatientCardPDF: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestRenderPatientCardPDF_EmptyCard(t *testing.T) {
 }
 
 func TestRenderPatientCardPDF_InvalidJSON(t *testing.T) {
-	if _, err := renderPatientCardPDF(Patient{ID: "P"}, "not-json{{", ""); err != nil {
+	if _, err := renderPatientCardPDF(Patient{ID: "P"}, "not-json{{", "", nil); err != nil {
 		t.Fatalf("невалидный JSON не должен ронять рендер: %v", err)
 	}
 }

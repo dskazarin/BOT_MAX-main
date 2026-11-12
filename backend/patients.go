@@ -455,7 +455,14 @@ func handlePatientCardPDF(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	pdfBytes, err := renderPatientCardPDF(*p, data, updated)
+	var vd *VitalsData
+	if bp, temp, spo2, vupd, verr := getVitals(db, id); verr == nil {
+		vd = &VitalsData{BP: bp, Temp: temp, SpO2: spo2, Updated: vupd}
+	} else if verr != sql.ErrNoRows {
+		http.Error(w, verr.Error(), http.StatusInternalServerError)
+		return
+	}
+	pdfBytes, err := renderPatientCardPDF(*p, data, updated, vd)
 	if err != nil {
 		http.Error(w, "pdf render: "+err.Error(), http.StatusInternalServerError)
 		return
