@@ -392,7 +392,7 @@ func upsertFileRecord(pid string, payload map[string]any) (string, error) {
 	      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	      ON CONFLICT(id) DO UPDATE SET
 	        filename=excluded.filename, mime=excluded.mime,
-	        size_bytes=excluded.size_bytes, data=excluded.data, notes=excluded.notes,
+	        size_bytes=excluded.size_bytes, data=COALESCE(excluded.data, files.data), notes=excluded.notes,
 	        storage_kind=excluded.storage_kind, storage_key=excluded.storage_key,
 	        updated_at=excluded.updated_at
 	      WHERE files.patient_id = excluded.patient_id`

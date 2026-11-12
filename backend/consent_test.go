@@ -54,8 +54,13 @@ func reqConsentTransitionDoctor(doctorID, consentID, action string) *http.Reques
 func setupConsentDB(t *testing.T) {
 	t.Helper()
 	saved := db
+	savedStorage := storage
 	db = newTestDB(t)
-	t.Cleanup(func() { db = saved })
+	storage = newBlobStorage(db) // B30.10 §6.59: blob — дефолт (как в main.go)
+	t.Cleanup(func() {
+		db = saved
+		storage = savedStorage
+	})
 }
 
 // setupConsentEnv — пациент + врач + consent в заданном статусе.
