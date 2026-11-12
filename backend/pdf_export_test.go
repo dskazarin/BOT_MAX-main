@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRenderPatientCardPDF_Header(t *testing.T) {
@@ -225,5 +226,87 @@ func TestRenderPDF_Smoke(t *testing.T) {
 	}
 	if len(withRecs) <= len(base) {
 		t.Errorf("records не увеличили PDF: %d vs %d", len(withRecs), len(base))
+	}
+}
+
+// --- B30.16 step5: негативные httptest-кейсы endpoint ---
+
+func TestPatientCardPDF_403_ConsentExpired(t *testing.T) {
+	setupConsentDB(t)
+	seedDoctorForRefresh(t, db, "DOC-1")
+	seedPatient(t, db, "PAT-1", "Test Patient")
+	approveConsent(t, "PAT-1", "DOC-1", "card_read")
+	past := time.Now().UTC().Add(-time.Hour).Format(tsLayout)
+	if _, err := db.Exec(`UPDATE consents SET expires_at=? WHERE patient_id=? AND doctor_id=? AND scope=?`,
+		past, "PAT-1", "DOC-1", "card_read"); err != nil {
+		t.Fatalf("update expires_at: %v", err)
+	}
+	if err := upsertCard(db, "PAT-1", `{}`); err != nil {
+		t.Fatalf("upsertCard: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	handlePatientCardPDF(rr, reqCardPDF("DOC-1", "PAT-1"), "PAT-1")
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("code = %d, want 403; body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "consent_expired") {
+		t.Errorf("body = %s, want consent_expired", rr.Body.String())
+	}
+}
+
+func TestPatientCardPDF_500_ConsentBadExpires(t *testing.T) {
+	setupConsentDB(t)
+	seedDoctorForRefresh(t, db, "DOC-1")
+	seedPatient(t, db, "PAT-1", "Test Patient")
+	approveConsent(t, "PAT-1", "DOC-1", "card_read")
+	if _, err := db.Exec(`UPDATE consents SET expires_at='garbage' WHERE patient_id=? AND doctor_id=? AND scope=?`,
+		"PAT-1", "DOC-1", "card_read"); err != nil {
+		t.Fatalf("update expires_at: %v", err)
+	}
+	if err := upsertCard(db, "PAT-1", `{}`); err != nil {
+		t.Fatalf("upsertCard: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	handlePatientCardPDF(rr, reqCardPDF("DOC-1", "PAT-1"), "PAT-1")
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("code = %d, want 500; body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "consent_bad_expires") {
+		t.Errorf("body = %s, want consent_bad_expires", rr.Body.String())
+	}
+}
+
+func TestPatientCardPDF_404_NoCard(t *testing.T) {
+	setupConsentDB(t)
+	seedDoctorForRefresh(t, db, "DOC-1")
+	seedPatient(t, db, "PAT-1", "Test Patient")
+	approveConsent(t, "PAT-1", "DOC-1", "card_read")
+	// cards пусто — getCard → sql.ErrNoRows
+
+	rr := httptest.NewRecorder()
+	handlePatientCardPDF(rr, reqCardPDF("DOC-1", "PAT-1"), "PAT-1")
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("code = %d, want 404; body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "card not found") {
+		t.Errorf("body = %s, want card not found", rr.Body.String())
+	}
+}
+
+func TestPatientCardPDF_405_AllNonGET(t *testing.T) {
+	setupConsentDB(t)
+	seedDoctorForRefresh(t, db, "DOC-1")
+	seedPatient(t, db, "PAT-1", "Test Patient")
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		ctx := withDoctorID(context.Background(), "DOC-1", RoleDoctor)
+		req := httptest.NewRequest(method, "/api/patients/PAT-1/cards.pdf", nil).WithContext(ctx)
+		rr := httptest.NewRecorder()
+		handlePatientCardPDF(rr, req, "PAT-1")
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s: code = %d, want 405", method, rr.Code)
+		}
 	}
 }
