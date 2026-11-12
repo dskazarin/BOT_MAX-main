@@ -355,3 +355,118 @@ func TestDoctorWriteKinds_Vaccinations_ReadAfterWrite(t *testing.T) {
 		t.Fatalf("read status=%d body=%s, want 200 с VAC-1", rr.Code, rr.Body.String())
 	}
 }
+
+// --- diagnoses ---
+
+func TestDoctorWriteKinds_Diagnoses_NoAuth_401(t *testing.T) {
+	setupConsentDB(t)
+	seedPatientWithAccount(t, "PAT-1", "ACC-1")
+
+	r := httptest.NewRequest(http.MethodPost, "/api/patients/PAT-1/diagnoses",
+		strings.NewReader(`{"id":"DX-1","code":"J06.9","title":"ОРВИ"}`))
+	r.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handleDoctorPatientRecords(rr, r, "PAT-1", "diagnoses")
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401", rr.Code)
+	}
+}
+
+func TestDoctorWriteKinds_Diagnoses_NoConsent_403(t *testing.T) {
+	setupConsentDB(t)
+	seedPatientWithAccount(t, "PAT-1", "ACC-1")
+	seedDoctorForRefresh(t, db, "DOC-1")
+
+	rr := httptest.NewRecorder()
+	r := reqDoctorWrite(http.MethodPost, "DOC-1",
+		"/api/patients/PAT-1/diagnoses", `{"id":"DX-1","code":"J06.9","title":"ОРВИ"}`)
+	handleDoctorPatientRecords(rr, r, "PAT-1", "diagnoses")
+	if rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), "consent_required") {
+		t.Fatalf("status=%d body=%s, want 403 consent_required", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDoctorWriteKinds_Diagnoses_ReadOnly_WriteDenied_403(t *testing.T) {
+	setupConsentDB(t)
+	seedPatientWithAccount(t, "PAT-1", "ACC-1")
+	seedDoctorForRefresh(t, db, "DOC-1")
+	approveConsent(t, "PAT-1", "DOC-1", "diagnoses_read")
+
+	rr := httptest.NewRecorder()
+	r := reqDoctorWrite(http.MethodPost, "DOC-1",
+		"/api/patients/PAT-1/diagnoses", `{"id":"DX-1","code":"J06.9","title":"ОРВИ"}`)
+	handleDoctorPatientRecords(rr, r, "PAT-1", "diagnoses")
+	if rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), "consent_required") {
+		t.Fatalf("read!=write: status=%d body=%s, want 403", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDoctorWriteKinds_Diagnoses_ApprovedWrite_Ok(t *testing.T) {
+	setupConsentDB(t)
+	seedPatientWithAccount(t, "PAT-1", "ACC-1")
+	seedDoctorForRefresh(t, db, "DOC-1")
+	approveConsent(t, "PAT-1", "DOC-1", "diagnoses_write")
+
+	rr := httptest.NewRecorder()
+	r := reqDoctorWrite(http.MethodPost, "DOC-1",
+		"/api/patients/PAT-1/diagnoses",
+		`{"id":"DX-1","code":"J06.9","title":"ОРВИ","diagnosed_at":"2026-11-01","status":"active"}`)
+	handleDoctorPatientRecords(rr, r, "PAT-1", "diagnoses")
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"ok":true`) {
+		t.Fatalf("status=%d body=%s, want 200 ok", rr.Code, rr.Body.String())
+	}
+
+	list, err := listPatientRecords("diagnoses", "PAT-1")
+	if err != nil {
+		t.Fatalf("listPatientRecords: %v", err)
+	}
+	var found bool
+	for _, rec := range list {
+		if rec["id"] == "DX-1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("DX-1 not found in listPatientRecords: %v", list)
+	}
+}
+
+func TestDoctorWriteKinds_Diagnoses_InvalidPayload_400(t *testing.T) {
+	setupConsentDB(t)
+	seedPatientWithAccount(t, "PAT-1", "ACC-1")
+	seedDoctorForRefresh(t, db, "DOC-1")
+	approveConsent(t, "PAT-1", "DOC-1", "diagnoses_write")
+
+	rr := httptest.NewRecorder()
+	r := reqDoctorWrite(http.MethodPost, "DOC-1",
+		"/api/patients/PAT-1/diagnoses", `{not json`)
+	handleDoctorPatientRecords(rr, r, "PAT-1", "diagnoses")
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s, want 400", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDoctorWriteKinds_Diagnoses_ReadAfterWrite(t *testing.T) {
+	setupConsentDB(t)
+	seedPatientWithAccount(t, "PAT-1", "ACC-1")
+	seedDoctorForRefresh(t, db, "DOC-1")
+	approveConsent(t, "PAT-1", "DOC-1", "diagnoses_read")
+	approveConsent(t, "PAT-1", "DOC-1", "diagnoses_write")
+
+	rr := httptest.NewRecorder()
+	r := reqDoctorWrite(http.MethodPost, "DOC-1",
+		"/api/patients/PAT-1/diagnoses", `{"id":"DX-1","code":"J06.9","title":"ОРВИ"}`)
+	handleDoctorPatientRecords(rr, r, "PAT-1", "diagnoses")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("write status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	r = reqDoctorWrite(http.MethodGet, "DOC-1",
+		"/api/patients/PAT-1/diagnoses", "")
+	handleDoctorPatientRecords(rr, r, "PAT-1", "diagnoses")
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"DX-1"`) {
+		t.Fatalf("read status=%d body=%s, want 200 с DX-1", rr.Code, rr.Body.String())
+	}
+}
