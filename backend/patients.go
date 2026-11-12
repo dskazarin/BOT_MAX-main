@@ -139,6 +139,11 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 				handleCardByID(w, r, id)
 				return
 			}
+		case "cards.pdf": // B30.16 step2
+			if len(parts) == 2 {
+				handlePatientCardPDF(w, r, id)
+				return
+			}
 		case "symptoms", "allergies", "vaccinations", "diagnoses",
 			"constant_medications", "course_medications":
 			if len(parts) == 2 {
@@ -418,4 +423,62 @@ func handleCardByID(w http.ResponseWriter, r *http.Request, id string) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// handlePatientCardPDF — GET /api/patients/{id}/cards.pdf (B30.16 step2).
+// Bearer (doctor) + approved consent scope=card_read.
+// 401 — нет doctorID в ctx; 404 — пациент/карта не найдены;
+// 403 — нет/истёк consent; 200 — application/pdf.
+func handlePatientCardPDF(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !requireDoctorConsent(w, r, id, "card", "read") {
+		return
+	}
+	p, err := getPatientByID(db, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "patient not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data, updated, err := getCard(db, id)
+	if err == sql.ErrNoRows {
+		http.Error(w, "card not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var vd *VitalsData
+	if bp, temp, spo2, vupd, verr := getVitals(db, id); verr == nil {
+		vd = &VitalsData{BP: bp, Temp: temp, SpO2: spo2, Updated: vupd}
+	} else if verr != sql.ErrNoRows {
+		http.Error(w, verr.Error(), http.StatusInternalServerError)
+		return
+	}
+	records := map[string][]map[string]any{}
+	for _, kind := range []string{"symptoms", "allergies", "vaccinations", "files"} {
+		rows, lerr := listPatientRecords(kind, id)
+		if lerr != nil {
+			http.Error(w, lerr.Error(), http.StatusInternalServerError)
+			return
+		}
+		records[kind] = rows
+	}
+	pdfBytes, err := renderPatientCardPDF(*p, data, updated, vd, records)
+	if err != nil {
+		http.Error(w, "pdf render: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition",
+		`attachment; filename="patient_`+id+`_card.pdf"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(pdfBytes)
 }

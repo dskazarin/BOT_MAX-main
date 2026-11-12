@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/minio/minio-go/v7 v7.4.1
 	golang.org/x/crypto v0.57.0
 	modernc.org/sqlite v1.34.5

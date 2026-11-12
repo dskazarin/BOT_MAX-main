@@ -345,6 +345,7 @@ var validConsentScopes = map[string]bool{
 	"constant_medications_read": true,
 	"course_medications_read":   true,
 	"files_read":                true,
+	"card_read":                 true, // B30.16 step2: чтение карты для PDF
 
 	// 3g: write-scope для doctor-CRUD (constant_medications / course_medications / files).
 	"constant_medications_write": true,
