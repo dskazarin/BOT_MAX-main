@@ -352,7 +352,8 @@ var validConsentScopes = map[string]bool{
 	"course_medications_write":   true,
 	"files_write":                true,
 	// B30.17: write-scope для doctor-CRUD (symptoms/allergies/vaccinations/diagnoses).
-	"symptoms_write": true,
+	"symptoms_write":  true,
+	"allergies_write": true,
 }
 
 func normalizeConsentScope(s string) (string, bool) {
