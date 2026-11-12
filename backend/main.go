@@ -496,6 +496,9 @@ func main() {
 	// B26.1: Prometheus-совместимый /api/metrics.
 	registerMetricsRoutes()
 
+	// B30.14 шаг 2b: presigned URL для S3.
+	registerFilesURLRoute()
+
 	http.HandleFunc("/api/specialties", func(w http.ResponseWriter, r *http.Request) {
 		specs := make(map[string][]string)
 		for _, g := range guidelines {
