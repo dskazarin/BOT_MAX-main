@@ -144,6 +144,11 @@ func handlePatientByID(w http.ResponseWriter, r *http.Request) {
 				handlePatientCardPDF(w, r, id)
 				return
 			}
+		case "records":
+			if len(parts) == 3 && parts[2] == "sync" {
+				handlePatientRecordsSync(w, r, id)
+				return
+			}
 		case "symptoms", "allergies", "vaccinations", "diagnoses",
 			"constant_medications", "course_medications":
 			if len(parts) == 2 {
