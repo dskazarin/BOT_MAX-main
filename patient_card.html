@@ -2101,14 +2101,9 @@
         return apiRequest('GET', '/api/patients/' + encodeURIComponent(pid) + '/' + kind);
     }
 
-    function downloadRecordFile(id, filename) {
-        if (!id) return;
-        // 3g: врач качает через /api/patients/{pid}/files/{fid}/data (consent files_read).
-        var pid = patientId || currentPatientId();
-        var url = pid
-            ? API_BASE + '/api/patients/' + encodeURIComponent(pid) + '/files/' + encodeURIComponent(id) + '/data'
-            : API_BASE + '/api/patient/records/files/' + encodeURIComponent(id) + '/data';
-        BotMaxAuth.authFetch('GET', url).then(function(res) {
+    // blobDownload — скачивание через бэкенд (blob→objectURL), fallback-путь.
+    function blobDownload(url, filename) {
+        return BotMaxAuth.authFetch('GET', url).then(function(res) {
             if (!res.ok) {
                 return res.text().then(function(t) {
                     var err = new Error('download HTTP ' + res.status + ': ' + t);
@@ -2120,16 +2115,42 @@
                 var objUrl = URL.createObjectURL(blob);
                 var a = document.createElement('a');
                 a.href = objUrl;
-                a.download = filename || ('file-' + id);
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(function() { URL.revokeObjectURL(objUrl); }, 1000);
             });
         }).catch(function(err) {
-            console.warn('download file ' + id + ' failed:', err && err.message);
+            console.warn('download file failed:', err && err.message);
             alert('Не удалось скачать файл: ' + ((err && err.message) || 'ошибка'));
         });
+    }
+
+    // downloadRecordFile — врач: presign (GET /api/files/{id}/url) → fallback blob.
+    // Пациент (self): всегда blob через /api/patient/records/files/{id}/data.
+    function downloadRecordFile(id, filename) {
+        if (!id) return;
+        var pid = patientId || currentPatientId();
+        var fname = filename || ('file-' + id);
+        var blobUrl = pid
+            ? API_BASE + '/api/patients/' + encodeURIComponent(pid) + '/files/' + encodeURIComponent(id) + '/data'
+            : API_BASE + '/api/patient/records/files/' + encodeURIComponent(id) + '/data';
+
+        if (!pid) { blobDownload(blobUrl, fname); return; }
+
+        BotMaxAuth.authFetch('GET', API_BASE + '/api/files/' + encodeURIComponent(id) + '/url')
+            .then(function(res) {
+                if (!res.ok) return blobDownload(blobUrl, fname);
+                return res.json().then(function(data) {
+                    if (!data || !data.url) return blobDownload(blobUrl, fname);
+                    var a = document.createElement('a');
+                    a.href = data.url; a.target = '_blank'; a.rel = 'noopener';
+                    if (fname) a.download = fname;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                });
+            })
+            .catch(function() { blobDownload(blobUrl, fname); });
     }
 
     function renderRecords(kind, items) {
