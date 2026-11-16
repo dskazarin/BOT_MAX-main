@@ -68,7 +68,6 @@ func (s *stubS3) StatObject(_ context.Context, _, object string, _ minio.StatObj
 	}, nil
 }
 
-
 func (s *stubS3) PresignedGetObject(_ context.Context, _, object string, _ time.Duration, _ url.Values) (*url.URL, error) {
 	return url.Parse("https://stub/" + object)
 }
