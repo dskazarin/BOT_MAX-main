@@ -15,8 +15,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 	"strings"
+	"time"
 )
 
 // StorageKind — режим хранения.
@@ -34,10 +34,10 @@ const DefaultStorageMaxMiB = 6
 // S3Cfg — параметры S3-совместимого хранилища (B30.14).
 // Заполняется из BOTMAX_STORAGE_S3_* только при KIND=s3.
 type S3Cfg struct {
-	Endpoint  string
-	Bucket    string
-	AccessKey string
-	SecretKey string
+	Endpoint   string
+	Bucket     string
+	AccessKey  string
+	SecretKey  string
 	Region     string
 	UseSSL     bool
 	Presign    bool
@@ -52,7 +52,6 @@ type StorageCfg struct {
 	Migrate bool   // только для kind=fs
 	S3      S3Cfg  // только для kind=s3
 }
-
 
 // parseStorageKind — BOTMAX_STORAGE_KIND. Пусто → blob (текущее поведение).
 func parseStorageKind(raw string) (StorageKind, error) {
@@ -157,11 +156,11 @@ func loadStorageCfg(dbPath string) (StorageCfg, error) {
 // loadS3Cfg — BOTMAX_STORAGE_S3_* → S3Cfg. Обязательны endpoint/bucket/access_key/secret_key.
 func loadS3Cfg() (S3Cfg, error) {
 	cfg := S3Cfg{
-		Endpoint:  os.Getenv("BOTMAX_STORAGE_S3_ENDPOINT"),
-		Bucket:    os.Getenv("BOTMAX_STORAGE_S3_BUCKET"),
-		AccessKey: os.Getenv("BOTMAX_STORAGE_S3_ACCESS_KEY"),
-		SecretKey: os.Getenv("BOTMAX_STORAGE_S3_SECRET_KEY"),
-		Region:    os.Getenv("BOTMAX_STORAGE_S3_REGION"),
+		Endpoint:   os.Getenv("BOTMAX_STORAGE_S3_ENDPOINT"),
+		Bucket:     os.Getenv("BOTMAX_STORAGE_S3_BUCKET"),
+		AccessKey:  os.Getenv("BOTMAX_STORAGE_S3_ACCESS_KEY"),
+		SecretKey:  os.Getenv("BOTMAX_STORAGE_S3_SECRET_KEY"),
+		Region:     os.Getenv("BOTMAX_STORAGE_S3_REGION"),
 		UseSSL:     true,
 		Presign:    true,
 		PresignTTL: 15 * time.Minute,

@@ -16,8 +16,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -62,7 +62,6 @@ func newS3Storage(cfg S3Cfg) (*s3Storage, error) {
 		presignTTL: cfg.PresignTTL,
 	}, nil
 }
-
 
 // PresignURL — presigned GET-URL для объекта patients/{pid}/{id}.
 // Не входит в FileStorage (blob/fs его не умеют) — вызывается через type-assert.
