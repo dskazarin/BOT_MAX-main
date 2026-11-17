@@ -1236,24 +1236,44 @@
         }
     }
 
+    function pendingMoveToDead(id, reason) {
+        var arr = pendingLoad();
+        var idx = -1;
+        for (var i = 0; i < arr.length; i++) { if (arr[i].id === id) { idx = i; break; } }
+        if (idx < 0) return;
+        var item = arr[idx];
+        item.deadReason = reason || 'max_retries';
+        item.deadTs = Date.now();
+        var dead = [];
+        try {
+            var rawDead = localStorage.getItem(PENDING_DEAD_KEY);
+            if (rawDead) dead = JSON.parse(rawDead) || [];
+        } catch (e) {}
+        dead.push(item);
+        arr.splice(idx, 1);
+        pendingSave(arr);
+        try { localStorage.setItem(PENDING_DEAD_KEY, JSON.stringify(dead)); } catch (e) {}
+        console.warn('pendingMoveToDead:', reason, item.path);
+        updateGlobalSyncStatus();
+    }
+
+    function pendingDeadCount() {
+        try {
+            var rawDead = localStorage.getItem(PENDING_DEAD_KEY);
+            if (!rawDead) return 0;
+            var dead = JSON.parse(rawDead);
+            return Array.isArray(dead) ? dead.length : 0;
+        } catch (e) { return 0; }
+    }
+
     function pendingMarkRetry(id) {
         var arr = pendingLoad();
         for (var i = 0; i < arr.length; i++) {
             if (arr[i].id === id) {
                 arr[i].retries += 1;
                 if (arr[i].retries >= PENDING_MAX_RETRIES) {
-                    var dead = [];
-                    try {
-                        var rawDead = localStorage.getItem(PENDING_DEAD_KEY);
-                        if (rawDead) dead = JSON.parse(rawDead) || [];
-                    } catch (e) {}
-                    arr[i].deadReason = 'max_retries';
-                    arr[i].deadTs = Date.now();
-                    dead.push(arr[i]);
-                    var deadItem = arr[i];
-                    arr.splice(i, 1);
-                    try { localStorage.setItem(PENDING_DEAD_KEY, JSON.stringify(dead)); } catch (e) {}
-                    console.warn('pendingMarkRetry: dead-letter', deadItem.path);
+                    pendingMoveToDead(arr[i].id, 'max_retries');
+                    arr = pendingLoad(); // перечитали после splice внутри moveToDead
                 } else {
                     var jitter = 0.8 + Math.random() * 0.4;
                     arr[i].nextRetryTs = Date.now() + PENDING_BACKOFF[Math.min(arr[i].retries, PENDING_BACKOFF.length - 1)] * jitter;
@@ -1267,6 +1287,20 @@
 
     function pendingGetCount() {
         return pendingLoad().length;
+    }
+
+    // B30.17 3b: kinds, которые поддерживает POST /api/patients/{pid}/records/sync.
+    var SYNC_KINDS = { symptoms: 1, allergies: 1, vaccinations: 1, diagnoses: 1 };
+    var SYNC_BATCH_MAX = 100;
+
+    // kindFromPath: /api/patients/{pid}/{kind}[/...] -> {pid, kind} или null.
+    function syncPathInfo(path) {
+        var parts = String(path || '').split('/');
+        // ['', 'api', 'patients', pid, kind, ...]
+        if (parts.length < 5 || parts[1] !== 'api' || parts[2] !== 'patients') return null;
+        var kind = parts[4];
+        if (!SYNC_KINDS[kind]) return null;
+        return { pid: parts[3], kind: kind };
     }
 
     function flushPendingSync(opts) {
@@ -1290,24 +1324,82 @@
             return Promise.resolve(pendingGetCount());
         }
 
+        // Разделяем: syncable (records POST/PUT) и rest (пациент/vitals/cards/DELETE).
+        var syncable = [];
+        var rest = [];
+        ready.forEach(function(it) {
+            var info = syncPathInfo(it.path);
+            if (info && (it.method === 'POST' || it.method === 'PUT')) {
+                syncable.push({ item: it, info: info });
+            } else {
+                rest.push(it);
+            }
+        });
+
         isFlushing = true;
         lastFlushTs = now;
-        console.log('flushPendingSync: start, ready =', ready.length, 'iz', arr.length);
+        console.log('flushPendingSync: start, syncable =', syncable.length, 'rest =', rest.length);
 
+        // 1) rest — по одному, как раньше.
         var chain = Promise.resolve();
-        ready.forEach(function(item) {
+        rest.forEach(function(item) {
             chain = chain.then(function() {
                 return apiRequest(item.method, item.path, item.body, { noEnqueue: true, idempotencyKey: item.idempotencyKey })
-                    .then(function() {
-                        pendingDequeue(item.id);
-                        console.log('flushPendingSync: OK', item.method, item.path);
-                    })
+                    .then(function() { pendingDequeue(item.id); })
                     .catch(function(err) {
-                        console.warn('flushPendingSync: FAIL', item.method, item.path, err.message);
+                        console.warn('flushPendingSync(rest): FAIL', item.method, item.path, err.message);
                         pendingMarkRetry(item.id);
                     });
             });
         });
+
+        // 2) syncable — группируем по pid, чанки <= SYNC_BATCH_MAX, один POST на чанк.
+        var byPid = {};
+        syncable.forEach(function(x) {
+            var pid = x.info.pid;
+            if (!byPid[pid]) byPid[pid] = [];
+            byPid[pid].push(x);
+        });
+        Object.keys(byPid).forEach(function(pid) {
+            var list = byPid[pid];
+            for (var off = 0; off < list.length; off += SYNC_BATCH_MAX) {
+                let chunk = list.slice(off, off + SYNC_BATCH_MAX); // let: замыкание на чанк
+                chain = chain.then(function() {
+                    var ops = chunk.map(function(x) {
+                        return {
+                            client_op_id: x.item.idempotencyKey || x.item.id,
+                            kind: x.info.kind,
+                            action: (x.item.method === 'POST') ? 'create' : 'update',
+                            payload: x.item.body
+                        };
+                    });
+                    var url = '/api/patients/' + encodeURIComponent(pid) + '/records/sync';
+                    return apiRequest('POST', url, { ops: ops }, { noEnqueue: true })
+                        .then(function(resp) {
+                            var results = (resp && resp.results) || [];
+                            var byOp = {};
+                            results.forEach(function(r) { byOp[r.client_op_id] = r; });
+                            chunk.forEach(function(x) {
+                                var opId = x.item.idempotencyKey || x.item.id;
+                                var r = byOp[opId];
+                                if (!r) { pendingMarkRetry(x.item.id); return; }
+                                if (r.status === 'ok' || r.status === 'dup') {
+                                    pendingDequeue(x.item.id);
+                                } else if (r.status === 'conflict' || r.status === 'invalid') {
+                                    pendingMoveToDead(x.item.id, r.status);
+                                } else {
+                                    pendingMarkRetry(x.item.id);
+                                }
+                            });
+                        })
+                        .catch(function(err) {
+                            console.warn('flushPendingSync(sync): FAIL', pid, chunk.length, err.message);
+                            chunk.forEach(function(x) { pendingMarkRetry(x.item.id); });
+                        });
+                });
+            }
+        });
+
         return chain.then(function() {
             isFlushing = false;
             updateGlobalSyncStatus();
@@ -1320,12 +1412,15 @@
     }
 
     function updateGlobalSyncStatus() {
-        if (typeof showSaveStatus === 'function') {
-            var n = pendingGetCount();
-            if (n > 0 && STORAGE_MODE === 'server') {
-                if (lastSaveStatus !== 'saving') {
-                    showSaveStatus('queued', 'Ochered: ' + n, true);
-                }
+        if (typeof showSaveStatus !== 'function') return;
+        var n = pendingGetCount();
+        var m = (typeof pendingDeadCount === 'function') ? pendingDeadCount() : 0;
+        if (STORAGE_MODE !== 'server') return;
+        if (n > 0 || m > 0) {
+            var txt = 'Очередь: ' + n;
+            if (m > 0) txt += ' \u00b7 Ошибки: ' + m;
+            if (lastSaveStatus !== 'saving') {
+                showSaveStatus('queued', txt, true); // sticky: не автоскрывать
             }
         }
     }
@@ -1347,7 +1442,7 @@
                     var err = new Error(method + ' ' + path + ' HTTP ' + res.status + ': ' + t);
                     err.status = res.status;
                     if (res.status >= 500 || res.status === 0) {
-                        if (!_noEnqueue && (method === 'PUT' || method === 'DELETE')) {
+                        if (!_noEnqueue && (method === 'PUT' || method === 'DELETE' || method === 'POST')) {
                             pendingEnqueue(method, path, body);
                         }
                     }
@@ -1367,7 +1462,7 @@
                 return data;
             });
         }).catch(function(err) {
-            if (!err.status && !_noEnqueue && (method === 'PUT' || method === 'DELETE')) {
+            if (!err.status && !_noEnqueue && (method === 'PUT' || method === 'DELETE' || method === 'POST')) {
                 pendingEnqueue(method, path, body);
             }
             throw err;
