@@ -222,7 +222,7 @@ func validSyncOp(op syncOp) bool {
 	if !syncKinds[op.Kind] {
 		return false
 	}
-	if op.Action != "create" && op.Action != "update" {
+	if op.Action != "create" && op.Action != "update" && op.Action != "delete" {
 		return false
 	}
 	if op.Payload == nil {
@@ -260,6 +260,17 @@ func applySyncOp(tx *sql.Tx, patientID string, op syncOp) syncResult {
 		id, ok, err := updateSyncLWW(tx, patientID, op.Kind, rid, op.Payload, now)
 		if err != nil {
 			slog.Warn("records.sync: update", "kind", op.Kind, "err", err)
+			return syncResult{ClientOpID: op.ClientOpID, Status: "invalid"}
+		}
+		if !ok {
+			return syncResult{ClientOpID: op.ClientOpID, Status: "conflict", RecordID: rid}
+		}
+		return syncResult{ClientOpID: op.ClientOpID, Status: "ok", RecordID: id}
+
+	case "delete":
+		id, ok, err := softDeleteLWW(tx, patientID, op.Kind, rid, now)
+		if err != nil {
+			slog.Warn("records.sync: delete", "kind", op.Kind, "err", err)
 			return syncResult{ClientOpID: op.ClientOpID, Status: "invalid"}
 		}
 		if !ok {
@@ -346,6 +357,24 @@ func updateSyncLWW(tx *sql.Tx, patientID, kind, rid string, payload map[string]a
 }
 
 // clinicIDForPatientTx — clinic_id пациента внутри tx (nil-safe).
+// softDeleteLWW — LWW soft-delete: ставит deleted_at только если серверная
+// updated_at < now и запись ещё жива. Возвращает (recordID, applied, err).
+// applied=false — конфликт (уже удалено / серверная новее / нет записи).
+func softDeleteLWW(tx *sql.Tx, patientID, kind, rid, now string) (string, bool, error) {
+	q := `UPDATE ` + kind + ` SET deleted_at=?, updated_at=?
+		WHERE id=? AND patient_id=? AND deleted_at IS NULL AND updated_at < ?
+		RETURNING id`
+	var outID string
+	err := tx.QueryRow(q, now, now, rid, patientID, now).Scan(&outID)
+	if err == nil {
+		return outID, true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return rid, false, nil
+	}
+	return "", false, err
+}
+
 func clinicIDForPatientTx(tx *sql.Tx, pid string) (any, error) {
 	var c sql.NullString
 	err := tx.QueryRow(`SELECT clinic_id FROM patients WHERE id=?`, pid).Scan(&c)
