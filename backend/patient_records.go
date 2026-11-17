@@ -596,6 +596,10 @@ func registerPatientRecordsRoutes() {
 		patientAuthMiddleware(http.HandlerFunc(handlePatientFilesRouter)))
 	http.Handle("/api/patient/records/files/",
 		patientAuthMiddleware(http.HandlerFunc(handlePatientFilesRouter)))
+	// B30.17 3b: batch-sync self (create/update) — точный путь, чтобы ServeMux
+	// не увёл его в общий handlePatientRecords (там sync не в recordTables).
+	http.Handle("/api/patient/records/sync",
+		patientAuthMiddleware(http.HandlerFunc(handlePatientRecordsSyncSelf)))
 	http.Handle("/api/patient/records/",
 		patientAuthMiddleware(http.HandlerFunc(handlePatientRecords)))
 	slog.Info("registerPatientRecordsRoutes",

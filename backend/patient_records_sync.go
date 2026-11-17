@@ -49,6 +49,12 @@ type syncOp struct {
 	Payload    map[string]any `json:"payload"`
 }
 
+// syncOpIndexed — валидная op с индексом в исходном массиве.
+type syncOpIndexed struct {
+	idx int
+	op  syncOp
+}
+
 // syncResult — per-op результат.
 type syncResult struct {
 	ClientOpID string `json:"client_op_id"`
@@ -96,31 +102,17 @@ func handlePatientRecordsSync(w http.ResponseWriter, r *http.Request, patientID 
 		return
 	}
 
-	// 1. Валидация op'ов до записи. Невалидные -> results как "invalid",
-	//    в транзакцию не попадают. Собираем множество kind'ов валидных op.
-	results := make([]syncResult, 0, len(req.Ops))
+	// 1. Валидация + сбор kind'ов (для consent).
+	results, valids := validateSyncOps(req.Ops)
 	kindSet := map[string]bool{}
-	type validOp struct {
-		idx int
-		op  syncOp
-	}
-	valids := make([]validOp, 0, len(req.Ops))
-
-	for i, op := range req.Ops {
-		if !validSyncOp(op) {
-			results = append(results, syncResult{ClientOpID: op.ClientOpID, Status: "invalid"})
-			continue
-		}
-		kindSet[op.Kind] = true
-		valids = append(valids, validOp{idx: i, op: op})
-		results = append(results, syncResult{ClientOpID: op.ClientOpID, Status: ""}) // заполним ниже
+	for _, v := range valids {
+		kindSet[v.op.Kind] = true
 	}
 
 	// 2. Consent атомарно: для каждого kind из валидных op нужен approved <kind>_write.
-	//    Если хотя бы одного нет — 403 на весь батч (как Шаг 1).
 	if len(valids) > 0 {
 		for kind := range kindSet {
-			consentID, _, err := findApprovedConsent(patientID, doctorID, kind+"_write")
+			_, _, err := findApprovedConsent(patientID, doctorID, kind+"_write")
 			if errors.Is(err, sql.ErrNoRows) {
 				consentAudit(db, "", patientID, doctorID, "write_denied", "doctor", doctorID, clientIP(r))
 				http.Error(w, `{"error":"consent_required"}`, http.StatusForbidden)
@@ -131,11 +123,58 @@ func handlePatientRecordsSync(w http.ResponseWriter, r *http.Request, patientID 
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 				return
 			}
-			_ = consentID
 		}
 	}
 
-	// 3. Одна транзакция на батч. Валидные op уже отфильтрованы, "ядовитых" нет.
+	// 3. Применяем батч общей функцией (та же логика для self и doctor).
+	applySyncBatch(w, patientID, valids, results)
+
+	auditLog(db, doctorID, "records.sync", "patient", patientID, clientIP(r), nil)
+}
+
+// handlePatientRecordsSyncSelf — POST /api/patient/records/sync (self).
+// Та же логика, что doctor-путь, но без consent: пациент пишет свои записи.
+func handlePatientRecordsSyncSelf(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	pid, err := resolvePatientIDForSelf(r)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"patient account not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+	if err != nil {
+		http.Error(w, `{"error":"read body"}`, http.StatusBadRequest)
+		return
+	}
+	var req syncRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Ops) == 0 {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.Ops) > maxSyncOps {
+		http.Error(w, `{"error":"batch_too_large"}`, http.StatusBadRequest)
+		return
+	}
+
+	results, valids := validateSyncOps(req.Ops)
+	applySyncBatch(w, pid, valids, results)
+}
+
+// applySyncBatch — общая часть: одна tx, per-op результаты, ответ.
+// valids уже отфильтрованы, results — слоты под все op (invalid заполнены).
+func applySyncBatch(w http.ResponseWriter, patientID string, valids []syncOpIndexed, results []syncResult) {
 	tx, err := db.Begin()
 	if err != nil {
 		slog.Warn("records.sync: begin", "err", err)
@@ -155,10 +194,24 @@ func handlePatientRecordsSync(w http.ResponseWriter, r *http.Request, patientID 
 		return
 	}
 
-	auditLog(db, doctorID, "records.sync", "patient", patientID, clientIP(r), nil)
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"results": results})
+}
+
+// validateSyncOps — общая валидация: невалидные -> results как "invalid",
+// валидные -> valids (с idx в исходном массиве).
+func validateSyncOps(ops []syncOp) (results []syncResult, valids []syncOpIndexed) {
+	results = make([]syncResult, 0, len(ops))
+	valids = make([]syncOpIndexed, 0, len(ops))
+	for i, op := range ops {
+		if !validSyncOp(op) {
+			results = append(results, syncResult{ClientOpID: op.ClientOpID, Status: "invalid"})
+			continue
+		}
+		valids = append(valids, syncOpIndexed{idx: i, op: op})
+		results = append(results, syncResult{ClientOpID: op.ClientOpID, Status: ""})
+	}
+	return results, valids
 }
 
 // validSyncOp — базовая валидация op до записи.
