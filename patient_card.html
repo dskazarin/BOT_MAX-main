@@ -1197,16 +1197,58 @@
         }
     });
 
-    // Шаг 4.5, коммит 2: триггеры flush — online + возврат вкладки из фона
-    window.addEventListener('online', function() {
-        console.log('online event - flush pending');
-        if (typeof flushPendingSync === 'function') flushPendingSync({ manual: true });
-    });
-    document.addEventListener('visibilitychange', function() {
-        if (!document.hidden && typeof flushPendingSync === 'function') {
-            flushPendingSync();
+    // B30.17 3c-3: фоновый worker — online / visibility / interval с backoff.
+    var SYNC_WORKER_INTERVAL_MS = 60000;   // fallback-тик, только при непустой очереди
+    var SYNC_WORKER_BACKOFF_MAX_MS = 60000;
+    var syncWorkerFails = 0;
+    var syncWorkerNextAttemptTs = 0;
+    var syncWorkerTimer = null;
+
+    function syncWorkerFlush(reason) {
+        if (STORAGE_MODE !== 'server') return;
+        var now = Date.now();
+        if (now < syncWorkerNextAttemptTs) {
+            console.log('[sync-worker] backoff, next in', (syncWorkerNextAttemptTs - now) + 'ms');
+            return;
         }
-    });
+        if (typeof flushPendingSync !== 'function') return;
+        // online — manual (обойти throttle), interval/visibility — уважают throttle.
+        var manual = (reason === 'online');
+        var before = pendingGetCount();
+        if (before === 0 && reason !== 'online') return;
+        console.log('[sync-worker] flush triggered by', reason, 'queue =', before);
+        flushPendingSync({ manual: manual }).then(function(n) {
+            if (n === 0) {
+                syncWorkerFails = 0;
+                syncWorkerNextAttemptTs = 0;
+                console.log('[sync-worker] result=empty');
+            } else {
+                syncWorkerFails += 1;
+                var backoff = Math.min(Math.pow(2, syncWorkerFails) * 1000, SYNC_WORKER_BACKOFF_MAX_MS);
+                syncWorkerNextAttemptTs = Date.now() + backoff;
+                console.log('[sync-worker] result=partial queue =', n, 'fails =', syncWorkerFails, 'next in', backoff + 'ms');
+            }
+        }).catch(function(err) {
+            syncWorkerFails += 1;
+            var backoff = Math.min(Math.pow(2, syncWorkerFails) * 1000, SYNC_WORKER_BACKOFF_MAX_MS);
+            syncWorkerNextAttemptTs = Date.now() + backoff;
+            console.warn('[sync-worker] result=fail', err && err.message, 'next in', backoff + 'ms');
+        });
+    }
+
+    function initSyncWorker() {
+        if (syncWorkerTimer) return;
+        window.addEventListener('online', function() { syncWorkerFlush('online'); });
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) syncWorkerFlush('visibility');
+        });
+        syncWorkerTimer = setInterval(function() {
+            if (typeof pendingGetCount === 'function' && pendingGetCount() > 0) {
+                syncWorkerFlush('interval');
+            }
+        }, SYNC_WORKER_INTERVAL_MS);
+        console.log('[sync-worker] initialized, interval =', SYNC_WORKER_INTERVAL_MS + 'ms');
+    }
 
     // ============================================================
     // Шаг 4.5, коммит 2: pending sync queue + retry
@@ -3916,6 +3958,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         setTimeout(initAISpellCheck, 500);
+        if (typeof initSyncWorker === 'function') initSyncWorker();
     });
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
