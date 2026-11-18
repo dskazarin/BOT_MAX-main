@@ -1555,7 +1555,7 @@
     }
 
     // B30.17 3b: kinds, которые поддерживает POST /api/patients/{pid}/records/sync.
-    var SYNC_KINDS = { symptoms: 1, allergies: 1, vaccinations: 1, diagnoses: 1 };
+    var SYNC_KINDS = { symptoms: 1, allergies: 1, vaccinations: 1, diagnoses: 1, constant_medications: 1, course_medications: 1, files: 1 }; // 7 видов: синхронно с backend syncKinds
     var SYNC_BATCH_MAX = 100;
 
     // kindFromPath: /api/patients/{pid}/{kind}[/...] -> {pid, kind} или null.
