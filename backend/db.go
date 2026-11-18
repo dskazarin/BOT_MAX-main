@@ -434,6 +434,9 @@ func InitDB(path string) (*sql.DB, error) {
 		{"allergies", "client_op_id", "TEXT"},
 		{"vaccinations", "client_op_id", "TEXT"},
 		{"diagnoses", "client_op_id", "TEXT"},
+		{"constant_medications", "client_op_id", "TEXT"},
+		{"course_medications", "client_op_id", "TEXT"},
+		{"files", "client_op_id", "TEXT"},
 	}
 	for _, m := range migrations {
 		if err := ensureColumn(db, m.table, m.column, m.ddl); err != nil {
@@ -443,7 +446,10 @@ func InitDB(path string) (*sql.DB, error) {
 	}
 
 	// === B30.17 sync 3a: partial UNIQUE (patient_id, client_op_id) ===
-	for _, t := range []string{"symptoms", "allergies", "vaccinations", "diagnoses"} {
+	for _, t := range []string{
+		"symptoms", "allergies", "vaccinations", "diagnoses",
+		"constant_medications", "course_medications", "files",
+	} {
 		if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS ux_` + t + `_client_op
 			ON ` + t + `(patient_id, client_op_id) WHERE client_op_id IS NOT NULL`); err != nil {
 			db.Close()

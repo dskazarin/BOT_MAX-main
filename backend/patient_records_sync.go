@@ -35,10 +35,13 @@ const maxSyncOps = 100
 
 // syncKinds — kind'ы, участвующие в sync (только *_write из Шага 1).
 var syncKinds = map[string]bool{
-	"symptoms":     true,
-	"allergies":    true,
-	"vaccinations": true,
-	"diagnoses":    true,
+	"symptoms":             true,
+	"allergies":            true,
+	"vaccinations":         true,
+	"diagnoses":            true,
+	"constant_medications": true,
+	"course_medications":   true,
+	"files":                true,
 }
 
 // syncOp — одна операция из батча.
