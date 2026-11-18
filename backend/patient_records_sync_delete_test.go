@@ -182,6 +182,130 @@ func TestRecordsSyncDelete_MixedBatch(t *testing.T) {
 	}
 }
 
+// TestRecordsSyncDelete_IdempotentSameOpID фиксирует фактический контракт повтора:
+// для delete нет проверки client_op_id (в отличие от create). Повтор того же op_id
+// проходит через softDeleteLWW, где deleted_at IS NULL уже ложно -> conflict.
+// Главное по оси «стабильность»: не 5xx, не dup, tombstone (deleted_at) не перезаписывается.
+func TestRecordsSyncDelete_IdempotentSameOpID(t *testing.T) {
+	did, pid := setupSyncWriteEnv(t)
+	seedViaSync(t, did, pid, "op-c1", "symptoms", "S1")
+
+	w := callRecordsSync(t, reqSyncPost(did, pid,
+		mkSyncBody(t, mkDeleteOp("op-d1", "symptoms", "S1"))), pid)
+	if w.Code != http.StatusOK {
+		t.Fatalf("first delete: want 200, got %d %s", w.Code, w.Body.String())
+	}
+	if resp := decodeSyncResp(t, w); resp.Results[0].Status != "ok" {
+		t.Fatalf("first delete: want ok, got %s", resp.Results[0].Status)
+	}
+
+	var del1 string
+	if err := db.QueryRow(`SELECT deleted_at FROM symptoms WHERE id=? AND patient_id=?`,
+		"S1", pid).Scan(&del1); err != nil {
+		t.Fatalf("select deleted_at after first: %v", err)
+	}
+
+	// Тот же client_op_id — как сетевой ретрай.
+	w = callRecordsSync(t, reqSyncPost(did, pid,
+		mkSyncBody(t, mkDeleteOp("op-d1", "symptoms", "S1"))), pid)
+	if w.Code != http.StatusOK {
+		t.Fatalf("replay same op_id: want 200 (not 5xx), got %d %s", w.Code, w.Body.String())
+	}
+	resp := decodeSyncResp(t, w)
+	if resp.Results[0].Status == "dup" {
+		t.Fatalf("replay same op_id: want conflict (no op_id check for delete), got dup")
+	}
+	if resp.Results[0].Status != "conflict" {
+		t.Fatalf("replay same op_id: want conflict, got %s", resp.Results[0].Status)
+	}
+
+	var del2 string
+	if err := db.QueryRow(`SELECT deleted_at FROM symptoms WHERE id=? AND patient_id=?`,
+		"S1", pid).Scan(&del2); err != nil {
+		t.Fatalf("select deleted_at after replay: %v", err)
+	}
+	if del1 != del2 {
+		t.Fatalf("deleted_at перезаписан при повторе: было %q, стало %q", del1, del2)
+	}
+}
+
+// TestRecordsSyncDelete_LWWEqualTimestamps — юнит на softDeleteLWW: строгое `<`
+// в WHERE означает, что при updated_at == now delete НЕ применяется (conflict).
+// Интеграционно это недетерминированно из-за time.Now() внутри хендлера,
+// поэтому проверяем на уровне tx с явным now.
+func TestRecordsSyncDelete_LWWEqualTimestamps(t *testing.T) {
+	_, pid := setupSyncWriteEnv(t)
+	now := "2026-11-18T12:00:00Z"
+
+	if _, err := db.Exec(`INSERT INTO symptoms (id, patient_id, client_op_id, created_at, updated_at, name)
+		VALUES (?, ?, ?, ?, ?, ?)`, "S_EQ", pid, "op-eq", now, now, "x"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer tx.Rollback()
+
+	id, applied, err := softDeleteLWW(tx, pid, "symptoms", "S_EQ", now)
+	if err != nil {
+		t.Fatalf("softDeleteLWW: %v", err)
+	}
+	if applied {
+		t.Fatalf("updated_at == now: want applied=false (strict <), got true (id=%s)", id)
+	}
+
+	var deletedAt *string
+	if err := tx.QueryRow(`SELECT deleted_at FROM symptoms WHERE id=? AND patient_id=?`,
+		"S_EQ", pid).Scan(&deletedAt); err != nil {
+		t.Fatalf("select deleted_at: %v", err)
+	}
+	if deletedAt != nil {
+		t.Fatalf("deleted_at должен остаться NULL при равенстве updated_at == now")
+	}
+}
+
+// TestRecordsSyncDelete_MixedBatchDeleteThenUpdateSameID — в одном батче delete,
+// затем update того же id: delete применяется (ok), update поверх tombstone -> conflict.
+func TestRecordsSyncDelete_MixedBatchDeleteThenUpdateSameID(t *testing.T) {
+	did, pid := setupSyncWriteEnv(t)
+	seedViaSync(t, did, pid, "op-c-seed", "symptoms", "S2")
+
+	body := mkSyncBody(t,
+		mkDeleteOp("op-d1", "symptoms", "S2"),
+		map[string]any{
+			"client_op_id": "op-u1",
+			"kind":         "symptoms",
+			"action":       "update",
+			"payload":      map[string]any{"id": "S2", "notes": "v2"},
+		},
+	)
+	w := callRecordsSync(t, reqSyncPost(did, pid, body), pid)
+	if w.Code != http.StatusOK {
+		t.Fatalf("mixed batch: want 200, got %d %s", w.Code, w.Body.String())
+	}
+	resp := decodeSyncResp(t, w)
+	want := []string{"ok", "conflict"}
+	if len(resp.Results) != len(want) {
+		t.Fatalf("want %d results, got %d", len(want), len(resp.Results))
+	}
+	for i, st := range want {
+		if resp.Results[i].Status != st {
+			t.Fatalf("result[%d]: want %s, got %s", i, st, resp.Results[i].Status)
+		}
+	}
+
+	var deletedAt *string
+	if err := db.QueryRow(`SELECT deleted_at FROM symptoms WHERE id=? AND patient_id=?`,
+		"S2", pid).Scan(&deletedAt); err != nil {
+		t.Fatalf("select deleted_at: %v", err)
+	}
+	if deletedAt == nil {
+		t.Fatalf("deleted_at должен быть NOT NULL после delete+update одного id")
+	}
+}
+
 func TestRecordsSync_CompatNoAction(t *testing.T) {
 	did, pid := setupSyncWriteEnv(t)
 	body := mkSyncBody(t, map[string]any{
