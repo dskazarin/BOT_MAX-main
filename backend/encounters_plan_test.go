@@ -152,3 +152,26 @@ func TestEncountersPlan_NoKindUsesIdxEncPatient(t *testing.T) {
 		t.Errorf("plan doesn't use idx_enc_patient:\n%s", plan)
 	}
 }
+
+// --- 4. Проверка прав врача: WHERE doctor_id=? AND patient_id=? LIMIT 1
+//
+//	Должна опираться на композитный idx_enc_doctor_patient.
+func TestEncountersPlan_DoctorPatientAccessUsesIdxEncDoctorPatient(t *testing.T) {
+	db := newTestDB(t)
+	seedDoctorForRefresh(t, db, "D1")
+	seedPatientForEncounter(t, db, "P1", "D1")
+	seedPlanEncounters(t, db)
+
+	plan := explainPlan(t, db,
+		`SELECT 1 FROM encounters WHERE doctor_id = ? AND patient_id = ? LIMIT 1`,
+		"D1", "P1")
+
+	if !strings.Contains(plan, "idx_enc_doctor_patient") {
+		t.Errorf("plan doesn't use idx_enc_doctor_patient:\n%s", plan)
+	}
+	// Covering-scan по индексу — это "SCAN encounters USING COVERING INDEX ...",
+	// а не полный скан таблицы. Полный скан таблицы был бы "SCAN encounters" без USING.
+	if strings.Contains(plan, "SCAN encounters") && !strings.Contains(plan, "USING") {
+		t.Errorf("plan does full table SCAN encounters:\n%s", plan)
+	}
+}

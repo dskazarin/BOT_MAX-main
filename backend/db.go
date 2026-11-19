@@ -116,6 +116,7 @@ func InitDB(path string) (*sql.DB, error) {
 		`CREATE INDEX IF NOT EXISTS idx_enc_doctor  ON encounters(doctor_id, started_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_enc_clinic  ON encounters(clinic_id, started_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_enc_patient_kind ON encounters(patient_id, kind, started_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_enc_doctor_patient ON encounters(doctor_id, patient_id);`,
 
 		// === Витальные (текущие) ===
 		`CREATE TABLE IF NOT EXISTS vitals (
@@ -1287,6 +1288,7 @@ func migrateEncountersDoctorIdNullable(db *sql.DB) error {
 		{"index idx_enc_doctor", `CREATE INDEX idx_enc_doctor ON encounters(doctor_id, started_at DESC)`},
 		{"index idx_enc_clinic", `CREATE INDEX idx_enc_clinic ON encounters(clinic_id, started_at DESC)`},
 		{"index idx_enc_patient_kind", `CREATE INDEX idx_enc_patient_kind ON encounters(patient_id, kind, started_at DESC)`},
+		{"index idx_enc_doctor_patient", `CREATE INDEX idx_enc_doctor_patient ON encounters(doctor_id, patient_id)`},
 	}
 
 	for _, s := range steps {

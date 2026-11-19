@@ -254,7 +254,7 @@ func TestInitDB_Encounters(t *testing.T) {
 		_ = rows.Scan(&idx)
 		got[idx] = true
 	}
-	for _, want := range []string{"idx_enc_patient", "idx_enc_doctor", "idx_enc_clinic", "idx_enc_patient_kind"} {
+	for _, want := range []string{"idx_enc_patient", "idx_enc_doctor", "idx_enc_clinic", "idx_enc_patient_kind", "idx_enc_doctor_patient"} {
 		if !got[want] {
 			t.Errorf("индекс %s не найден; got=%v", want, got)
 		}
