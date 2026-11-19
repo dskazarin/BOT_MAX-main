@@ -2467,6 +2467,9 @@
     // GET /api/patients/{id}/{kind} — consent по scope *_read (B30.9d)
     // ============================================================
     var RECORD_KINDS = ['symptoms', 'allergies', 'vaccinations', 'diagnoses', 'constant_medications', 'course_medications', 'files']; // e4+3d: 7 секций
+    var RECORDS_PAGE_SIZE = 20;
+    var _recordsPage = {};
+    var _recordsItems = {};
 
     function recordsKindRu(kind) {
         return ({ symptoms: 'Симптомы', allergies: 'Аллергии', vaccinations: 'Вакцинации', diagnoses: 'Диагнозы', constant_medications: 'Постоянные лекарства', course_medications: 'Курсовые лекарства', files: 'Файлы' })[kind] || kind;
@@ -2544,7 +2547,16 @@
             host.innerHTML = '<div class="records-empty">Пока нет записей</div>';
             return;
         }
-        var html = items.map(function(it) {
+        _recordsItems[kind] = items;
+        var pageCount = Math.max(1, Math.ceil(items.length / RECORDS_PAGE_SIZE));
+        var page = _recordsPage[kind] || 0;
+        if (page < 0) page = 0;
+        if (page > pageCount - 1) page = pageCount - 1;
+        _recordsPage[kind] = page;
+        var start = page * RECORDS_PAGE_SIZE;
+        var end = Math.min(start + RECORDS_PAGE_SIZE, items.length);
+        var visible = items.slice(start, end);
+        var html = visible.map(function(it) {
             var title = it.name || it.title || it.symptom || it.allergen || it.vaccine || it.diagnosis || it.filename || it.code || it.id || '—';
             var meta = [];
             if (it.code && it.code !== title) meta.push('Код: ' + it.code);
@@ -2572,7 +2584,30 @@
                 actions +
                 '</div>';
         }).join('');
+        if (pageCount > 1) {
+            html += '<div class="records-nav">';
+            html += '<button type="button" class="records-btn" data-records-kind="' + kind + '" data-records-page="prev"' + (page === 0 ? ' disabled' : '') + '>←</button>';
+            html += '<span class="records-pageinfo">стр. ' + (page + 1) + ' из ' + pageCount + '</span>';
+            html += '<button type="button" class="records-btn" data-records-kind="' + kind + '" data-records-page="next"' + (page >= pageCount - 1 ? ' disabled' : '') + '>→</button>';
+            html += '</div>';
+        }
         host.innerHTML = html;
+        if (!host._recordsBound) {
+            host._recordsBound = true;
+            host.addEventListener('click', function(ev) {
+                var t = ev.target;
+                var nav = t && t.getAttribute && t.getAttribute('data-records-page');
+                if (!nav) return;
+                var k = t.getAttribute('data-records-kind');
+                var arr = _recordsItems[k] || [];
+                var pc = Math.max(1, Math.ceil(arr.length / RECORDS_PAGE_SIZE));
+                var p = _recordsPage[k] || 0;
+                if (nav === 'prev' && p > 0) p--;
+                if (nav === 'next' && p < pc - 1) p++;
+                _recordsPage[k] = p;
+                renderRecords(k, arr);
+            });
+        }
     }
 
     function renderRecordsError(kind, err) {
